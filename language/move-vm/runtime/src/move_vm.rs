@@ -72,10 +72,10 @@ impl MoveVM {
         remote: &'r S,
     ) -> VMResult<Arc<CompiledModule>> {
         self.runtime
-            .loader()
+            .loader
             .load_module(
                 module_id,
-                &TransactionDataCache::new(remote, self.runtime.loader()),
+                &TransactionDataCache::new(remote, &self.runtime.loader),
             )
             .map(|arc_module| arc_module.arc_module())
     }

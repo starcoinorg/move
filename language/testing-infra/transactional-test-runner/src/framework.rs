@@ -118,6 +118,7 @@ pub trait MoveTestAdapter<'a>: Sized {
     fn compiled_state(&mut self) -> &mut CompiledState<'a>;
     fn default_syntax(&self) -> SyntaxChoice;
     fn init(
+        test_path: &Path,
         default_syntax: SyntaxChoice,
         option: Option<&'a FullyCompiledProgram>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
@@ -686,7 +687,7 @@ where
         }
     };
     let (mut adapter, result_opt) =
-        Adapter::init(default_syntax, fully_compiled_program_opt, init_opt);
+        Adapter::init(path, default_syntax, fully_compiled_program_opt, init_opt);
     if let Some(result) = result_opt {
         writeln!(output, "\ninit:\n{}", result)?;
     }

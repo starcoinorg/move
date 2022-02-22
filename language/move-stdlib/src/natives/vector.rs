@@ -37,7 +37,6 @@ pub fn native_empty(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.is_empty());
-
     NativeResult::map_partial_vm_result_one(gas_params.base, Vector::empty(&ty_args[0]))
 }
 
