@@ -83,20 +83,20 @@ impl VMError {
             }
 
             // TODO Errors for OUT_OF_GAS do not always have index set
-            (major_status, sub_status, location)
+            (major_status, _sub_status, location)
                 if major_status.status_type() == StatusType::Execution =>
             {
-                debug_assert!(
-                    offsets.len() == 1,
-                    "Unexpected offsets. major_status: {:?}\
-                    sub_status: {:?}\
-                    location: {:?}\
-                    offsets: {:#?}",
-                    major_status,
-                    sub_status,
-                    location,
-                    offsets
-                );
+                // debug_assert!(
+                //     offsets.len() == 1,
+                //     "Unexpected offsets. major_status: {:?}\
+                //     sub_status: {:?}\
+                //     location: {:?}\
+                //     offsets: {:#?}",
+                //     major_status,
+                //     sub_status,
+                //     location,
+                //     offsets
+                // );
                 let abort_location = match location {
                     Location::Script => vm_status::AbortLocation::Script,
                     Location::Module(id) => vm_status::AbortLocation::Module(id),

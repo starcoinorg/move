@@ -84,6 +84,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
     }
 
     fn init(
+        _: &Path,
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<&'a FullyCompiledProgram>,
         task_opt: Option<TaskInput<(InitCommand, EmptyCommand)>>,

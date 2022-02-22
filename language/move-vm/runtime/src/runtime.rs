@@ -37,7 +37,7 @@ use tracing::warn;
 
 /// An instantiation of the MoveVM.
 pub(crate) struct VMRuntime {
-    loader: Loader,
+    pub(crate) loader: Loader,
 }
 
 impl VMRuntime {
@@ -255,7 +255,7 @@ impl VMRuntime {
         Ok((dummy_locals, deserialized_args))
     }
 
-    fn serialize_return_value(
+    pub(crate) fn create_signers_and_arguments(
         &self,
         ty: &Type,
         value: Value,
@@ -305,7 +305,7 @@ impl VMRuntime {
         return_types
             .iter()
             .zip(return_values)
-            .map(|(ty, value)| self.serialize_return_value(ty, value))
+            .map(|(ty, value)| self.create_signers_and_arguments(ty, value))
             .collect()
     }
 
@@ -360,7 +360,7 @@ impl VMRuntime {
             .map(|(idx, ty)| {
                 // serialize return values first in the case that a value points into this local
                 let local_val = dummy_locals.move_loc(idx)?;
-                let (bytes, layout) = self.serialize_return_value(&ty, local_val)?;
+                let (bytes, layout) = self.create_signers_and_arguments(&ty, local_val)?;
                 Ok((idx as LocalIndex, bytes, layout))
             })
             .collect::<PartialVMResult<_>>()

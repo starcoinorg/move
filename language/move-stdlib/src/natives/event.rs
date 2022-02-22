@@ -30,7 +30,7 @@ pub fn write_to_event_store(
 
     let cost = native_gas(
         context.cost_table(),
-        NativeCostIndex::EMIT_EVENT,
+        NativeCostIndex::EMIT_EVENT as u8,
         msg.size().get() as usize,
     );
 

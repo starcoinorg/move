@@ -23,7 +23,7 @@ pub fn native_empty(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.is_empty());
 
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 1);
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY as u8, 1);
     NativeResult::map_partial_vm_result_one(cost, Vector::empty(&ty_args[0]))
 }
 
@@ -36,7 +36,7 @@ pub fn native_length(
     debug_assert!(args.len() == 1);
 
     let r = pop_arg!(args, VectorRef);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::LENGTH, 1);
+    let cost = native_gas(context.cost_table(), NativeCostIndex::LENGTH as u8, 1);
     NativeResult::map_partial_vm_result_one(cost, r.len(&ty_args[0]))
 }
 
@@ -52,7 +52,7 @@ pub fn native_push_back(
     let r = pop_arg!(args, VectorRef);
     let cost = native_gas(
         context.cost_table(),
-        NativeCostIndex::PUSH_BACK,
+        NativeCostIndex::PUSH_BACK as u8,
         e.size().get() as usize,
     );
     NativeResult::map_partial_vm_result_empty(cost, r.push_back(e, &ty_args[0]))
@@ -68,7 +68,7 @@ pub fn native_borrow(
 
     let idx = pop_arg!(args, u64) as usize;
     let r = pop_arg!(args, VectorRef);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::BORROW, 1);
+    let cost = native_gas(context.cost_table(), NativeCostIndex::BORROW as u8, 1);
     NativeResult::map_partial_vm_result_one(
         cost,
         r.borrow_elem(idx, &ty_args[0])
@@ -85,7 +85,7 @@ pub fn native_pop(
     debug_assert!(args.len() == 1);
 
     let r = pop_arg!(args, VectorRef);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::POP_BACK, 1);
+    let cost = native_gas(context.cost_table(), NativeCostIndex::POP_BACK as u8, 1);
     NativeResult::map_partial_vm_result_one(cost, r.pop(&ty_args[0]).map_err(native_error_to_abort))
 }
 
@@ -98,7 +98,11 @@ pub fn native_destroy_empty(
     debug_assert!(args.len() == 1);
 
     let v = pop_arg!(args, Vector);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::DESTROY_EMPTY, 1);
+    let cost = native_gas(
+        context.cost_table(),
+        NativeCostIndex::DESTROY_EMPTY as u8,
+        1,
+    );
     NativeResult::map_partial_vm_result_empty(
         cost,
         v.destroy_empty(&ty_args[0]).map_err(native_error_to_abort),
@@ -116,7 +120,7 @@ pub fn native_swap(
     let idx2 = pop_arg!(args, u64) as usize;
     let idx1 = pop_arg!(args, u64) as usize;
     let r = pop_arg!(args, VectorRef);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::SWAP, 1);
+    let cost = native_gas(context.cost_table(), NativeCostIndex::SWAP as u8, 1);
     NativeResult::map_partial_vm_result_empty(
         cost,
         r.swap(idx1, idx2, &ty_args[0])

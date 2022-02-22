@@ -40,7 +40,7 @@ pub struct Move {
         parse(from_os_str),
         default_value = "."
     )]
-    package_path: PathBuf,
+    pub package_path: PathBuf,
 
     /// Print additional diagnostics if available.
     #[clap(short = 'v', global = true)]

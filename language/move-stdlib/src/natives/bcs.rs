@@ -14,6 +14,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
+// use std::convert::TryFrom;
 
 /// Rust implementation of Move's `native public fun to_bytes<T>(&T): vector<u8>`
 pub fn native_to_bytes(
@@ -34,7 +35,7 @@ pub fn native_to_bytes(
     };
     let serialized_value = match serialized_value_opt {
         None => {
-            let cost = native_gas(context.cost_table(), NativeCostIndex::BCS_TO_BYTES, 1);
+            let cost = native_gas(context.cost_table(), NativeCostIndex::BCS_TO_BYTES as u8, 1);
             return Ok(NativeResult::err(cost, NFE_BCS_SERIALIZATION_FAILURE));
         }
         Some(serialized_value) => serialized_value,
@@ -43,7 +44,7 @@ pub fn native_to_bytes(
     // cost is proportional to the size of the serialized value
     let cost = native_gas(
         context.cost_table(),
-        NativeCostIndex::BCS_TO_BYTES,
+        NativeCostIndex::BCS_TO_BYTES as u8,
         serialized_value.len(),
     );
 
@@ -52,3 +53,30 @@ pub fn native_to_bytes(
         smallvec![Value::vector_u8(serialized_value)],
     ))
 }
+
+// /// Rust implementation of Move's `public fun from_public_key_vec(pub_key_vec: vector<u8>): address;`
+// pub fn native_to_address(
+//     context: &mut NativeContext,
+//     mut _ty_args: Vec<Type>,
+//     mut args: VecDeque<Value>,
+// ) -> PartialVMResult<NativeResult> {
+//     debug_assert!(_ty_args.is_empty());
+//     debug_assert!(args.len() == 1);
+//
+//     let key_bytes = pop_arg!(args, Vec<u8>);
+//     let cost = native_gas(
+//         context.cost_table(),
+//         NativeCostIndex::BCS_TO_ADDRESS,
+//         key_bytes.len(),
+//     );
+//     if key_bytes.len() != AccountAddress::LENGTH {
+//         return Ok(NativeResult::err(cost, NFE_BCS_TO_ADDRESS_FAILURE));
+//     }
+//
+//     let address = match AccountAddress::try_from(&key_bytes[..AccountAddress::LENGTH]) {
+//         Ok(addr) => addr,
+//         Err(_) => return Ok(NativeResult::err(cost, NFE_BCS_TO_ADDRESS_FAILURE)),
+//     };
+//     let return_values = smallvec![Value::address(address)];
+//     Ok(NativeResult::ok(cost, return_values))
+// }

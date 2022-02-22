@@ -23,7 +23,11 @@ pub fn native_borrow_address(
     debug_assert!(arguments.len() == 1);
 
     let signer_reference = pop_arg!(arguments, SignerRef);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::SIGNER_BORROW, 1);
+    let cost = native_gas(
+        context.cost_table(),
+        NativeCostIndex::SIGNER_BORROW as u8,
+        1,
+    );
 
     Ok(NativeResult::ok(
         cost,

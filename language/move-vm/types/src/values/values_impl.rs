@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::loaded_data::runtime_types::Type;
+use crate::{loaded_data::runtime_types::Type, natives::function::NativeResult};
 use move_binary_format::{
     errors::*,
     file_format::{Constant, SignatureToken},
@@ -11,7 +11,7 @@ use move_core_types::{
     account_address::AccountAddress,
     gas_schedule::{
         AbstractMemorySize, GasAlgebra, GasCarrier, CONST_SIZE, MIN_EXISTS_DATA_SIZE,
-        REFERENCE_SIZE, STRUCT_SIZE,
+        REFERENCE_SIZE, STRUCT_SIZE, InternalGasUnits,
     },
     value::{MoveStructLayout, MoveTypeLayout},
     vm_status::{sub_status::NFE_VECTOR_ERROR_BASE, StatusCode},
@@ -1137,6 +1137,15 @@ impl VMValueCast<Vec<u8>> for Value {
         }
     }
 }
+impl VMValueCast<Vec<u64>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u64>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU64(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u64>", v,))),
+        }
+    }
+}
 
 impl VMValueCast<SignerRef> for Value {
     fn cast(self) -> PartialVMResult<SignerRef> {
@@ -1680,6 +1689,107 @@ impl VectorRef {
 
         self.0.mark_dirty();
         Ok(())
+    }
+    pub fn remove(
+        &self,
+        idx: usize,
+        cost: InternalGasUnits<GasCarrier>,
+        type_param: &Type,
+    ) -> PartialVMResult<NativeResult> {
+        let c = self.0.container();
+        check_elem_layout(type_param, c)?;
+
+        // len must be >0
+        let len = c.len();
+        let ret = match c {
+            Container::VecU8(r) => Value::u8(r.borrow_mut().remove(idx)),
+            Container::VecU64(r) => Value::u64(r.borrow_mut().remove(idx)),
+            Container::VecU128(r) => Value::u128(r.borrow_mut().remove(idx)),
+            Container::VecBool(r) => Value::bool(r.borrow_mut().remove(idx)),
+            Container::VecAddress(r) => Value::address(r.borrow_mut().remove(idx)),
+            Container::Vec(r) => Value(r.borrow_mut().remove(idx)),
+
+            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+        };
+        self.0.mark_dirty();
+        // cost with memory
+        let memory_cost = c.size().get() * ((len - idx) as u64) / (len as u64);
+        let cost = cost.mul(AbstractMemorySize::new(std::cmp::max(1, memory_cost)));
+        Ok(NativeResult::ok(cost, smallvec![ret]))
+    }
+
+    pub fn reverse(
+        &self,
+        cost: InternalGasUnits<GasCarrier>,
+        type_param: &Type,
+    ) -> PartialVMResult<NativeResult> {
+        let c = self.0.container();
+        check_elem_layout(type_param, c)?;
+        macro_rules! reverse {
+            ($v: ident) => {{
+                $v.borrow_mut().reverse();
+            }};
+        }
+        match c {
+            Container::VecU8(r) => reverse!(r),
+            Container::VecU64(r) => reverse!(r),
+            Container::VecU128(r) => reverse!(r),
+            Container::VecBool(r) => reverse!(r),
+            Container::VecAddress(r) => reverse!(r),
+            Container::Vec(r) => {
+                reverse!(r)
+            }
+
+            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+        }
+        self.0.mark_dirty();
+
+        // half of the memory size.
+        let memory_cost = std::cmp::max(1, c.size().get() / 2);
+        let cost = cost.get() * memory_cost;
+
+        Ok(NativeResult::ok(InternalGasUnits::new(cost), smallvec![]))
+    }
+
+    pub fn append(
+        self,
+        cost: InternalGasUnits<GasCarrier>,
+        e: Vector,
+        type_param: &Type,
+    ) -> PartialVMResult<NativeResult> {
+        let lhs = self.0.container();
+        let other = e.0;
+        check_elem_layout(type_param, lhs)?;
+        check_elem_layout(type_param, &other)?;
+        // cost with memory
+        let cost = cost.mul(other.size());
+
+        match (lhs, other) {
+            (Container::Vec(c), Container::Vec(r)) => {
+                c.borrow_mut().append(r.borrow_mut().as_mut());
+            }
+
+            (Container::VecU8(c), Container::VecU8(r)) => {
+                c.borrow_mut().append(r.borrow_mut().as_mut());
+            }
+            (Container::VecU64(c), Container::VecU64(r)) => {
+                c.borrow_mut().append(r.borrow_mut().as_mut());
+            }
+            (Container::VecU128(c), Container::VecU128(r)) => {
+                c.borrow_mut().append(r.borrow_mut().as_mut());
+            }
+            (Container::VecBool(c), Container::VecBool(r)) => {
+                c.borrow_mut().append(r.borrow_mut().as_mut());
+            }
+            (Container::VecAddress(c), Container::VecAddress(r)) => {
+                c.borrow_mut().append(r.borrow_mut().as_mut());
+            }
+            (Container::Locals(_), _) | (Container::Struct(_), _) => unreachable!(),
+            _ => unreachable!(),
+        }
+        self.0.mark_dirty();
+
+        Ok(NativeResult::ok(cost, smallvec![]))
     }
 }
 
@@ -2342,6 +2452,7 @@ use serde::{
     ser::{Error as SerError, SerializeSeq, SerializeTuple},
     Deserialize,
 };
+use smallvec::smallvec;
 
 impl Value {
     pub fn simple_deserialize(blob: &[u8], layout: &MoveTypeLayout) -> Option<Value> {
