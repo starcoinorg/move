@@ -37,7 +37,7 @@ use tracing::warn;
 
 /// An instantiation of the MoveVM.
 pub(crate) struct VMRuntime {
-    loader: Loader,
+    pub(crate) loader: Loader,
     verifier_config: VerifierConfig,
 }
 

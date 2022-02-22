@@ -34,7 +34,6 @@ pub struct ToBytesGasParameters {
     pub legacy_min_output_size: NumBytes,
     pub failure: InternalGas,
 }
-
 /// Rust implementation of Move's `native public fun to_bytes<T>(&T): vector<u8>`
 #[inline]
 fn native_to_bytes(
@@ -102,3 +101,30 @@ pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, Nati
 
     make_module_natives(natives)
 }
+
+// /// Rust implementation of Move's `public fun from_public_key_vec(pub_key_vec: vector<u8>): address;`
+// pub fn native_to_address(
+//     context: &mut NativeContext,
+//     mut _ty_args: Vec<Type>,
+//     mut args: VecDeque<Value>,
+// ) -> PartialVMResult<NativeResult> {
+//     debug_assert!(_ty_args.is_empty());
+//     debug_assert!(args.len() == 1);
+//
+//     let key_bytes = pop_arg!(args, Vec<u8>);
+//     let cost = native_gas(
+//         context.cost_table(),
+//         NativeCostIndex::BCS_TO_ADDRESS,
+//         key_bytes.len(),
+//     );
+//     if key_bytes.len() != AccountAddress::LENGTH {
+//         return Ok(NativeResult::err(cost, NFE_BCS_TO_ADDRESS_FAILURE));
+//     }
+//
+//     let address = match AccountAddress::try_from(&key_bytes[..AccountAddress::LENGTH]) {
+//         Ok(addr) => addr,
+//         Err(_) => return Ok(NativeResult::err(cost, NFE_BCS_TO_ADDRESS_FAILURE)),
+//     };
+//     let return_values = smallvec![Value::address(address)];
+//     Ok(NativeResult::ok(cost, return_values))
+// }

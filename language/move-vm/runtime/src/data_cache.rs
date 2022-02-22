@@ -10,7 +10,7 @@ use move_core_types::{
     effects::{AccountChangeSet, ChangeSet, Event, Op},
     gas_algebra::NumBytes,
     identifier::Identifier,
-    language_storage::{ModuleId, TypeTag},
+    language_storage::{ModuleId, StructTag, TypeTag},
     resolver::MoveResolver,
     value::MoveTypeLayout,
     vm_status::StatusCode,
@@ -218,7 +218,9 @@ impl<'r, 'l, S: MoveResolver> DataStore for TransactionDataCache<'r, 'l, S> {
                 }
             };
 
-            account_cache.data_map.insert(ty.clone(), (ty_layout, gv));
+            account_cache
+                .data_map
+                .insert(ty.clone(), (ty_layout, gv));
         }
 
         Ok((

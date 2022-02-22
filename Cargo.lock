@@ -355,6 +355,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bech32"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5738be7561b0eeb501ef1d5c5db3f24e01ceb55fededd9b00039aada34966ad"
+
+[[package]]
 name = "better_any"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3080,6 +3086,7 @@ version = "0.0.4"
 dependencies = [
  "anyhow",
  "bcs",
+ "bech32",
  "hex",
  "once_cell",
  "proptest",
