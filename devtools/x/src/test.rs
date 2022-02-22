@@ -106,7 +106,7 @@ pub fn run(mut args: Args, xctx: XContext) -> Result<()> {
             env: build_env_vars.as_slice(),
             skip_sccache: true,
         };
-        let build_result = build.run_on_packages(&packages);
+        let build_result = build.run_on_packages(&packages, &xctx);
 
         if !args.no_fail_fast && build_result.is_err() {
             return build_result;
@@ -139,7 +139,7 @@ pub fn run(mut args: Args, xctx: XContext) -> Result<()> {
         skip_sccache: generate_coverage,
     };
 
-    let cmd_result = cmd.run_on_packages(&packages);
+    let cmd_result = cmd.run_on_packages(&packages, &xctx);
 
     if !args.no_fail_fast && cmd_result.is_err() {
         return cmd_result;

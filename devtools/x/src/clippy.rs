@@ -48,5 +48,5 @@ pub fn run(args: Args, xctx: XContext) -> Result<()> {
         args: &pass_through_args,
     };
     let packages = args.package_args.to_selected_packages(&xctx)?;
-    cmd.run_on_packages(&packages)
+    cmd.run_on_packages(&packages, &xctx)
 }

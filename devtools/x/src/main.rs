@@ -2,6 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright (c) The Starcoin Core Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 #![forbid(unsafe_code)]
 
 use chrono::Local;
@@ -50,7 +53,7 @@ enum Command {
     Build(Box<build::Args>),
     #[clap(name = "check")]
     /// Run `cargo check`
-    Check(check::Args),
+    Check(x::check::Args),
     /// List packages changed since merge base with the given commit
     ///
     /// Note that this compares against the merge base (common ancestor) of the specified commit.
@@ -64,7 +67,6 @@ enum Command {
     #[clap(name = "fix")]
     /// Run `cargo fix`
     Fix(fix::Args),
-    #[clap(name = "fmt")]
     /// Run `cargo fmt`
     Fmt(fmt::Args),
     #[clap(name = "test")]
@@ -77,16 +79,7 @@ enum Command {
     /// Run tests
     Tools(tools::Args),
     #[clap(name = "lint")]
-    /// Run lints
     Lint(lint::Args),
-    /// Run playground code
-    Playground(playground::Args),
-    #[clap(name = "generate-summaries")]
-    /// Generate build summaries for important subsets
-    GenerateSummaries(generate_summaries::Args),
-    #[clap(name = "diff-summary")]
-    /// Diff build summaries for important subsets
-    DiffSummary(diff_summary::Args),
 }
 
 fn main() -> Result<()> {

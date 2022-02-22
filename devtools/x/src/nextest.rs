@@ -154,7 +154,7 @@ pub fn run(args: Args, xctx: XContext) -> Result<()> {
         skip_sccache: false,
     };
 
-    let stdout = cmd.run_capture_stdout(&packages)?;
+    let stdout = cmd.run_capture_stdout(&packages, &xctx)?;
 
     if args.no_run {
         // Don't proceed further.
