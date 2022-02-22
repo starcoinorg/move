@@ -40,6 +40,14 @@ pub(crate) struct VMRuntime {
     pub(crate) loader: Loader,
 }
 
+// signer helper closure
+fn is_signer_reference(s: &Type) -> bool {
+    match s {
+        Type::Reference(ty) => matches!(&**ty, Type::Signer),
+        _ => false,
+    }
+}
+
 impl VMRuntime {
     pub(crate) fn new(
         natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,

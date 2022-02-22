@@ -6,6 +6,7 @@ use crate::{
     interpreter::Interpreter, loader::Resolver, native_extensions::NativeContextExtensions,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::language_storage::TypeTag;
 use move_core_types::{
     account_address::AccountAddress,
     gas_schedule::CostTable,
@@ -151,11 +152,7 @@ impl<'a, 'b> NativeContext<'a, 'b> {
         }
     }
 
-    pub fn extensions(&self) -> &NativeContextExtensions<'b> {
-        self.extensions
-    }
-
-    pub fn extensions_mut(&mut self) -> &mut NativeContextExtensions<'b> {
-        self.extensions
+    pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+        self.resolver.type_to_type_tag(ty)
     }
 }

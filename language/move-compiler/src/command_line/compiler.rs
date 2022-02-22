@@ -419,12 +419,12 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     interface_files_dir_opt: Option<String>,
     flags: Flags,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
-        let compiler = Compiler::from_package_paths(targets, Vec::<PackagePaths<Paths, NamedAddress>>::new())
-            .set_interface_files_dir_opt(interface_files_dir_opt)
-            .set_flags(flags);
-        construct_pre_compiled_lib_from_compiler(compiler)
+    let compiler = Compiler::new(&[], deps)
+        .set_interface_files_dir_opt(interface_files_dir_opt)
+        .set_flags(flags)
+        .set_named_address_values(named_address_values);
+    construct_pre_compiled_lib_from_compiler(compiler)
 }
-
 pub fn construct_pre_compiled_lib_from_compiler(
     compiler: Compiler,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {

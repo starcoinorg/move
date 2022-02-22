@@ -49,11 +49,11 @@ pub struct Move {
     pub package_path: PathBuf,
 
     /// Print additional diagnostics if available.
-    #[clap(short = 'v', global = true)]
-    verbose: bool,
+    #[structopt(short = "v", global = true)]
+    pub verbose: bool,
 
     /// Package build options
-    #[clap(flatten)]
+    #[structopt(flatten)]
     pub build_config: BuildConfig,
 }
 
