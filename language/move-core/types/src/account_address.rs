@@ -7,11 +7,28 @@ use hex::FromHex;
 use rand::{rngs::OsRng, Rng};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryFrom, fmt, str::FromStr};
+use schemars::{JsonSchema, schema::{InstanceType, Schema, SchemaObject}, gen::SchemaGenerator,};
 
 /// A struct that represents an account address.
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 pub struct AccountAddress([u8; AccountAddress::LENGTH]);
+
+impl JsonSchema for AccountAddress {
+
+    fn schema_name() -> String {
+        "AccountAddress".to_owned()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        SchemaObject {
+            instance_type: Some(InstanceType::String.into()),
+            format: Some("AccountAddress".to_owned()),
+            ..Default::default()
+        }
+            .into()
+    }
+}
 
 impl AccountAddress {
     pub const fn new(address: [u8; Self::LENGTH]) -> Self {
@@ -272,8 +289,8 @@ impl FromStr for AccountAddress {
 
 impl<'de> Deserialize<'de> for AccountAddress {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
             let s = <String>::deserialize(deserializer)?;
@@ -294,8 +311,8 @@ impl<'de> Deserialize<'de> for AccountAddress {
 
 impl Serialize for AccountAddress {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
+        where
+            S: Serializer,
     {
         if serializer.is_human_readable() {
             self.to_string().serialize(serializer)
