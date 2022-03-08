@@ -19,7 +19,6 @@ pub const CORE_CODE_ADDRESS: AccountAddress = AccountAddress::ONE;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 pub enum TypeTag {
-    // alias for compatibility with old json serialized data.
     #[serde(rename = "bool", alias = "Bool")]
     Bool,
     #[serde(rename = "u8", alias = "U8")]
@@ -44,7 +43,6 @@ pub struct StructTag {
     pub module: Identifier,
     pub name: Identifier,
     // TODO: rename to "type_args" (or better "ty_args"?)
-    // alias for compatibility with old json serialized data.
     #[serde(rename = "type_args", alias = "type_params")]
     pub type_params: Vec<TypeTag>,
 }
