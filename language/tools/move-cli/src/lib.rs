@@ -31,8 +31,6 @@ type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunct
 
 #[derive(Parser)]
 #[clap(
-    author,
-    version,
     name = "move",
     about = "CLI frontend for Move compiler and VM",
     rename_all = "kebab-case"
@@ -49,12 +47,12 @@ pub struct Move {
     pub package_path: PathBuf,
 
     /// Print additional diagnostics if available.
-    #[structopt(short = "v", global = true)]
-    pub verbose: bool,
+    #[clap(short = 'v', global = true)]
+    verbose: bool,
 
     /// Package build options
-    #[structopt(flatten)]
-    pub build_config: BuildConfig,
+    #[clap(flatten)]
+    build_config: BuildConfig,
 }
 
 /// MoveCLI is the CLI that will be executed by the `move-cli` command

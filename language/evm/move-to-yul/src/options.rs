@@ -2,18 +2,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::experiments::Experiment;
 use clap::Parser;
 use codespan_reporting::diagnostic::Severity;
 
 /// Options for a run of the compiler.
 #[derive(Parser, Debug)]
-#[clap(
-    author,
-    version,
-    name = "move-to-yul",
-    about = "Move Solidity Generator"
-)]
+#[clap(name = "move-to-yul", about = "Move Solidity Generator")]
 pub struct Options {
     /// Directories where to lookup dependencies.
     #[clap(
@@ -37,6 +31,7 @@ pub struct Options {
     pub output: String,
     /// Solc executable
     #[clap(long, env = "SOLC_EXE", default_value = "solc")]
+
     pub solc_exe: String,
     /// Whether to dump bytecode to a file.
     #[clap(long = "dump-bytecode")]

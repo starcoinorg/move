@@ -18,10 +18,8 @@ use std::{
 
 #[derive(Debug, Parser)]
 #[clap(
-    name = "coverage-summaries",
-    about = "Creates a coverage summary from the trace data collected from the Move VM",
-    author,
-    version
+    name = "Move VM Coverage Summary",
+    about = "Creates a coverage summary from the trace data collected from the Move VM"
 )]
 struct Args {
     /// The path to the coverage map or trace file

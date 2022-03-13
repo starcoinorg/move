@@ -8,11 +8,11 @@ publish = false
 edition = "2018"
 
 [dependencies]
-clap = { version = "3.1.8", features = ["derive"] }
+clap = { version = "3", features = ["derive"] }
 anyhow = "1.0.52"
 regex = "1.5.4"
-termion = "1.5"
-tui = "0.14.0"
+tui = "0.17.0"
+crossterm = "0.21"
 
 move-command-line-common = { path = "../../move-command-line-common" }
 move-bytecode-source-map = { path = "../../move-ir-compiler/move-bytecode-source-map" }

@@ -108,9 +108,8 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
     }
 }
 
-pub trait MoveTestAdapter<'a>: Sized {
+pub trait MoveTestAdapter<'a> {
     type ExtraPublishArgs: Parser;
-    type ExtraValueArgs: ParsableValue;
     type ExtraRunArgs: Parser;
     type Subcommand: Parser;
     type ExtraInitArgs: Parser;
@@ -667,7 +666,6 @@ where
     Adapter: MoveTestAdapter<'a>,
     Adapter::ExtraInitArgs: Debug,
     Adapter::ExtraPublishArgs: Debug,
-    Adapter::ExtraValueArgs: Debug,
     Adapter::ExtraRunArgs: Debug,
     Adapter::Subcommand: Debug,
 {

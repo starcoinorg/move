@@ -18,10 +18,8 @@ use std::{
 
 #[derive(Debug, Parser)]
 #[clap(
-    name = "source-coverage",
-    about = "Annotate Move Source Code with Coverage Information",
-    author,
-    version
+    name = "Move Source Coverage",
+    about = "Annotate Move Source Code with Coverage Information"
 )]
 struct Args {
     /// The path to the coverage map or trace file

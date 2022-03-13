@@ -12,12 +12,7 @@ use move_compiler::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(
-    name = "move-build",
-    about = "Compile Move source to Move bytecode",
-    author,
-    version
-)]
+#[clap(name = "Move Build", about = "Compile Move source to Move bytecode.")]
 pub struct Options {
     /// The source files to check and compile
     #[clap(

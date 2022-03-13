@@ -25,16 +25,15 @@ struct Args {
 }
 
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
 enum Command {
     #[clap(name = "bench")]
     /// Run `cargo bench`
-    Bench(x::bench::Args),
-    #[structopt(name = "build")]
+    Bench(bench::Args),
+    #[clap(name = "build")]
     /// Run `cargo build`
     // the argument must be Boxed due to it's size and clippy (it's quite large by comparison to others.)
-    Build(Box<x::build::Args>),
-    #[structopt(name = "check")]
+    Build(Box<build::Args>),
+    #[clap(name = "check")]
     /// Run `cargo check`
     Check(x::check::Args),
     /// List packages changed since merge base with the given commit
@@ -42,38 +41,38 @@ enum Command {
     /// Note that this compares against the merge base (common ancestor) of the specified commit.
     /// For example, if origin/master is specified, the current working directory will be compared
     /// against the point at which it branched off of origin/master.
-    #[structopt(name = "changed-since")]
-    ChangedSince(x::changed_since::Args),
-    #[structopt(name = "clippy")]
+    #[clap(name = "changed-since")]
+    ChangedSince(changed_since::Args),
+    #[clap(name = "clippy")]
     /// Run `cargo clippy`
-    Clippy(x::clippy::Args),
-    #[structopt(name = "fix")]
+    Clippy(clippy::Args),
+    #[clap(name = "fix")]
     /// Run `cargo fix`
-    Fix(x::fix::Args),
-    #[structopt(name = "fmt")]
+    Fix(fix::Args),
+    #[clap(name = "fmt")]
     /// Run `cargo fmt`
-    Fmt(x::fmt::Args),
-    #[structopt(name = "test")]
+    Fmt(fmt::Args),
+    #[clap(name = "test")]
     /// Run tests
-    Test(x::test::Args),
-    #[structopt(name = "nextest")]
+    Test(test::Args),
+    #[clap(name = "nextest")]
     /// Run tests with new test runner
-    Nextest(x::nextest::Args),
-    #[structopt(name = "tools")]
+    Nextest(nextest::Args),
+    #[clap(name = "tools")]
     /// Run tests
-    Tools(x::tools::Args),
-    #[structopt(name = "lint")]
+    Tools(tools::Args),
+    #[clap(name = "lint")]
     /// Run lints
     Lint(x::lint::Args),
     /// Run playground code
-    Playground(x::playground::Args),
-    #[structopt(name = "generate-summaries")]
+    Playground(playground::Args),
+    #[clap(name = "generate-summaries")]
     /// Generate build summaries for important subsets
-    GenerateSummaries(x::generate_summaries::Args),
-    #[structopt(name = "diff-summary")]
+    GenerateSummaries(generate_summaries::Args),
+    #[clap(name = "diff-summary")]
     /// Diff build summaries for important subsets
-    DiffSummary(x::diff_summary::Args),
-    #[structopt(name = "generate-workspace-hack")]
+    DiffSummary(diff_summary::Args),
+    #[clap(name = "generate-workspace-hack")]
     /// Update workspace-hack contents
     GenerateWorkspaceHack(x::generate_workspace_hack::Args),
 }
@@ -100,8 +99,8 @@ fn main() -> Result<()> {
         })
         .init();
 
-    let args = Args::from_args();
-    let xctx = x::context::XContext::new()?;
+    let args = Args::parse();
+    let xctx = context::XContext::new()?;
 
     match args.cmd {
         Command::Tools(args) => x::tools::run(args, xctx),

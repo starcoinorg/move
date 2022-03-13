@@ -8,7 +8,7 @@ pub mod compilation;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use clap::*;
 use compilation::compiled_package::CompilationCachingStatus;
 use move_core_types::account_address::AccountAddress;
@@ -31,67 +31,11 @@ use crate::{
     source_package::{layout, manifest_parser},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum Architecture {
-    Move,
-
-    AsyncMove,
-
-    Ethereum,
-}
-
-impl fmt::Display for Architecture {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Move => write!(f, "move"),
-
-            Self::AsyncMove => write!(f, "async-move"),
-
-            Self::Ethereum => write!(f, "ethereum"),
-        }
-    }
-}
-
-impl Architecture {
-    fn all() -> impl Iterator<Item = Self> {
-        IntoIterator::into_iter([
-            Self::Move,
-            Self::AsyncMove,
-            #[cfg(feature = "evm-backend")]
-            Self::Ethereum,
-        ])
-    }
-
-    fn try_parse_from_str(s: &str) -> Result<Self> {
-        Ok(match s {
-            "move" => Self::Move,
-
-            "async-move" => Self::AsyncMove,
-
-            "ethereum" => Self::Ethereum,
-
-            _ => {
-                let supported_architectures = Self::all()
-                    .map(|arch| format!("\"{}\"", arch))
-                    .collect::<Vec<_>>();
-                let be = if supported_architectures.len() == 1 {
-                    "is"
-                } else {
-                    "are"
-                };
-                bail!(
-                    "Unrecognized architecture {} -- only {} {} supported",
-                    s,
-                    supported_architectures.join(", "),
-                    be
-                )
-            }
-        })
-    }
-}
-
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd)]
-#[clap(author, version, about)]
+#[clap(
+    name = "Move Package",
+    about = "Package and build system for Move code."
+)]
 pub struct BuildConfig {
     /// Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if
     /// this flag is set. This flag is useful for development of packages that expose named
@@ -100,7 +44,7 @@ pub struct BuildConfig {
     pub dev_mode: bool,
 
     /// Compile in 'test' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used
-    /// along with any code in the 'tests' directory.
+    /// along with any code in the 'test' directory.
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
 

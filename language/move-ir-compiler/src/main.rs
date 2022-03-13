@@ -23,12 +23,7 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(
-    author,
-    version,
-    name = "IR Compiler",
-    about = "Move IR to bytecode compiler."
-)]
+#[clap(name = "IR Compiler", about = "Move IR to bytecode compiler.")]
 struct Args {
     /// Treat input file as a module (default is to treat file as a script)
     #[clap(short = 'm', long = "module")]
