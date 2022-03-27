@@ -83,7 +83,11 @@ pub fn module_generation_settings() -> ModuleGeneratorOptions {
 
 /// Command line arguments for the tool
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[clap(
+    name = "Bytecode Test Generator",
+    author = "Diem",
+    about = "Tool for generating tests for the bytecode verifier and Move VM runtime."
+)]
 pub struct Args {
     /// The optional number of programs that will be generated. If not specified, program
     /// generation will run infinitely.

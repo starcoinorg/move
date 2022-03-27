@@ -21,7 +21,10 @@ pub mod tui;
 pub mod viewer;
 
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[clap(
+    name = "Move Bytecode Explorer",
+    about = "Explore Move bytecode and how the source code compiles to it"
+)]
 pub struct BytecodeViewerConfig {
     /// The path to the module binary
     #[clap(long = "module-path", short = 'b')]

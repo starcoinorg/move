@@ -8,7 +8,7 @@ use codespan_reporting::diagnostic::Severity;
 
 /// Options for a run of the compiler.
 #[derive(Parser, Debug)]
-#[clap(author, version, about)]
+#[clap(name = "move-to-yul", about = "Move Solidity Generator")]
 pub struct Options {
     /// Directories where to lookup dependencies.
     #[clap(

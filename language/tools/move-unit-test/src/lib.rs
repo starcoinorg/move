@@ -27,7 +27,7 @@ use std::{
 };
 
 #[derive(Debug, Parser, Clone)]
-#[clap(author, version, about)]
+#[clap(name = "Move Unit Test", about = "Unit testing for Move code.")]
 pub struct UnitTestingConfig {
     /// Bound the number of instructions that can be executed by any one test.
     #[clap(

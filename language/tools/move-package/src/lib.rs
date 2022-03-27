@@ -8,8 +8,9 @@ pub mod compilation;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use clap::*;
+use compilation::compiled_package::CompilationCachingStatus;
 use move_core_types::account_address::AccountAddress;
 use move_model::model::GlobalEnv;
 use serde::{Deserialize, Serialize};

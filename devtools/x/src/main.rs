@@ -11,6 +11,7 @@ use chrono::Local;
 use clap::Parser;
 use env_logger::{self, fmt::Color};
 use log::Level;
+use x::generate_workspace_hack;
 use std::{boxed::Box, io::Write};
 
 mod bench;
@@ -67,6 +68,7 @@ enum Command {
     #[clap(name = "fix")]
     /// Run `cargo fix`
     Fix(fix::Args),
+    #[clap(name = "fmt")]
     /// Run `cargo fmt`
     Fmt(fmt::Args),
     #[clap(name = "test")]
@@ -79,7 +81,19 @@ enum Command {
     /// Run tests
     Tools(tools::Args),
     #[clap(name = "lint")]
-    Lint(lint::Args),
+    /// Run lints
+    Lint(x::lint::Args),
+    /// Run playground code
+    Playground(playground::Args),
+    #[clap(name = "generate-summaries")]
+    /// Generate build summaries for important subsets
+    GenerateSummaries(generate_summaries::Args),
+    #[clap(name = "diff-summary")]
+    /// Diff build summaries for important subsets
+    DiffSummary(diff_summary::Args),
+    #[clap(name = "generate-workspace-hack")]
+    /// Update workspace-hack contents
+    GenerateWorkspaceHack(x::generate_workspace_hack::Args),
 }
 
 fn main() -> Result<()> {
@@ -122,5 +136,6 @@ fn main() -> Result<()> {
         Command::Playground(args) => playground::run(args, xctx),
         Command::GenerateSummaries(args) => generate_summaries::run(args, xctx),
         Command::DiffSummary(args) => diff_summary::run(args, xctx),
+        Command::GenerateWorkspaceHack(args) => generate_workspace_hack::run(args, xctx),
     }
 }
