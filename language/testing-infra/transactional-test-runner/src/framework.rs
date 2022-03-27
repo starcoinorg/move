@@ -9,7 +9,6 @@ use crate::tasks::{
     RunCommand, SyntaxChoice, TaskCommand, TaskInput, ViewCommand,
 };
 use anyhow::{anyhow, Result};
-use clap::Parser;
 use move_binary_format::{
     binary_views::BinaryIndexedView,
     file_format::{CompiledModule, CompiledScript},
