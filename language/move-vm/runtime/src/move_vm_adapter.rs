@@ -1,17 +1,16 @@
 use crate::session::Session;
-use move_binary_format::access::ModuleAccess;
-use move_binary_format::compatibility::Compatibility;
-use move_binary_format::errors::*;
-use move_binary_format::{normalized, CompiledModule, IndexKind};
-use move_core_types::vm_status::StatusCode;
+use move_binary_format::{
+    access::ModuleAccess, compatibility::Compatibility, errors::*, normalized, CompiledModule,
+    IndexKind,
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::*,
+    vm_status::StatusCode,
 };
-use move_vm_types::data_store::DataStore;
-use move_vm_types::gas_schedule::GasStatus;
+use move_vm_types::{data_store::DataStore, gas_schedule::GasStatus};
 use std::collections::BTreeSet;
 use tracing::warn;
 

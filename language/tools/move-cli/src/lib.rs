@@ -31,6 +31,8 @@ type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunct
 
 #[derive(Parser)]
 #[clap(
+    author,
+    version,
     name = "move",
     about = "CLI frontend for Move compiler and VM",
     rename_all = "kebab-case"

@@ -18,7 +18,12 @@ use move_analyzer::{
 };
 
 #[derive(Parser)]
-#[clap(name = "move-analyzer", about = "A language server for Move")]
+#[clap(
+    author,
+    version,
+    name = "move-analyzer",
+    about = "A language server for Move"
+)]
 struct Options {}
 
 fn main() {

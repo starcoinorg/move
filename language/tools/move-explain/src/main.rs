@@ -10,6 +10,8 @@ use move_core_types::{
 };
 #[derive(Debug, Parser)]
 #[clap(
+    author,
+    version,
     name = "Move Explain",
     about = "Explain Move abort codes. Errors are defined as a global category + module-specific reason for the error."
 )]

@@ -11,7 +11,6 @@ use chrono::Local;
 use clap::Parser;
 use env_logger::{self, fmt::Color};
 use log::Level;
-use x::generate_workspace_hack;
 use std::{boxed::Box, io::Write};
 
 mod bench;
@@ -33,6 +32,7 @@ mod playground;
 mod test;
 mod tools;
 mod utils;
+// mod generate_workspace_hack;
 
 type Result<T> = anyhow::Result<T>;
 
@@ -54,7 +54,7 @@ enum Command {
     Build(Box<build::Args>),
     #[clap(name = "check")]
     /// Run `cargo check`
-    Check(x::check::Args),
+    Check(check::Args),
     /// List packages changed since merge base with the given commit
     ///
     /// Note that this compares against the merge base (common ancestor) of the specified commit.
@@ -82,7 +82,7 @@ enum Command {
     Tools(tools::Args),
     #[clap(name = "lint")]
     /// Run lints
-    Lint(x::lint::Args),
+    Lint(lint::Args),
     /// Run playground code
     Playground(playground::Args),
     #[clap(name = "generate-summaries")]
@@ -91,9 +91,9 @@ enum Command {
     #[clap(name = "diff-summary")]
     /// Diff build summaries for important subsets
     DiffSummary(diff_summary::Args),
-    #[clap(name = "generate-workspace-hack")]
-    /// Update workspace-hack contents
-    GenerateWorkspaceHack(x::generate_workspace_hack::Args),
+    // #[clap(name = "generate-workspace-hack")]
+    // Update workspace-hack contents
+    // GenerateWorkspaceHack(x::generate_workspace_hack::Args),
 }
 
 fn main() -> Result<()> {
@@ -136,6 +136,6 @@ fn main() -> Result<()> {
         Command::Playground(args) => playground::run(args, xctx),
         Command::GenerateSummaries(args) => generate_summaries::run(args, xctx),
         Command::DiffSummary(args) => diff_summary::run(args, xctx),
-        Command::GenerateWorkspaceHack(args) => generate_workspace_hack::run(args, xctx),
+        // Command::GenerateWorkspaceHack(args) => generate_workspace_hack::run(args, xctx),
     }
 }

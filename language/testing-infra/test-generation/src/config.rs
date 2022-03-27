@@ -86,6 +86,7 @@ pub fn module_generation_settings() -> ModuleGeneratorOptions {
 #[clap(
     name = "Bytecode Test Generator",
     author = "Diem",
+    version,
     about = "Tool for generating tests for the bytecode verifier and Move VM runtime."
 )]
 pub struct Args {

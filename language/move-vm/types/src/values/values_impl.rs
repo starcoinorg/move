@@ -10,8 +10,8 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     gas_schedule::{
-        AbstractMemorySize, GasAlgebra, GasCarrier, CONST_SIZE, MIN_EXISTS_DATA_SIZE,
-        REFERENCE_SIZE, STRUCT_SIZE, InternalGasUnits,
+        AbstractMemorySize, GasAlgebra, GasCarrier, InternalGasUnits, CONST_SIZE,
+        MIN_EXISTS_DATA_SIZE, REFERENCE_SIZE, STRUCT_SIZE,
     },
     value::{MoveStructLayout, MoveTypeLayout},
     vm_status::{sub_status::NFE_VECTOR_ERROR_BASE, StatusCode},
