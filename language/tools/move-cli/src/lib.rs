@@ -54,7 +54,7 @@ pub struct Move {
 
     /// Package build options
     #[clap(flatten)]
-    build_config: BuildConfig,
+    pub build_config: BuildConfig,
 }
 
 /// MoveCLI is the CLI that will be executed by the `move-cli` command
