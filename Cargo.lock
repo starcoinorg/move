@@ -2950,6 +2950,7 @@ name = "move-vm-test-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "move-binary-format",
  "move-core-types",
  "move-table-extension",
 ]
