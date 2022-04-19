@@ -17,7 +17,3 @@ anyhow = "1.0.52"
 move-core-types = {path = "../../move-core/types" }
 move-table-extension = { path = "../../extensions/move-table-extension", optional = true }
 move-binary-format = { path = "../../move-binary-format" }
-
-[features]
-default = [ ]
-table-extension = [ "move-table-extension" ]

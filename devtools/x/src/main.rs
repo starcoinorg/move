@@ -16,6 +16,26 @@ use env_logger::{self, fmt::Color};
 use log::Level;
 use std::{boxed::Box, io::Write};
 
+mod bench;
+mod build;
+mod cargo;
+mod changed_since;
+mod check;
+mod clippy;
+mod config;
+mod context;
+mod diff_summary;
+mod fix;
+mod fmt;
+mod generate_summaries;
+mod installer;
+mod lint;
+mod nextest;
+mod playground;
+mod test;
+mod tools;
+mod utils;
+
 type Result<T> = anyhow::Result<T>;
 
 #[derive(Debug, Parser)]
@@ -35,7 +55,7 @@ enum Command {
     Build(Box<build::Args>),
     #[clap(name = "check")]
     /// Run `cargo check`
-    Check(x::check::Args),
+    Check(check::Args),
     /// List packages changed since merge base with the given commit
     ///
     /// Note that this compares against the merge base (common ancestor) of the specified commit.
@@ -63,7 +83,7 @@ enum Command {
     Tools(tools::Args),
     #[clap(name = "lint")]
     /// Run lints
-    Lint(x::lint::Args),
+    Lint(lint::Args),
     /// Run playground code
     Playground(playground::Args),
     #[clap(name = "generate-summaries")]
@@ -72,9 +92,6 @@ enum Command {
     #[clap(name = "diff-summary")]
     /// Diff build summaries for important subsets
     DiffSummary(diff_summary::Args),
-    #[clap(name = "generate-workspace-hack")]
-    /// Update workspace-hack contents
-    GenerateWorkspaceHack(x::generate_workspace_hack::Args),
 }
 
 fn main() -> Result<()> {
@@ -103,20 +120,19 @@ fn main() -> Result<()> {
     let xctx = context::XContext::new()?;
 
     match args.cmd {
-        Command::Tools(args) => x::tools::run(args, xctx),
-        Command::Test(args) => x::test::run(args, xctx),
-        Command::Nextest(args) => x::nextest::run(args, xctx),
-        Command::Build(args) => x::build::run(args, xctx),
-        Command::ChangedSince(args) => x::changed_since::run(args, xctx),
-        Command::Check(args) => x::check::run(args, xctx),
-        Command::Clippy(args) => x::clippy::run(args, xctx),
-        Command::Fix(args) => x::fix::run(args, xctx),
-        Command::Fmt(args) => x::fmt::run(args, xctx),
-        Command::Bench(args) => x::bench::run(args, xctx),
-        Command::Lint(args) => x::lint::run(args, xctx),
-        Command::Playground(args) => x::playground::run(args, xctx),
-        Command::GenerateSummaries(args) => x::generate_summaries::run(args, xctx),
-        Command::DiffSummary(args) => x::diff_summary::run(args, xctx),
-        Command::GenerateWorkspaceHack(args) => x::generate_workspace_hack::run(args, xctx),
+        Command::Tools(args) => tools::run(args, xctx),
+        Command::Test(args) => test::run(args, xctx),
+        Command::Nextest(args) => nextest::run(args, xctx),
+        Command::Build(args) => build::run(args, xctx),
+        Command::ChangedSince(args) => changed_since::run(args, xctx),
+        Command::Check(args) => check::run(args, xctx),
+        Command::Clippy(args) => clippy::run(args, xctx),
+        Command::Fix(args) => fix::run(args, xctx),
+        Command::Fmt(args) => fmt::run(args, xctx),
+        Command::Bench(args) => bench::run(args, xctx),
+        Command::Lint(args) => lint::run(args, xctx),
+        Command::Playground(args) => playground::run(args, xctx),
+        Command::GenerateSummaries(args) => generate_summaries::run(args, xctx),
+        Command::DiffSummary(args) => diff_summary::run(args, xctx),
     }
 }

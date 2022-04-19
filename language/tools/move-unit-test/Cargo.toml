@@ -33,13 +33,6 @@ move-model = { path = "../../move-model" }
 move-stackless-bytecode-interpreter = { path = "../../move-prover/interpreter" }
 move-bytecode-utils = { path = "../move-bytecode-utils" }
 
-# EVM-specific dependencies
-move-to-yul = { path = "../../evm/move-to-yul", optional = true }
-evm-exec-utils = { path = "../../evm/exec-utils", optional = true }
-
-evm = { version = "0.33.1", optional = true }
-primitive-types = { version = "0.10.1", optional = true }
-
 [dev-dependencies]
 datatest-stable = "0.1.1"
 difference = "2.0.0"
