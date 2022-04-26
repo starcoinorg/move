@@ -15,7 +15,6 @@ pub mod diff_summary;
 pub mod fix;
 pub mod fmt;
 pub mod generate_summaries;
-pub mod generate_workspace_hack;
 pub mod installer;
 pub mod lint;
 pub mod nextest;
