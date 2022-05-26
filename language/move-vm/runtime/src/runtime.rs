@@ -226,7 +226,7 @@ impl VMRuntime {
         }
     }
 
-    fn deserialize_args(
+    pub(crate) fn deserialize_args(
         &self,
         arg_tys: Vec<Type>,
         serialized_args: Vec<impl Borrow<[u8]>>,

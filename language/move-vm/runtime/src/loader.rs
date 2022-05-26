@@ -2382,6 +2382,10 @@ impl Function {
         &self.type_parameters
     }
 
+    pub(crate) fn parameters(&self) -> &Signature {
+        &self.parameters
+    }
+
     pub(crate) fn local_types(&self) -> &[Type] {
         &self.local_types
     }
