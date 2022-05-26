@@ -1,9 +1,15 @@
-use crate::session::Session;
-use move_binary_format::access::ModuleAccess;
-use move_binary_format::compatibility::Compatibility;
 use move_binary_format::errors::*;
-use move_binary_format::{normalized, CompiledModule, IndexKind};
 use move_core_types::vm_status::StatusCode;
+// Copyright (c) The Starcoin Core Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::loader::Function;
+use crate::session::{LoadedFunctionInstantiation, Session};
+use move_binary_format::{
+    access::ModuleAccess, compatibility::Compatibility, normalized, CompiledModule,
+    IndexKind,
+};
+use move_core_types::value::MoveValue;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
@@ -11,9 +17,11 @@ use move_core_types::{
     resolver::*,
 };
 use move_vm_types::data_store::DataStore;
-use std::collections::BTreeSet;
-use tracing::warn;
 use move_vm_types::gas::GasMeter;
+use move_vm_types::loaded_data::runtime_types::Type;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use tracing::warn;
 
 /// Publish module bundle options
 /// - force_publish: force publish without compatibility check.
@@ -34,6 +42,7 @@ impl<'r, 'l, R> From<Session<'r, 'l, R>> for SessionAdapter<'r, 'l, R> {
         Self { session: s }
     }
 }
+
 impl<'r, 'l, R> Into<Session<'r, 'l, R>> for SessionAdapter<'r, 'l, R> {
     fn into(self) -> Session<'r, 'l, R> {
         self.session
@@ -150,7 +159,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
                 let old_module = old_module_ref.module();
                 let old_m = normalized::Module::new(old_module);
                 let new_m = normalized::Module::new(&module);
-                let compat = Compatibility::check(false,&old_m, &new_m);
+                let compat = Compatibility::check(false, &old_m, &new_m);
                 if !compat.is_fully_compatible() && !option.force_publish {
                     return Err(PartialVMError::new(
                         StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
@@ -174,51 +183,121 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
 
     pub fn verify_script_args(
         &mut self,
-        _script: Vec<u8>,
-        _ty_args: Vec<TypeTag>,
-        _args: Vec<Vec<u8>>,
-        _senders: Vec<AccountAddress>,
+        script: Vec<u8>,
+        ty_args: Vec<TypeTag>,
+        args: Vec<Vec<u8>>,
+        sender: AccountAddress,
     ) -> VMResult<()> {
-        // load the script, perform verification
-        // let (main, _ty_args, params) = self.session.runtime.loader.load_script(
-        //     &script,
-        //     &ty_args,
-        //     &mut self.session.data_cache,
-        // )?;
-        // let _signers_and_args = self
-        //     .session
-        //     .runtime
-        //     .create_signers_and_arguments(main.file_format_version(), &params, senders, args)
-        //     .map_err(|err| err.finish(Location::Undefined))?;
+        //load the script, perform verification
+        let (
+            main,
+            LoadedFunctionInstantiation {
+                type_arguments: _,
+                parameters,
+                return_,
+            },
+        ) = self
+            .session
+            .runtime
+            .loader
+            .load_script(&script, &ty_args, &self.session.data_cache)?;
+
+        Self::check_script_return(return_)?;
+
+        self.check_script_signer_and_build_args(main, parameters, args, sender)?;
+
         Ok(())
     }
 
-    // FIXME: i don't know how to fix this.
     pub fn verify_script_function_args(
         &mut self,
-        _module: &ModuleId,
-        _function_name: &IdentStr,
-        _ty_args: Vec<TypeTag>,
-        _args: Vec<Vec<u8>>,
-        _senders: Vec<AccountAddress>,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<TypeTag>,
+        args: Vec<Vec<u8>>,
+        sender: AccountAddress,
     ) -> VMResult<()> {
-        // let (func, ty_args, params, _return_tys) = self.session.runtime.loader.load_function(
-        //     function_name,
-        //     module,
-        //     &ty_args,
-        //     &mut self.session.data_cache,
-        // )?;
-        // let params = params
-        //     .into_iter()
-        //     .map(|ty| ty.subst(&ty_args))
-        //     .collect::<PartialVMResult<Vec<_>>>()
-        //     .map_err(|err| err.finish(Location::Undefined))?;
+        let (
+            _module,
+            func,
+            LoadedFunctionInstantiation {
+                type_arguments: _,
+                parameters,
+                return_,
+            },
+        ) = self.session.runtime.loader.load_function(
+            module,
+            function_name,
+            &ty_args,
+            &self.session.data_cache,
+        )?;
 
-        // let _signer_and_args = self
-        //     .session
-        //     .runtime
-        //     .create_signers_and_arguments(func.file_format_version(), &params, senders, args)
-        //     .map_err(|err| err.finish(Location::Undefined))?;
+        Self::check_script_return(return_)?;
+
+        self.check_script_signer_and_build_args(func, parameters, args, sender)?;
+
+        Ok(())
+    }
+
+    //ensure the script function not return value
+    fn check_script_return(return_: Vec<Type>) -> VMResult<()> {
+        return if !return_.is_empty() {
+            Err(PartialVMError::new(StatusCode::RET_TYPE_MISMATCH_ERROR)
+                .with_message(format!(
+                    "Expected script function should not return value, but got {:?}",
+                    return_
+                ))
+                .finish(Location::Undefined))
+        } else {
+            Ok(())
+        };
+    }
+
+    fn check_script_signer_and_build_args(
+        &self,
+        func: Arc<Function>,
+        arg_tys: Vec<Type>,
+        args: Vec<Vec<u8>>,
+        sender: AccountAddress,
+    ) -> VMResult<()> {
+        let mut has_signer = false;
+        for (i, param_signature) in func.parameters().0.iter().enumerate() {
+            //If script function contains signer parameter, it must been the first one.
+            //Move has release the signer check at https://github.com/move-language/move/commit/086005ed6a2e54f2f971b77e092416a1f9248a5b
+            //We should add check check at the compile time.
+            if param_signature.is_signer() {
+                if i == 0 {
+                    has_signer = true;
+                } else {
+                    return Err(PartialVMError::new(
+                        StatusCode::NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH,
+                    )
+                    .with_message(format!(
+                        "Expected signer arg is this first arg, but got it at {}",
+                        i + 1
+                    ))
+                    .finish(Location::Undefined));
+                }
+            }
+        }
+
+        let final_args = if has_signer {
+            let signer = MoveValue::Signer(sender);
+            let mut final_args = vec![signer
+                .simple_serialize()
+                .expect("serialize signer should success")];
+            final_args.extend(args);
+            final_args
+        } else {
+            args
+        };
+
+        let (_, _) = self
+            .session
+            .runtime
+            .deserialize_args(arg_tys, final_args)
+            .map_err(|err| err.finish(Location::Undefined))?;
+
         Ok(())
     }
 
