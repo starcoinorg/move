@@ -419,11 +419,16 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     interface_files_dir_opt: Option<String>,
     flags: Flags,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
-    let (files, pprog_and_comments_res) =
-        Compiler::from_package_paths(targets, Vec::<PackagePaths<Paths, NamedAddress>>::new())
+        let compiler = Compiler::from_package_paths(targets, Vec::<PackagePaths<Paths, NamedAddress>>::new())
             .set_interface_files_dir_opt(interface_files_dir_opt)
-            .set_flags(flags)
-            .run::<PASS_PARSER>()?;
+            .set_flags(flags);
+        construct_pre_compiled_lib_from_compiler(compiler)
+}
+
+pub fn construct_pre_compiled_lib_from_compiler(
+    compiler: Compiler,
+) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
+    let (files, pprog_and_comments_res) = compiler.run::<PASS_PARSER>()?;
 
     let (_comments, stepped) = match pprog_and_comments_res {
         Err(errors) => return Ok(Err((files, errors))),
