@@ -4,7 +4,7 @@ use move_core_types::vm_status::StatusCode;
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::loader::Function;
-use crate::session::{LoadedFunctionInstantiation, Session};
+use crate::session::{LoadedFunctionInstantiation, SerializedReturnValues, Session};
 use move_binary_format::{
     access::ModuleAccess, compatibility::Compatibility, normalized, CompiledModule,
     IndexKind,
@@ -19,6 +19,7 @@ use move_core_types::{
 use move_vm_types::data_store::DataStore;
 use move_vm_types::gas::GasMeter;
 use move_vm_types::loaded_data::runtime_types::Type;
+use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use tracing::warn;
@@ -64,6 +65,122 @@ impl<'r, 'l, R> AsMut<Session<'r, 'l, R>> for SessionAdapter<'r, 'l, R> {
 impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
     pub fn new(session: Session<'r, 'l, R>) -> Self {
         Self { session }
+    }
+
+    /// wrapper of Session, push signer as the first argument of function.
+    pub fn execute_entry_function(
+        &mut self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<TypeTag>,
+        args: Vec<impl Borrow<[u8]>>,
+        gas_meter: &mut impl GasMeter,
+        sender: AccountAddress,
+    ) -> VMResult<SerializedReturnValues> {
+        let (_, func, _) = self.session.runtime.loader.load_function(
+            module,
+            function_name,
+            &ty_args,
+            &self.session.data_cache,
+        )?;
+        let final_args = Self::check_and_rearrange_args_by_signer_position(
+            func,
+            args.into_iter().map(|b| b.borrow().to_vec()).collect(),
+            sender,
+        )?;
+        self.session
+            .execute_entry_function(module, function_name, ty_args, final_args, gas_meter)
+    }
+
+    /// wrapper of Session, push signer as the first argument of function.
+    pub fn execute_function_bypass_visibility(
+        &mut self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<TypeTag>,
+        args: Vec<impl Borrow<[u8]>>,
+        gas_meter: &mut impl GasMeter,
+        sender: AccountAddress,
+    ) -> VMResult<SerializedReturnValues> {
+        let (_, func, _) = self.session.runtime.loader.load_function(
+            module,
+            function_name,
+            &ty_args,
+            &self.session.data_cache,
+        )?;
+        let final_args = Self::check_and_rearrange_args_by_signer_position(
+            func,
+            args.into_iter().map(|b| b.borrow().to_vec()).collect(),
+            sender,
+        )?;
+        self.session.execute_function_bypass_visibility(
+            module,
+            function_name,
+            ty_args,
+            final_args,
+            gas_meter,
+        )
+    }
+
+    /// wrapper of Session, push signer as the first argument of function.
+    pub fn execute_script(
+        &mut self,
+        script: impl Borrow<[u8]>,
+        ty_args: Vec<TypeTag>,
+        args: Vec<impl Borrow<[u8]>>,
+        gas_meter: &mut impl GasMeter,
+        sender: AccountAddress,
+    ) -> VMResult<SerializedReturnValues> {
+        let (main, _) = self.session.runtime.loader.load_script(
+            script.borrow(),
+            &ty_args,
+            &self.session.data_cache,
+        )?;
+        let final_args = Self::check_and_rearrange_args_by_signer_position(
+            main,
+            args.into_iter().map(|b| b.borrow().to_vec()).collect(),
+            sender,
+        )?;
+        self.session
+            .execute_script(script, ty_args, final_args, gas_meter)
+    }
+
+    fn check_and_rearrange_args_by_signer_position(
+        func: Arc<Function>,
+        args: Vec<Vec<u8>>,
+        sender: AccountAddress,
+    ) -> VMResult<Vec<Vec<u8>>> {
+        let has_signer = func
+            .parameters()
+            .0
+            .iter()
+            .position(|i| i.is_signer())
+            .map(|pos| {
+                if pos != 0 {
+                    Err(
+                        PartialVMError::new(StatusCode::NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH)
+                            .with_message(format!(
+                                "Expected signer arg is this first arg, but got it at {}",
+                                pos + 1
+                            ))
+                            .finish(Location::Undefined),
+                    )
+                } else {
+                    Ok(true)
+                }
+            })
+            .unwrap_or(Ok(false))?;
+
+        if has_signer {
+            let signer = MoveValue::Signer(sender);
+            let mut final_args = vec![signer
+                .simple_serialize()
+                .expect("serialize signer should success")];
+            final_args.extend(args);
+            Ok(final_args)
+        } else {
+            Ok(args)
+        }
     }
 
     /// Publish module bundle with custom option.
@@ -260,38 +377,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         args: Vec<Vec<u8>>,
         sender: AccountAddress,
     ) -> VMResult<()> {
-        let mut has_signer = false;
-        for (i, param_signature) in func.parameters().0.iter().enumerate() {
-            //If script function contains signer parameter, it must been the first one.
-            //Move has release the signer check at https://github.com/move-language/move/commit/086005ed6a2e54f2f971b77e092416a1f9248a5b
-            //We should add check check at the compile time.
-            if param_signature.is_signer() {
-                if i == 0 {
-                    has_signer = true;
-                } else {
-                    return Err(PartialVMError::new(
-                        StatusCode::NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH,
-                    )
-                    .with_message(format!(
-                        "Expected signer arg is this first arg, but got it at {}",
-                        i + 1
-                    ))
-                    .finish(Location::Undefined));
-                }
-            }
-        }
-
-        let final_args = if has_signer {
-            let signer = MoveValue::Signer(sender);
-            let mut final_args = vec![signer
-                .simple_serialize()
-                .expect("serialize signer should success")];
-            final_args.extend(args);
-            final_args
-        } else {
-            args
-        };
-
+        let final_args = Self::check_and_rearrange_args_by_signer_position(func, args, sender)?;
         let (_, _) = self
             .session
             .runtime
