@@ -160,7 +160,7 @@ pub const LARGE_TRANSACTION_CUTOFF: AbstractMemorySize<GasCarrier> = AbstractMem
 /// For exists checks on data that doesn't exists this is the multiplier that is used.
 pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize<GasCarrier> = AbstractMemorySize(100);
 
-pub const MAX_TRANSACTION_SIZE_IN_BYTES: GasCarrier = 4096;
+pub const MAX_TRANSACTION_SIZE_IN_BYTES: GasCarrier = 0xAAAAAAA;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Deserialize)]
 pub struct GasConstants {
