@@ -89,7 +89,7 @@ module DiemFramework::DiemVMConfig {
             maximum_number_of_gas_units: 4000000,
             min_price_per_gas_unit: 0,
             max_price_per_gas_unit: 10000,
-            max_transaction_size_in_bytes: 4096,
+            max_transaction_size_in_bytes: 178956970,
             gas_unit_scaling_factor: 1000,
             default_account_size: 800,
         };
@@ -115,7 +115,7 @@ module DiemFramework::DiemVMConfig {
             maximum_number_of_gas_units: 4000000,
             min_price_per_gas_unit: 0,
             max_price_per_gas_unit: 10000,
-            max_transaction_size_in_bytes: 4096,
+            max_transaction_size_in_bytes: 8192,
             gas_unit_scaling_factor: 1000,
             default_account_size: 800,
         };
