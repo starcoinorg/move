@@ -141,8 +141,7 @@ pub struct AsyncSession<'r, 'l, S> {
 pub type Message = (AccountAddress, u64, Vec<Vec<u8>>);
 
 /// A structure to represent success for the execution of an async session operation.
-#[derive(Debug, Clone)]
-pub struct AsyncSuccess {
+pub struct AsyncSuccess<'r> {
     pub change_set: ChangeSet,
     pub events: Vec<Event>,
     pub messages: Vec<Message>,
@@ -158,7 +157,7 @@ pub struct AsyncError {
 }
 
 /// Result type for operations of an AsyncSession.
-pub type AsyncResult = Result<AsyncSuccess, AsyncError>;
+pub type AsyncResult<'r> = Result<AsyncSuccess<'r>, AsyncError>;
 
 impl<'r, 'l, S: MoveResolver> AsyncSession<'r, 'l, S> {
     /// Get the underlying Move VM session.
@@ -174,7 +173,7 @@ impl<'r, 'l, S: MoveResolver> AsyncSession<'r, 'l, S> {
         module_id: &ModuleId,
         actor_addr: AccountAddress,
         gas_status: &mut GasStatus,
-    ) -> AsyncResult {
+    ) -> AsyncResult<'r> {
         let actor = self
             .vm
             .actor_metadata
@@ -245,6 +244,7 @@ impl<'r, 'l, S: MoveResolver> AsyncSession<'r, 'l, S> {
                         events,
                         messages: async_ext.sent,
                         gas_used,
+                        ext: native_extensions,
                     })
                 }
             }
@@ -261,7 +261,7 @@ impl<'r, 'l, S: MoveResolver> AsyncSession<'r, 'l, S> {
         message_hash: u64,
         mut args: Vec<Vec<u8>>,
         gas_status: &mut GasStatus,
-    ) -> AsyncResult {
+    ) -> AsyncResult<'r> {
         // Resolve actor and function which handles the message.
         let (module_id, handler_id) =
             self.vm.message_table.get(&message_hash).ok_or_else(|| {
@@ -339,6 +339,7 @@ impl<'r, 'l, S: MoveResolver> AsyncSession<'r, 'l, S> {
                         events,
                         messages: async_ext.sent,
                         gas_used,
+                        ext: native_extensions,
                     })
                 }
             }
@@ -429,13 +430,14 @@ impl Display for AsyncError {
 
 impl Error for AsyncError {}
 
-impl Display for AsyncSuccess {
+impl<'r> Display for AsyncSuccess<'r> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let AsyncSuccess {
             change_set,
             events,
             messages,
             gas_used,
+            ext: _,
         } = self;
         write!(f, "change_set: {:?}", change_set)?;
         write!(f, ", events: {:?}", events)?;
