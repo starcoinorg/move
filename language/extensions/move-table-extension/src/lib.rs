@@ -475,7 +475,7 @@ fn native_destroy_empty_box(
     let mut table_data = table_context.table_data.borrow_mut();
 
     let handle = get_table_handle(&pop_arg!(args, StructRef))?;
-    let table = table_data.get_or_create_table(context, handle, &ty_args[0], &ty_args[2])?;
+    let table = table_data.get_or_create_table(&*context, handle, &ty_args[0], &ty_args[2])?;
     let (key_size, val_size) = table.destroy_empty(table_context)?;
 
     assert!(table_data.removed_tables.insert(handle));

@@ -5,6 +5,8 @@
 use clap::Parser;
 use codespan_reporting::diagnostic::Severity;
 
+use crate::experiments::Experiment;
+
 /// Options for a run of the compiler.
 #[derive(Parser, Debug)]
 #[clap(name = "move-to-yul", about = "Move Solidity Generator")]
@@ -31,7 +33,6 @@ pub struct Options {
     pub output: String,
     /// Solc executable
     #[clap(long, env = "SOLC_EXE", default_value = "solc")]
-
     pub solc_exe: String,
     /// Whether to dump bytecode to a file.
     #[clap(long = "dump-bytecode")]

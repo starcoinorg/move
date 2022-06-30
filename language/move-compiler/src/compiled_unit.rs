@@ -193,10 +193,10 @@ impl CompiledUnit {
         let mut serialized = Vec::<u8>::new();
         match self {
             Self::Module(NamedCompiledModule { module, .. }) => module
-                .serialize_for_version(bytecode_version, &mut serialized)
+                .serialize_to_version(&mut serialized, bytecode_version)
                 .unwrap(),
             Self::Script(NamedCompiledScript { script, .. }) => script
-                .serialize_for_version(bytecode_version, &mut serialized)
+                .serialize_to_version(&mut serialized, bytecode_version)
                 .unwrap(),
         };
         serialized

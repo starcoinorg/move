@@ -25,11 +25,15 @@ impl CompiledScript {
     /// Serializes a `CompiledScript` into a binary. The mutable `Vec<u8>` will contain the
     /// binary blob on return.
     pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
-        self.serialize_to_version(binary, VERSION_MAX)
+        self.serialize_to_version(binary, Some(VERSION_MAX))
     }
-    pub fn serialize_to_version(&self, binary: &mut Vec<u8>, major_version: u32) -> Result<()> {
+    pub fn serialize_to_version(
+        &self,
+        binary: &mut Vec<u8>,
+        major_version: Option<u32>,
+    ) -> Result<()> {
         let mut binary_data = BinaryData::from(binary.clone());
-        let mut ser = ScriptSerializer::new(major_version);
+        let mut ser = ScriptSerializer::new(major_version.unwrap_or(VERSION_MAX));
         let mut temp = BinaryData::new();
 
         ser.common.serialize_common_tables(&mut temp, self)?;
@@ -209,13 +213,17 @@ impl CompiledModule {
     /// Serializes a `CompiledModule` into a binary. The mutable `Vec<u8>` will contain the
     /// binary blob on return.
     pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
-        self.serialize_to_version(binary, VERSION_MAX)
+        self.serialize_to_version(binary, Some(VERSION_MAX))
     }
 
     /// temp method
-    pub fn serialize_to_version(&self, binary: &mut Vec<u8>, major_version: u32) -> Result<()> {
+    pub fn serialize_to_version(
+        &self,
+        binary: &mut Vec<u8>,
+        major_version: Option<u32>,
+    ) -> Result<()> {
         let mut binary_data = BinaryData::from(binary.clone());
-        let mut ser = ModuleSerializer::new(major_version);
+        let mut ser = ModuleSerializer::new(major_version.unwrap_or(VERSION_MAX));
         let mut temp = BinaryData::new();
         ser.serialize_tables(&mut temp, self)?;
         if temp.len() > u32::max_value() as usize {

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{criterion_group, criterion_main, measurement::Measurement, Criterion};
-use language_benchmarks::{measurement::cpu_time_measurement, move_vm::bench};
+use language_benchmarks::move_vm::bench;
 
 //
 // MoveVM benchmarks
@@ -23,7 +23,7 @@ fn natives<M: Measurement + 'static>(c: &mut Criterion<M>) {
 
 criterion_group!(
     name = vm_benches;
-    config = cpu_time_measurement();
+    config = Criterion::default();
     targets = arith,
     call,
     natives

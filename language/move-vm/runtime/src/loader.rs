@@ -213,12 +213,6 @@ impl ModuleCache {
     //     Ok(())
     // }
 
-    fn empty(&mut self) {
-        self.modules.empty();
-        self.functions.clear();
-        self.structs.clear();
-    }
-
     //
     // Insertion is under lock and it's a pretty heavy operation.
     // The VM is pretty much stopped waiting for this to finish
@@ -1416,10 +1410,6 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
         self.loader.type_to_type_tag(ty)
-    }
-
-    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
-        self.loader.type_to_type_layout(ty)
     }
 
     pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {

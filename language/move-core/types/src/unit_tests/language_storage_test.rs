@@ -2,11 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::account_address::AccountAddress;
+use crate::identifier::{IdentStr, Identifier};
 use crate::language_storage::{ModuleId, StructTag, TypeTag};
 use bcs::test_helpers::assert_canonical_encode_decode;
 use proptest::prelude::*;
-use crate::account_address::AccountAddress;
-use crate::identifier::{Identifier, IdentStr};
 
 proptest! {
     #[test]
@@ -17,11 +17,18 @@ proptest! {
 
 #[test]
 fn test_type_tag_deserialize_case_insensitive() {
-    let org_struct_tag = StructTag{
+    let org_struct_tag = StructTag {
         address: AccountAddress::ONE,
         module: Identifier::from(IdentStr::new("TestModule").unwrap()),
         name: Identifier::from(IdentStr::new("TestStruct").unwrap()),
-        type_params: vec![TypeTag::U8, TypeTag::U64, TypeTag::U128, TypeTag::Bool, TypeTag::Address,  TypeTag::Signer]
+        type_params: vec![
+            TypeTag::U8,
+            TypeTag::U64,
+            TypeTag::U128,
+            TypeTag::Bool,
+            TypeTag::Address,
+            TypeTag::Signer,
+        ],
     };
 
     let upper_case_json = r#"
