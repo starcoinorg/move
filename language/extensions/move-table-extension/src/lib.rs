@@ -40,7 +40,7 @@ use std::{
 /// The representation of a table handle. This is created from truncating a sha3-256 based
 /// hash over a transaction hash provided by the environment and a table creation counter
 /// local to the transaction.
-#[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct TableHandle(pub u128);
 
 impl Display for TableHandle {
@@ -50,7 +50,7 @@ impl Display for TableHandle {
 }
 
 /// A table change set.
-#[derive(Default)]
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct TableChangeSet {
     pub new_tables: BTreeSet<TableHandle>,
     pub removed_tables: BTreeSet<TableHandle>,
@@ -58,6 +58,7 @@ pub struct TableChangeSet {
 }
 
 /// A change of a single table.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableChange {
     pub entries: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
