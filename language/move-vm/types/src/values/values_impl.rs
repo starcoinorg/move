@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{loaded_data::runtime_types::Type, natives::function::NativeResult};
+use crate::{loaded_data::runtime_types::Type};
 use move_binary_format::{
     errors::*,
     file_format::{Constant, SignatureToken},
@@ -10,7 +10,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     gas_schedule::{
-        AbstractMemorySize, GasAlgebra, GasCarrier, InternalGasUnits, CONST_SIZE,
+        AbstractMemorySize, GasAlgebra, GasCarrier, CONST_SIZE,
         MIN_EXISTS_DATA_SIZE, REFERENCE_SIZE, STRUCT_SIZE,
     },
     value::{MoveStructLayout, MoveTypeLayout},
@@ -1699,6 +1699,7 @@ impl VectorRef {
         self.0.mark_dirty();
         Ok(())
     }
+    /*
     pub fn remove(
         &self,
         idx: usize,
@@ -1800,6 +1801,7 @@ impl VectorRef {
 
         Ok(NativeResult::ok(cost, smallvec![]))
     }
+     */
 }
 
 impl Vector {
@@ -2461,7 +2463,6 @@ use serde::{
     ser::{Error as SerError, SerializeSeq, SerializeTuple},
     Deserialize,
 };
-use smallvec::smallvec;
 
 impl Value {
     pub fn simple_deserialize(blob: &[u8], layout: &MoveTypeLayout) -> Option<Value> {

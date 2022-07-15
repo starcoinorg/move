@@ -8,23 +8,27 @@ use crate::{
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
-    gas_schedule::CostTable,
     identifier::Identifier,
     language_storage::TypeTag,
     value::MoveTypeLayout,
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_types::{
-    data_store::DataStore, gas_schedule::GasStatus, loaded_data::runtime_types::Type,
-    natives::function::NativeResult, values::Value,
+    data_store::DataStore, loaded_data::runtime_types::Type, natives::function::NativeResult,
+    values::Value,
 };
 use std::{
     collections::{HashMap, VecDeque},
     fmt::Write,
+    sync::Arc,
 };
 
-pub type NativeFunction =
-    fn(&mut NativeContext, Vec<Type>, VecDeque<Value>) -> PartialVMResult<NativeResult>;
+pub type UnboxedNativeFunction = dyn Fn(&mut NativeContext, Vec<Type>, VecDeque<Value>) -> PartialVMResult<NativeResult>
+    + Send
+    + Sync
+    + 'static;
+
+pub type NativeFunction = Arc<UnboxedNativeFunction>;
 
 pub type NativeFunctionTable = Vec<(AccountAddress, Identifier, Identifier, NativeFunction)>;
 
@@ -88,7 +92,6 @@ impl NativeFunctions {
 pub struct NativeContext<'a, 'b> {
     interpreter: &'a mut Interpreter,
     data_store: &'a mut dyn DataStore,
-    gas_status: &'a GasStatus<'a>,
     resolver: &'a Resolver<'a>,
     extensions: &'a mut NativeContextExtensions<'b>,
 }
@@ -97,14 +100,12 @@ impl<'a, 'b> NativeContext<'a, 'b> {
     pub(crate) fn new(
         interpreter: &'a mut Interpreter,
         data_store: &'a mut dyn DataStore,
-        gas_status: &'a mut GasStatus,
         resolver: &'a Resolver<'a>,
         extensions: &'a mut NativeContextExtensions<'b>,
     ) -> Self {
         Self {
             interpreter,
             data_store,
-            gas_status,
             resolver,
             extensions,
         }
@@ -115,18 +116,6 @@ impl<'a, 'b> NativeContext<'a, 'b> {
     pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
         self.interpreter
             .debug_print_stack_trace(buf, self.resolver.loader())
-    }
-
-    pub fn extensions(&self) -> &NativeContextExtensions<'b> {
-        self.extensions
-    }
-
-    pub fn cost_table(&self) -> &CostTable {
-        self.gas_status.cost_table()
-    }
-
-    pub fn extensions_mut(&mut self) -> &mut NativeContextExtensions<'b> {
-        self.extensions
     }
 
     pub fn save_event(
@@ -157,5 +146,13 @@ impl<'a, 'b> NativeContext<'a, 'b> {
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),
         }
+    }
+
+    pub fn extensions(&self) -> &NativeContextExtensions<'b> {
+        self.extensions
+    }
+
+    pub fn extensions_mut(&mut self) -> &mut NativeContextExtensions<'b> {
+        self.extensions
     }
 }
