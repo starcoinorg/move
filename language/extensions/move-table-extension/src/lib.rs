@@ -72,7 +72,7 @@ impl Display for TableInfo {
 }
 
 /// A table change set.
-#[derive(Default, Clone, Debug, Eq, PartialEq)]
+#[derive(Default)]
 pub struct TableChangeSet {
     pub new_tables: BTreeMap<TableHandle, TableInfo>,
     pub removed_tables: BTreeSet<TableHandle>,
@@ -80,7 +80,6 @@ pub struct TableChangeSet {
 }
 
 /// A change of a single table.
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableChange {
     pub entries: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
