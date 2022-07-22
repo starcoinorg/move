@@ -37,6 +37,7 @@ use move_vm_runtime::{
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::gas_schedule::GasStatus;
 use once_cell::sync::Lazy;
+use serde_json::Value;
 
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
@@ -52,7 +53,7 @@ pub fn view_resource_in_move_storage(
     module: &ModuleId,
     resource: &IdentStr,
     type_args: Vec<TypeTag>,
-) -> Result<String> {
+) -> Result<(String, Value)> {
     let tag = StructTag {
         address: *module.address(),
         module: module.name().to_owned(),
@@ -60,10 +61,10 @@ pub fn view_resource_in_move_storage(
         type_params: type_args,
     };
     match storage.get_resource(&address, &tag).unwrap() {
-        None => Ok("[No Resource Exists]".to_owned()),
+        None => Ok(("[No Resource Exists]".to_owned(), Value::Null)),
         Some(data) => {
             let annotated = MoveValueAnnotator::new(storage).view_resource(&tag, &data)?;
-            Ok(format!("{}", annotated))
+            Ok((format!("{}", &annotated), serde_json::to_value(&annotated)?))
         }
     }
 }
@@ -150,7 +151,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         _named_addr_opt: Option<Identifier>,
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, CompiledModule)> {
+    ) -> Result<(Option<String>, CompiledModule, Option<Value>)> {
         let mut module_bytes = vec![];
         module.serialize(&mut module_bytes)?;
 
@@ -159,7 +160,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         match self.perform_session_action(gas_budget, |session, gas_status| {
             session.publish_module(module_bytes, sender, gas_status)
         }) {
-            Ok(()) => Ok((None, module)),
+            Ok(()) => Ok((None, module, None)),
             Err(e) => Err(anyhow!(
                 "Unable to publish module '{}'. Got VMError: {}",
                 module.self_id(),
@@ -176,7 +177,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)> {
+    ) -> Result<(Option<String>, SerializedReturnValues, Option<Value>)> {
         let signers: Vec<_> = signers
             .into_iter()
             .map(|addr| self.compiled_state().resolve_address(&addr))
@@ -205,7 +206,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                     format_vm_error(&e)
                 )
             })?;
-        Ok((None, serialized_return_values))
+        Ok((None, serialized_return_values, None))
     }
 
     fn call_function(
@@ -217,7 +218,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)> {
+    ) -> Result<(Option<String>, SerializedReturnValues, Option<Value>)> {
         let signers: Vec<_> = signers
             .into_iter()
             .map(|addr| self.compiled_state().resolve_address(&addr))
@@ -245,7 +246,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                     format_vm_error(&e)
                 )
             })?;
-        Ok((None, serialized_return_values))
+        Ok((None, serialized_return_values, None))
     }
 
     fn view_data(
@@ -254,11 +255,14 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         module: &ModuleId,
         resource: &IdentStr,
         type_args: Vec<TypeTag>,
-    ) -> Result<String> {
+    ) -> Result<(String, Value)> {
         view_resource_in_move_storage(&self.storage, address, module, resource, type_args)
     }
 
-    fn handle_subcommand(&mut self, _: TaskInput<Self::Subcommand>) -> Result<Option<String>> {
+    fn handle_subcommand(
+        &mut self,
+        _: TaskInput<Self::Subcommand>,
+    ) -> Result<(Option<String>, Option<Value>)> {
         unreachable!()
     }
 }
@@ -364,6 +368,6 @@ static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
     }
 });
 
-pub fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run_test(path: &Path) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     run_test_impl::<SimpleVMTestAdapter>(path, Some(&*PRECOMPILED_MOVE_STDLIB))
 }
