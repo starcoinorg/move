@@ -504,7 +504,7 @@ fn function(
         acquires,
         body,
     };
-    fake_natives::function(&mut context.env, module_opt, name, &f);
+    fake_natives::function(context.env, module_opt, name, &f);
     f
 }
 
