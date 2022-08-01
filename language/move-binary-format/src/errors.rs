@@ -81,29 +81,28 @@ impl VMError {
                 );
                 VMStatus::Error(StatusCode::ABORTED)
             }
-
-            // TODO Errors for OUT_OF_GAS do not always have index set
-            (major_status, _sub_status, location)
+            (major_status, sub_status, location)
                 if major_status.status_type() == StatusType::Execution =>
             {
-                // debug_assert!(
-                //     offsets.len() == 1,
-                //     "Unexpected offsets. major_status: {:?}\
-                //     sub_status: {:?}\
-                //     location: {:?}\
-                //     offsets: {:#?}",
-                //     major_status,
-                //     sub_status,
-                //     location,
-                //     offsets
-                // );
-                let abort_location = match location {
+                let abort_location = match &location {
                     Location::Script => vm_status::AbortLocation::Script,
-                    Location::Module(id) => vm_status::AbortLocation::Module(id),
+                    Location::Module(id) => vm_status::AbortLocation::Module(id.clone()),
                     Location::Undefined => {
                         return VMStatus::Error(major_status);
                     }
                 };
+                // Errors for OUT_OF_GAS do not always have index set: if it does not, it should already return above.
+                debug_assert!(
+                    offsets.len() == 1,
+                    "Unexpected offsets. major_status: {:?}\
+                    sub_status: {:?}\
+                    location: {:?}\
+                    offsets: {:#?}",
+                    major_status,
+                    sub_status,
+                    location,
+                    offsets
+                );
                 let (function, code_offset) = match offsets.pop() {
                     None => {
                         return VMStatus::Error(major_status);
