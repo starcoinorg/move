@@ -2153,6 +2153,7 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "petgraph 0.5.1",
+ "serde 1.0.137",
  "serde_json",
  "tempfile",
  "url",
