@@ -24,6 +24,7 @@ This is the root document for the Move stdlib module documentation. The Move std
 -  [`0x1::Option`](Option.md#0x1_Option)
 -  [`0x1::Signer`](Signer.md#0x1_Signer)
 -  [`0x1::Vector`](Vector.md#0x1_Vector)
+-  [`0x1::string`](String.md#0x1_string)
 
 
 [//]: # ("File containing references which can be used from documentation")

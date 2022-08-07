@@ -437,6 +437,7 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
         (N::CREATE_SIGNER, GasCost::new(24, 1)),
         (N::DESTROY_SIGNER, GasCost::new(212, 1)),
         (N::EMIT_EVENT, GasCost::new(52, 1)),
+        (N::STRING_CHECK_UT8, GasCost::new(4,1)),
     ];
     native_table.sort_by_key(|cost| cost.0 as u64);
     let raw_native_table = native_table
@@ -489,6 +490,7 @@ pub enum NativeCostIndex {
     BCS_TO_ADDRESS = 18,
     TOKEN_NAME_OF = 19,
     KECCAK_256 = 20,
+    STRING_CHECK_UT8 = 21,
 }
 
 impl From<NativeCostIndex> for u8 {
