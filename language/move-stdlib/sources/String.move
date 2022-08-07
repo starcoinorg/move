@@ -1,5 +1,5 @@
 /// The `string` module defines the `String` type which represents UTF8 encoded strings.
-module Std::string {
+module Std::String {
     use Std::Vector;
     use Std::Option::{Self, Option};
 
