@@ -12,7 +12,7 @@ use move_vm_types::{
     pop_arg,
     values::Value,
 };
-use starcoin_vm_types::gas_schedule::NativeCostIndex;
+use move_vm_types::gas_schedule::NativeCostIndex;
 use std::collections::VecDeque;
 // The implementation approach delegates all utf8 handling to Rust.
 // This is possible without copying of bytes because (a) we can
@@ -121,9 +121,9 @@ pub fn native_internal_index_of(
     debug_assert!(ty_args.is_empty());
     debug_assert!(arguments.len() == 2);
     let r_arg = pop_arg!(arguments, Vec<u8>);
-    let r_str = unsafe { std::str::from_utf8_unchecked(r_arg) };
+    let r_str = unsafe { std::str::from_utf8_unchecked(r_arg.as_slice()) };
     let s_arg = pop_arg!(arguments, Vec<u8>);
-    let s_str = unsafe { std::str::from_utf8_unchecked(s_arg) };
+    let s_str = unsafe { std::str::from_utf8_unchecked(s_arg.as_slice()) };
     let pos = match s_str.find(r_str) {
         Some(size) => size,
         None => s_str.len(),
