@@ -34,6 +34,7 @@ use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
 use rayon::iter::Either;
+use serde_json::Value;
 use std::{
     collections::{BTreeMap, VecDeque},
     fmt::Debug,
@@ -112,7 +113,7 @@ pub trait MoveTestAdapter<'a> {
         named_addr_opt: Option<Identifier>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> Result<()>;
+    ) -> Result<(Option<String>, Option<Value>)>;
     fn execute_script(
         &mut self,
         script: CompiledScript,
@@ -121,7 +122,7 @@ pub trait MoveTestAdapter<'a> {
         args: Vec<TransactionArgument>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> Result<Option<String>>;
+    ) -> Result<(Option<String>, Option<Value>)>;
     fn call_function(
         &mut self,
         module: &ModuleId,
@@ -131,19 +132,19 @@ pub trait MoveTestAdapter<'a> {
         args: Vec<TransactionArgument>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> Result<Option<String>>;
+    ) -> Result<(Option<String>, Option<Value>)>;
     fn view_data(
         &mut self,
         address: AccountAddress,
         module: &ModuleId,
         resource: &IdentStr,
         type_args: Vec<TypeTag>,
-    ) -> Result<String>;
+    ) -> Result<(String, Value)>;
 
     fn handle_subcommand(
         &mut self,
         subcommand: TaskInput<Self::Subcommand>,
-    ) -> Result<Option<String>>;
+    ) -> Result<(Option<String>, Option<Value>)>;
 
     fn handle_command(
         &mut self,
@@ -155,7 +156,7 @@ pub trait MoveTestAdapter<'a> {
                 Self::Subcommand,
             >,
         >,
-    ) -> Result<Option<String>> {
+    ) -> Result<(Option<String>, Option<Value>)> {
         let TaskInput {
             command,
             name,
@@ -196,7 +197,7 @@ pub trait MoveTestAdapter<'a> {
                 )
                 .expect("Unable to build dummy source mapping");
                 let disassembler = Disassembler::new(source_mapping, DisassemblerOptions::new());
-                Ok(Some(disassembler.disassemble()?))
+                Ok((Some(disassembler.disassemble()?), None))
             }
             TaskCommand::Publish(PublishCommand { gas_budget, syntax }, extra_args) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
@@ -239,13 +240,13 @@ pub trait MoveTestAdapter<'a> {
                     }
                 };
                 state.add(named_addr_opt, module.clone());
-                self.publish_module(
+                let (result, cmd_var_ctx) = self.publish_module(
                     module,
                     named_addr_opt.map(|s| Identifier::new(s.as_str()).unwrap()),
                     gas_budget,
                     extra_args,
                 )?;
-                Ok(warnings_opt)
+                Ok((merge_output(warnings_opt, result), cmd_var_ctx))
             }
             TaskCommand::Run(
                 RunCommand {
@@ -292,9 +293,9 @@ pub trait MoveTestAdapter<'a> {
                     SyntaxChoice::IR => (compile_ir_script(state.dep_modules(), data_path)?, None),
                 };
                 let args = self.compiled_state().resolve_args(args);
-                let output =
+                let (output, cmd_var_ctx) =
                     self.execute_script(script, type_args, signers, args, gas_budget, extra_args)?;
-                Ok(merge_output(warning_opt, output))
+                Ok((merge_output(warning_opt, output), cmd_var_ctx))
             }
             TaskCommand::Run(
                 RunCommand {
@@ -328,12 +329,9 @@ pub trait MoveTestAdapter<'a> {
                 resource: (module, name, type_arguments),
             }) => {
                 let address = self.compiled_state().resolve_address(&address);
-                Ok(Some(self.view_data(
-                    address,
-                    &module,
-                    name.as_ident_str(),
-                    type_arguments,
-                )?))
+                let (output, cmd_var_ctx) =
+                    self.view_data(address, &module, name.as_ident_str(), type_arguments)?;
+                Ok((Some(output), Some(cmd_var_ctx)))
             }
             TaskCommand::Subcommand(c) => self.handle_subcommand(TaskInput {
                 command: c,
@@ -516,7 +514,7 @@ fn compile_ir_script<'a>(
 pub fn run_test_impl<'a, Adapter>(
     path: &Path,
     fully_compiled_program_opt: Option<&'a FullyCompiledProgram>,
-) -> Result<(), Box<dyn std::error::Error>>
+) -> Result<(), Box<(dyn std::error::Error + 'static)>>
 where
     Adapter: MoveTestAdapter<'a>,
     Adapter::ExtraInitArgs: Debug,
@@ -550,21 +548,27 @@ where
         num_tasks,
         if num_tasks > 1 { "s" } else { "" }
     ));
-
-    let first_task = tasks.pop_front().unwrap();
-    let init_opt = match &first_task.command {
-        TaskCommand::Init(_, _) => Some(first_task.map(|known| match known {
-            TaskCommand::Init(command, extra_args) => (command, extra_args),
-            _ => unreachable!(),
-        })),
-        _ => {
-            tasks.push_front(first_task);
-            None
-        }
+    let mut ctx = jpst::TemplateContext::new();
+    let first_lazy_task = tasks.pop_front().unwrap();
+    let first_task = first_lazy_task.parse(&ctx)?;
+    let (first_task, init_opt) = match &first_task.command {
+        TaskCommand::Init(_, _) => (
+            None,
+            Some(first_task.map(|known| match known {
+                TaskCommand::Init(command, extra_args) => (command, extra_args),
+                _ => unreachable!(),
+            })),
+        ),
+        _ => (Some(first_task), None),
     };
     let mut adapter = Adapter::init(path, default_syntax, fully_compiled_program_opt, init_opt);
+
+    if let Some(first_task) = first_task {
+        handle_known_task(&mut output, &mut adapter, &mut ctx, first_task);
+    }
     for task in tasks {
-        handle_known_task(&mut output, &mut adapter, task);
+        let task = task.parse(&ctx)?;
+        handle_known_task(&mut output, &mut adapter, &mut ctx, task);
     }
     handle_expected_output(path, output)?;
     Ok(())
@@ -573,6 +577,7 @@ where
 fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     output: &mut String,
     adapter: &mut Adapter,
+    ctx: &mut jpst::TemplateContext,
     task: TaskInput<
         TaskCommand<
             Adapter::ExtraInitArgs,
@@ -586,17 +591,25 @@ fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     let task_name = task.name.to_owned();
     let start_line = task.start_line;
     let stop_line = task.stop_line;
-    let result = adapter.handle_command(task);
-    let result_string = match result {
-        Ok(None) => return,
-        Ok(Some(s)) => s,
-        Err(e) => format!("Error: {}", e),
+    let (result_string, cmd_var_ctx) = match adapter.handle_command(task) {
+        Ok((result_string, cmd_var_ctx)) => {
+            if let Some(s) = result_string.as_ref() {
+                assert!(!s.is_empty());
+            }
+            (result_string, cmd_var_ctx)
+        }
+        Err(e) => (Some(format!("Error: {}", e)), None),
     };
-    assert!(!result_string.is_empty());
-    output.push_str(&format!(
-        "\ntask {} '{}'. lines {}-{}:\n{}\n",
-        task_number, task_name, start_line, stop_line, result_string
-    ));
+
+    if let Some(s) = result_string {
+        output.push_str(&format!(
+            "\ntask {} '{}'. lines {}-{}:\n{}\n",
+            task_number, task_name, start_line, stop_line, s
+        ));
+    }
+    if let Some(cmd_var_ctx) = cmd_var_ctx {
+        ctx.entry(task_name).append(cmd_var_ctx);
+    }
 }
 
 fn handle_expected_output(test_path: &Path, output: impl AsRef<str>) -> Result<()> {
@@ -612,7 +625,10 @@ fn handle_expected_output(test_path: &Path, output: impl AsRef<str>) -> Result<(
     if !exp_path.exists() {
         std::fs::write(&exp_path, "").unwrap();
     }
-    let expected_output = std::fs::read_to_string(&exp_path).unwrap();
+    let expected_output = std::fs::read_to_string(&exp_path)
+        .unwrap()
+        .replace("\r\n", "\n")
+        .replace("\r", "\n");
     if output != expected_output {
         let msg = format!(
             "Expected errors differ from actual errors:\n{}",
