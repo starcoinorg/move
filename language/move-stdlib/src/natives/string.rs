@@ -6,13 +6,14 @@
 
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
+use move_core_types::vm_status::sub_status::NFE_STRING_INVALID_ARG_FAILURE;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::{native_gas, NativeResult},
     pop_arg,
     values::Value,
+    gas_schedule::NativeCostIndex,
 };
-use move_vm_types::gas_schedule::NativeCostIndex;
 use std::collections::VecDeque;
 // The implementation approach delegates all utf8 handling to Rust.
 // This is possible without copying of bytes because (a) we can
@@ -23,13 +24,13 @@ use std::collections::VecDeque;
 // view, we can call ut8 functions like length, substring, etc.
 
 /***************************************************************************************************
- * native fun internal_check_utf8
+ * native fun native_check_utf8
  *
- *   gas cost: base_cost + unit_cost * length_in_bytes
+ *   
  *
  **************************************************************************************************/
 
-pub fn native_internal_check_utf8(
+pub fn native_check_utf8(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
@@ -48,12 +49,12 @@ pub fn native_internal_check_utf8(
 }
 
 /***************************************************************************************************
- * native fun internal_is_char_boundary
+ * native fun native_is_char_boundary
  *
- *   gas cost: base_cost
+ *  
  *
  **************************************************************************************************/
-pub fn native_internal_is_char_boundary(
+pub fn native_is_char_boundary(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
@@ -68,20 +69,20 @@ pub fn native_internal_is_char_boundary(
     };
     let cost = native_gas(
         context.cost_table(),
-        NativeCostIndex::STRING_CHECK_UT8 as u8,
+        NativeCostIndex::SRING_CHAR_BOUNDARY as u8,
         0,
     );
     NativeResult::map_partial_vm_result_one(cost, Ok(Value::bool(ok)))
 }
 
 /***************************************************************************************************
- * native fun internal_sub_string
+ * native fun native_sub_string
  *
- *   gas cost: base_cost + unit_cost * sub_string_length_in_bytes
+ *  
  *
  **************************************************************************************************/
 
-pub fn native_internal_sub_string(
+pub fn native_sub_string(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
@@ -92,12 +93,12 @@ pub fn native_internal_sub_string(
     let i = pop_arg!(arguments, u64) as usize;
     let cost = native_gas(
         context.cost_table(),
-        NativeCostIndex::STRING_CHECK_UT8 as u8,
+        NativeCostIndex::STRING_SUB_STR as u8,
         0,
     );
     if j < i {
         // TODO: what abort code should we use here?
-        return Ok(NativeResult::err(cost, 1));
+        return Ok(NativeResult::err(cost, NFE_STRING_INVALID_ARG_FAILURE));
     }
 
     let s_arg = pop_arg!(arguments, Vec<u8>);
@@ -111,9 +112,14 @@ pub fn native_internal_sub_string(
     NativeResult::map_partial_vm_result_one(cost, Ok(v))
 }
 
+/***************************************************************************************************
+ * native fun native_index_of
+ *
+ *  
+ *
+ **************************************************************************************************/
 
-
-pub fn native_internal_index_of(
+pub fn native_index_of(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
@@ -130,7 +136,7 @@ pub fn native_internal_index_of(
     };
     let cost = native_gas(
         context.cost_table(),
-        NativeCostIndex::STRING_CHECK_UT8 as u8,
+        NativeCostIndex::STRING_INDEX_OF as u8,
         0,
     );
     NativeResult::map_partial_vm_result_one(cost, Ok(Value::u64(pos as u64)))

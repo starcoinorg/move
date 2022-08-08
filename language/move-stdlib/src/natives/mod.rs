@@ -50,10 +50,10 @@ pub fn all_natives(move_std_addr: AccountAddress) -> NativeFunctionTable {
             "create_signers_for_testing",
             unit_test::native_create_signers_for_testing,
         ),
-        ("String","internal_check_utf8",string::native_internal_check_utf8),
-        ("String","internal_is_char_boundary",string::native_internal_is_char_boundary),
-        ("String","internal_sub_string",string::native_internal_sub_string),
-        ("String","internal_index_of",string::native_internal_index_of),
+        ("String","native_check_utf8",string::native_check_utf8),
+        ("String","native_is_char_boundary",string::native_is_char_boundary),
+        ("String","native_sub_string",string::native_sub_string),
+        ("String","native_index_of",string::native_index_of),
     ];
     native_functions::make_table(move_std_addr, NATIVES)
 }

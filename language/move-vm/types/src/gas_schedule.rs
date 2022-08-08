@@ -491,6 +491,9 @@ pub enum NativeCostIndex {
     TOKEN_NAME_OF = 19,
     KECCAK_256 = 20,
     STRING_CHECK_UT8 = 21,
+    STRING_SUB_STR = 22,
+    SRING_CHAR_BOUNDARY = 23,
+    STRING_INDEX_OF = 24,
 }
 
 impl From<NativeCostIndex> for u8 {
