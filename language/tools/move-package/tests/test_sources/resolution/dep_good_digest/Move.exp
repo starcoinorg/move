@@ -25,7 +25,7 @@ ResolutionGraph {
         addresses: Some(
             {
                 "A": Some(
-                    00000000000000000000000000000001,
+                    0x00000000000000000000000000000001,
                 ),
             },
         ),
@@ -42,9 +42,7 @@ ResolutionGraph {
                     },
                 ),
                 version: None,
-                digest: Some(
-                    "6A88B7888D6049EB0121900E22B6FA2C0E702F042C8C8D4FD62AD5C990B9F9A8",
-                ),
+                digest: None,
                 git_info: None,
             },
         },
@@ -91,7 +89,7 @@ ResolutionGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolution_table: {
-                "B": 00000000000000000000000000000001,
+                "B": 0x00000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -111,7 +109,7 @@ ResolutionGraph {
                 addresses: Some(
                     {
                         "A": Some(
-                            00000000000000000000000000000001,
+                            0x00000000000000000000000000000001,
                         ),
                     },
                 ),
@@ -128,9 +126,7 @@ ResolutionGraph {
                             },
                         ),
                         version: None,
-                        digest: Some(
-                            "6A88B7888D6049EB0121900E22B6FA2C0E702F042C8C8D4FD62AD5C990B9F9A8",
-                        ),
+                        digest: None,
                         git_info: None,
                     },
                 },
@@ -144,7 +140,7 @@ ResolutionGraph {
                 ),
             },
             resolution_table: {
-                "A": 00000000000000000000000000000001,
+                "A": 0x00000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },

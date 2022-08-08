@@ -1,11 +1,11 @@
 CompiledPackageInfo {
     package_name: "test",
     address_alias_instantiation: {
-        "A": 00000000000000000000000000000001,
+        "A": 0x00000000000000000000000000000001,
     },
     module_resolution_metadata: {
         ModuleId {
-            address: 00000000000000000000000000000001,
+            address: 0x00000000000000000000000000000001,
             name: Identifier(
                 "M",
             ),

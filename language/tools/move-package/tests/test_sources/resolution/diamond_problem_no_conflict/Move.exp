@@ -31,7 +31,7 @@ ResolutionGraph {
                 subst: Some(
                     {
                         "AA": Assign(
-                            00000000000000000000000000000001,
+                            0x00000000000000000000000000000001,
                         ),
                     },
                 ),
@@ -44,7 +44,7 @@ ResolutionGraph {
                 subst: Some(
                     {
                         "BA": Assign(
-                            00000000000000000000000000000001,
+                            0x00000000000000000000000000000001,
                         ),
                     },
                 ),
@@ -139,7 +139,7 @@ ResolutionGraph {
                 ),
             },
             resolution_table: {
-                "AA": 00000000000000000000000000000001,
+                "AA": 0x00000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -184,7 +184,7 @@ ResolutionGraph {
                 ),
             },
             resolution_table: {
-                "BA": 00000000000000000000000000000001,
+                "BA": 0x00000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -214,7 +214,7 @@ ResolutionGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolution_table: {
-                "A": 00000000000000000000000000000001,
+                "A": 0x00000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -240,7 +240,7 @@ ResolutionGraph {
                         subst: Some(
                             {
                                 "AA": Assign(
-                                    00000000000000000000000000000001,
+                                    0x00000000000000000000000000000001,
                                 ),
                             },
                         ),
@@ -253,7 +253,7 @@ ResolutionGraph {
                         subst: Some(
                             {
                                 "BA": Assign(
-                                    00000000000000000000000000000001,
+                                    0x00000000000000000000000000000001,
                                 ),
                             },
                         ),
@@ -267,8 +267,8 @@ ResolutionGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolution_table: {
-                "AA": 00000000000000000000000000000001,
-                "BA": 00000000000000000000000000000001,
+                "AA": 0x00000000000000000000000000000001,
+                "BA": 0x00000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
