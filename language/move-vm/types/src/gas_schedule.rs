@@ -438,6 +438,10 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
         (N::DESTROY_SIGNER, GasCost::new(212, 1)),
         (N::EMIT_EVENT, GasCost::new(52, 1)),
         (N::STRING_CHECK_UT8, GasCost::new(4,1)),
+        (N::STRING_SUB_STR,GasCost::new(4,1)),
+        (N::SRING_CHAR_BOUNDARY,GasCost::new(4,1)),
+        (N::STRING_INDEX_OF,GasCost::new(4,1)),
+
     ];
     native_table.sort_by_key(|cost| cost.0 as u64);
     let raw_native_table = native_table
