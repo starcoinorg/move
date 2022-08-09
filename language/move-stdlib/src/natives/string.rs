@@ -69,7 +69,7 @@ pub fn native_is_char_boundary(
     };
     let cost = native_gas(
         context.cost_table(),
-        NativeCostIndex::SRING_CHAR_BOUNDARY as u8,
+        NativeCostIndex::STRING_CHAR_BOUNDARY as u8,
         0,
     );
     NativeResult::map_partial_vm_result_one(cost, Ok(Value::bool(ok)))

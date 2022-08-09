@@ -439,7 +439,7 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
         (N::EMIT_EVENT, GasCost::new(52, 1)),
         (N::STRING_CHECK_UT8, GasCost::new(4,1)),
         (N::STRING_SUB_STR,GasCost::new(4,1)),
-        (N::SRING_CHAR_BOUNDARY,GasCost::new(4,1)),
+        (N::STRING_CHAR_BOUNDARY,GasCost::new(4,1)),
         (N::STRING_INDEX_OF,GasCost::new(4,1)),
 
     ];
@@ -496,7 +496,7 @@ pub enum NativeCostIndex {
     KECCAK_256 = 20,
     STRING_CHECK_UT8 = 41,
     STRING_SUB_STR = 42,
-    SRING_CHAR_BOUNDARY = 43,
+    STRING_CHAR_BOUNDARY = 43,
     STRING_INDEX_OF = 44,
 }
 
