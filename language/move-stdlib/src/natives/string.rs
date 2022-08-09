@@ -11,7 +11,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::{native_gas, NativeResult},
     pop_arg,
-    values::Value,
+    values::{Value, VectorRef},
     gas_schedule::NativeCostIndex,
 };
 use std::collections::VecDeque;
@@ -37,8 +37,8 @@ pub fn native_check_utf8(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(arguments.len() == 1);
-    let s_arg = pop_arg!(arguments, Vec<u8>);
-    let ok = std::str::from_utf8(s_arg.as_slice()).is_ok();
+    let s_arg = pop_arg!(arguments, VectorRef);
+    let ok = std::str::from_utf8(s_arg.as_bytes_ref().as_slice()).is_ok();
 
     let cost = native_gas(
         context.cost_table(),
@@ -62,10 +62,10 @@ pub fn native_is_char_boundary(
     debug_assert!(ty_args.is_empty());
     debug_assert!(arguments.len() == 2);
     let i = pop_arg!(arguments, u64);
-    let s_arg = pop_arg!(arguments, Vec<u8>);
+    let s_arg = pop_arg!(arguments, VectorRef);
     let ok = unsafe {
         // This is safe because we guarantee the bytes to be utf8.
-        std::str::from_utf8_unchecked(s_arg.as_slice()).is_char_boundary(i as usize)
+        std::str::from_utf8_unchecked(s_arg.as_bytes_ref().as_slice()).is_char_boundary(i as usize)
     };
     let cost = native_gas(
         context.cost_table(),
@@ -101,10 +101,11 @@ pub fn native_sub_string(
         return Ok(NativeResult::err(cost, NFE_STRING_INVALID_ARG_FAILURE));
     }
 
-    let s_arg = pop_arg!(arguments, Vec<u8>);
+    let s_arg = pop_arg!(arguments, VectorRef);
+    let s_ref = s_arg.as_bytes_ref();
     let s_str = unsafe {
         // This is safe because we guarantee the bytes to be utf8.
-        std::str::from_utf8_unchecked(s_arg.as_slice())
+        std::str::from_utf8_unchecked(s_ref.as_slice())
     };
     let v = Value::vector_u8((&s_str[i..j]).as_bytes().iter().cloned());
 
@@ -126,10 +127,12 @@ pub fn native_index_of(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(arguments.len() == 2);
-    let r_arg = pop_arg!(arguments, Vec<u8>);
-    let r_str = unsafe { std::str::from_utf8_unchecked(r_arg.as_slice()) };
-    let s_arg = pop_arg!(arguments, Vec<u8>);
-    let s_str = unsafe { std::str::from_utf8_unchecked(s_arg.as_slice()) };
+    let r_arg = pop_arg!(arguments, VectorRef);
+    let r_ref = r_arg.as_bytes_ref();
+    let r_str = unsafe { std::str::from_utf8_unchecked(r_ref.as_slice()) };
+    let s_arg = pop_arg!(arguments, VectorRef);
+    let s_ref = s_arg.as_bytes_ref();
+    let s_str = unsafe { std::str::from_utf8_unchecked(s_ref.as_slice()) };
     let pos = match s_str.find(r_str) {
         Some(size) => size,
         None => s_str.len(),
