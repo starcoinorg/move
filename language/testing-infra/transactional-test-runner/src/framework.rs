@@ -24,7 +24,7 @@ use move_command_line_common::{
     values::{ParsableValue, ParsedValue},
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
+    compiled_unit::{AnnotatedCompiledUnit, CompiledUnitEnum},
     diagnostics::{Diagnostics, FilesSourceText},
     shared::NumericalAddress,
     FullyCompiledProgram,
@@ -96,6 +96,15 @@ impl<'a> CompiledState<'a> {
             .into_iter()
             .map(|arg| arg.into_type_tag(&|s| Some(self.resolve_named_address(s))))
             .collect()
+    }
+
+    pub fn complie(&mut self, path: &str) -> Result<(AnnotatedCompiledUnit, Option<String>)> {
+        compile_source_unit(
+            self.pre_compiled_deps,
+            self.named_address_mapping.clone(),
+            &self.source_files().cloned().collect::<Vec<_>>(),
+            path.to_owned(),
+        )
     }
 }
 
@@ -535,7 +544,7 @@ impl<'a> CompiledState<'a> {
         self.modules.insert(id, processed);
     }
 
-    fn add_precompiled(&mut self, named_addr_opt: Option<Symbol>, module: CompiledModule) {
+    pub fn add_precompiled(&mut self, named_addr_opt: Option<Symbol>, module: CompiledModule) {
         let id = module.self_id();
         if let Some(named_addr) = named_addr_opt {
             self.compiled_module_named_address_mapping
