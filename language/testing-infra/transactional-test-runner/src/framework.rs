@@ -19,7 +19,7 @@ use move_command_line_common::{
     testing::{format_diff, read_env_update_baseline, EXP_EXT},
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
+    compiled_unit::{AnnotatedCompiledUnit, CompiledUnitEnum},
     diagnostics::{Diagnostics, FilesSourceText},
     shared::NumericalAddress,
     FullyCompiledProgram,
@@ -79,6 +79,19 @@ impl<'a> CompiledState<'a> {
                 Argument::TransactionArgument(arg) => arg,
             })
             .collect()
+    }
+
+    pub fn complie(&mut self, path: &str) -> Result<(AnnotatedCompiledUnit, Option<String>)> {
+        compile_source_unit(
+            self.pre_compiled_deps,
+            self.named_address_mapping.clone(),
+            self.compiled_module_named_address_mapping
+                .iter()
+                .map(|(k, v)| (k.clone(), v.as_str().to_string()))
+                .collect(),
+            &self.interface_files().cloned().collect::<Vec<_>>(),
+            path.to_owned(),
+        )
     }
 }
 
