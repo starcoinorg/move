@@ -1,17 +1,17 @@
 CompiledPackageInfo {
     package_name: "Root",
     address_alias_instantiation: {
-        "A": 00000000000000000000000000000002,
+        "A": 0x00000000000000000000000000000002,
     },
     module_resolution_metadata: {
         ModuleId {
-            address: 00000000000000000000000000000002,
+            address: 0x00000000000000000000000000000002,
             name: Identifier(
                 "B",
             ),
         }: "A",
         ModuleId {
-            address: 00000000000000000000000000000002,
+            address: 0x00000000000000000000000000000002,
             name: Identifier(
                 "OneDep",
             ),

@@ -77,11 +77,11 @@ impl AccountAddress {
     }
 
     pub fn from_hex_literal(literal: &str) -> Result<Self, AccountAddressParseError> {
-        if literal.is_empty() {
+        if !literal.starts_with("0x") {
             return Err(AccountAddressParseError);
         }
-        let literal = literal.strip_prefix("0x").unwrap_or_else(|| literal);
-        let hex_len = literal.len();
+
+        let hex_len = literal.len() - 2;
 
         // If the string is too short, pad it
         if hex_len < Self::LENGTH * 2 {
@@ -89,10 +89,10 @@ impl AccountAddress {
             for _ in 0..Self::LENGTH * 2 - hex_len {
                 hex_str.push('0');
             }
-            hex_str.push_str(&literal);
+            hex_str.push_str(&literal[2..]);
             AccountAddress::from_hex(hex_str)
         } else {
-            AccountAddress::from_hex(&literal)
+            AccountAddress::from_hex(&literal[2..])
         }
     }
 
@@ -135,7 +135,6 @@ impl AccountAddress {
         anyhow::ensure!(version.filter(|v| *v == 1u8).is_some(), "expect version 1");
 
         let data: Vec<u8> = bech32::FromBase32::from_base32(&data[1..])?;
-
         if data.len() == AccountAddress::LENGTH {
             Ok(data)
         } else if data.len() == AccountAddress::LENGTH + 32 {
@@ -267,7 +266,7 @@ impl TryFrom<String> for AccountAddress {
     type Error = AccountAddressParseError;
 
     fn try_from(s: String) -> Result<AccountAddress, AccountAddressParseError> {
-        AccountAddress::from_str(s.as_str())
+        Self::from_hex(s)
     }
 }
 
@@ -404,7 +403,7 @@ mod tests {
         assert_eq!(hex_literal, address.to_hex_literal());
 
         // Missing '0x' is ok
-        AccountAddress::from_hex_literal(hex).unwrap();
+        AccountAddress::from_hex_literal(hex).unwrap_err();
         // Too long
         AccountAddress::from_hex_literal("0x100000000000000000000000000000001").unwrap_err();
     }

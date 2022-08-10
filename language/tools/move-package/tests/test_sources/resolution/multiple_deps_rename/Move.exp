@@ -96,7 +96,7 @@ ResolutionGraph {
                 addresses: Some(
                     {
                         "A": Some(
-                            00000000000000000000000000000001,
+                            0x00000000000000000000000000000001,
                         ),
                     },
                 ),
@@ -108,7 +108,7 @@ ResolutionGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolution_table: {
-                "A": 00000000000000000000000000000001,
+                "A": 0x00000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -128,7 +128,7 @@ ResolutionGraph {
                 addresses: Some(
                     {
                         "A": Some(
-                            00000000000000000000000000000002,
+                            0x00000000000000000000000000000002,
                         ),
                     },
                 ),
@@ -140,7 +140,7 @@ ResolutionGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolution_table: {
-                "A": 00000000000000000000000000000002,
+                "A": 0x00000000000000000000000000000002,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -202,8 +202,8 @@ ResolutionGraph {
                 ),
             },
             resolution_table: {
-                "CA": 00000000000000000000000000000001,
-                "DA": 00000000000000000000000000000002,
+                "CA": 0x00000000000000000000000000000001,
+                "DA": 0x00000000000000000000000000000002,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
