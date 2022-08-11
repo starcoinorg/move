@@ -196,7 +196,12 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         let data_store = &mut self.session.data_cache;
         // All modules verified, publish them to data cache
         for (module, blob) in compiled_modules.into_iter().zip(modules.into_iter()) {
-            data_store.publish_module(&module.self_id(), blob)?;
+            let republish = if data_store.exists_module(&module.self_id())? {
+                true
+            } else {
+                false
+            };
+            data_store.publish_module(&module.self_id(), blob, republish)?;
         }
         Ok(())
     }
