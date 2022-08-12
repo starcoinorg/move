@@ -7,6 +7,7 @@ pub mod event;
 pub mod hash;
 pub mod signer;
 pub mod vector;
+pub mod string;
 
 #[cfg(feature = "testing")]
 pub mod unit_test;
@@ -49,6 +50,10 @@ pub fn all_natives(move_std_addr: AccountAddress) -> NativeFunctionTable {
             "create_signers_for_testing",
             unit_test::native_create_signers_for_testing,
         ),
+        ("String","native_check_utf8",string::native_check_utf8),
+        ("String","native_is_char_boundary",string::native_is_char_boundary),
+        ("String","native_sub_string",string::native_sub_string),
+        ("String","native_index_of",string::native_index_of),
     ];
     native_functions::make_table(move_std_addr, NATIVES)
 }
