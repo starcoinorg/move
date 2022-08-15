@@ -16,7 +16,11 @@ use std::{
 };
 
 #[cfg(feature = "table-extension")]
-use move_table_extension::{TableChangeSet, TableHandle, TableOperation, TableResolver};
+use {
+    anyhow::Error,
+    move_core_types::gas_algebra::InternalGas,
+    move_table_extension::{TableChangeSet, TableHandle, TableOperation, TableResolver},
+};
 
 /// A dummy storage containing no modules or resources.
 #[derive(Debug, Clone)]
