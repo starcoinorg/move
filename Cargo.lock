@@ -935,7 +935,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ebda144c4fe02d1f7ea1a7d9641b6fc6b580adcfa024ae48797ecdeb6825b4d"
 dependencies = [
  "libc",
- "redox_users 0.4.0",
+ "redox_users 0.4.3",
  "winapi",
 ]
 
@@ -1674,7 +1674,7 @@ dependencies = [
  "jsonpath-plus",
  "once_cell",
  "regex",
- "serde 1.0.130",
+ "serde 1.0.141",
  "serde_json",
 ]
 
