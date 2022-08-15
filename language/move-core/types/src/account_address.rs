@@ -80,8 +80,10 @@ impl AccountAddress {
         if !literal.starts_with("0x") {
             return Err(AccountAddressParseError);
         }
-
-        let hex_len = literal.len() - 2;
+        // strip all of 0x prefix to backward compatibility
+        // let literal = literal.strip_prefix("0x").unwrap_or_else(|| literal);
+        let literal = literal.trim_start_matches("0x");
+        let hex_len = literal.len();
 
         // If the string is too short, pad it
         if hex_len < Self::LENGTH * 2 {
@@ -89,10 +91,10 @@ impl AccountAddress {
             for _ in 0..Self::LENGTH * 2 - hex_len {
                 hex_str.push('0');
             }
-            hex_str.push_str(&literal[2..]);
+            hex_str.push_str(&literal);
             AccountAddress::from_hex(hex_str)
         } else {
-            AccountAddress::from_hex(&literal[2..])
+            AccountAddress::from_hex(&literal)
         }
     }
 

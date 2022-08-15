@@ -87,7 +87,7 @@ Command `sandbox generate struct-layouts --module storage/0x0x000000000000000000
 
 Command `sandbox generate struct-layouts --module storage/0x0x00000000000000000000000000000001/modules/M1.mv --struct A --type-args 0x1::M1::S<u64>`:
 ---
-"0x00000000000000000000000000000001::M1::A<00000000000000000000000000000001::M1::S<u64>>":
+"0x00000000000000000000000000000001::M1::A<0x00000000000000000000000000000001::M1::S<u64>>":
   STRUCT:
     - f: U64
     - v: BYTES
