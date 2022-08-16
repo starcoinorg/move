@@ -286,9 +286,9 @@ pub fn zero_cost_schedule(num_of_native_funcs: usize) -> CostTable {
     // about the actual gas for instructions.  The only thing we care about is having an entry
     // in the gas schedule for each instruction.
     let instrs = zero_cost_instruction_table();
-    // length of native_table vector should be at least 18 due to the fact that there's a
-    // builtin native function cost EMIT_EVENT which indexed 17 in the vector
-    let num_of_native_funcs = max(num_of_native_funcs, 18);
+    // length of native_table vector should be at least 25 due to the fact that there's a
+    // builtin native function cost STRING_INDEX_OF which indexed 24 in the vector
+    let num_of_native_funcs = max(num_of_native_funcs, 25);
     let native_table = (0..num_of_native_funcs)
         .map(|_| GasCost::new(0, 0))
         .collect::<Vec<GasCost>>();
