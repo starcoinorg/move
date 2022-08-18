@@ -15,6 +15,7 @@ use move_vm_types::{
     natives::function::NativeResult,
     pop_arg,
     values::{Value, Vector, VectorRef},
+    views::ValueView,
 };
 use std::{collections::VecDeque, sync::Arc};
 
@@ -26,7 +27,7 @@ use std::{collections::VecDeque, sync::Arc};
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct EmptyGasParameters {
-    pub base_cost: InternalGas,
+    pub base: InternalGas,
 }
 
 pub fn native_empty(
@@ -38,7 +39,7 @@ pub fn native_empty(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.is_empty());
 
-    NativeResult::map_partial_vm_result_one(gas_params.base_cost, Vector::empty(&ty_args[0]))
+    NativeResult::map_partial_vm_result_one(gas_params.base, Vector::empty(&ty_args[0]))
 }
 
 pub fn make_native_empty(gas_params: EmptyGasParameters) -> NativeFunction {
@@ -57,7 +58,7 @@ pub fn make_native_empty(gas_params: EmptyGasParameters) -> NativeFunction {
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct LengthGasParameters {
-    pub base_cost: InternalGas,
+    pub base: InternalGas,
 }
 
 pub fn native_length(
@@ -70,7 +71,7 @@ pub fn native_length(
     debug_assert!(args.len() == 1);
 
     let r = pop_arg!(args, VectorRef);
-    NativeResult::map_partial_vm_result_one(gas_params.base_cost, r.len(&ty_args[0]))
+    NativeResult::map_partial_vm_result_one(gas_params.base, r.len(&ty_args[0]))
 }
 
 pub fn make_native_length(gas_params: LengthGasParameters) -> NativeFunction {
@@ -89,8 +90,8 @@ pub fn make_native_length(gas_params: LengthGasParameters) -> NativeFunction {
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct PushBackGasParameters {
-    pub base_cost: InternalGas,
-    pub legacy_unit_cost: InternalGasPerAbstractMemoryUnit,
+    pub base: InternalGas,
+    pub legacy_per_abstract_memory_unit: InternalGasPerAbstractMemoryUnit,
 }
 
 pub fn native_push_back(
@@ -104,9 +105,10 @@ pub fn native_push_back(
 
     let e = args.pop_back().unwrap();
     let r = pop_arg!(args, VectorRef);
-    let mut cost = gas_params.base_cost;
-    if gas_params.legacy_unit_cost != 0.into() {
-        cost += gas_params.legacy_unit_cost * std::cmp::max(e.size(), 1.into());
+    let mut cost = gas_params.base;
+    if gas_params.legacy_per_abstract_memory_unit != 0.into() {
+        cost += gas_params.legacy_per_abstract_memory_unit
+            * std::cmp::max(e.legacy_abstract_memory_size(), 1.into());
     }
     NativeResult::map_partial_vm_result_empty(cost, r.push_back(e, &ty_args[0]))
 }
@@ -127,7 +129,7 @@ pub fn make_native_push_back(gas_params: PushBackGasParameters) -> NativeFunctio
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct BorrowGasParameters {
-    pub base_cost: InternalGas,
+    pub base: InternalGas,
 }
 
 pub fn native_borrow(
@@ -142,7 +144,7 @@ pub fn native_borrow(
     let idx = pop_arg!(args, u64) as usize;
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_one(
-        gas_params.base_cost,
+        gas_params.base,
         r.borrow_elem(idx, &ty_args[0])
             .map_err(native_error_to_abort),
     )
@@ -164,7 +166,7 @@ pub fn make_native_borrow(gas_params: BorrowGasParameters) -> NativeFunction {
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct PopBackGasParameters {
-    pub base_cost: InternalGas,
+    pub base: InternalGas,
 }
 
 pub fn native_pop_back(
@@ -178,7 +180,7 @@ pub fn native_pop_back(
 
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_one(
-        gas_params.base_cost,
+        gas_params.base,
         r.pop(&ty_args[0]).map_err(native_error_to_abort),
     )
 }
@@ -199,7 +201,7 @@ pub fn make_native_pop_back(gas_params: PopBackGasParameters) -> NativeFunction 
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct DestroyEmptyGasParameters {
-    pub base_cost: InternalGas,
+    pub base: InternalGas,
 }
 
 pub fn native_destroy_empty(
@@ -213,7 +215,7 @@ pub fn native_destroy_empty(
 
     let v = pop_arg!(args, Vector);
     NativeResult::map_partial_vm_result_empty(
-        gas_params.base_cost,
+        gas_params.base,
         v.destroy_empty(&ty_args[0]).map_err(native_error_to_abort),
     )
 }
@@ -231,7 +233,7 @@ pub fn make_native_destroy_empty(gas_params: DestroyEmptyGasParameters) -> Nativ
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct SwapGasParameters {
-    pub base_cost: InternalGas,
+    pub base: InternalGas,
 }
 
 pub fn native_swap(
@@ -247,7 +249,7 @@ pub fn native_swap(
     let idx1 = pop_arg!(args, u64) as usize;
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_empty(
-        gas_params.base_cost,
+        gas_params.base,
         r.swap(idx1, idx2, &ty_args[0])
             .map_err(native_error_to_abort),
     )
