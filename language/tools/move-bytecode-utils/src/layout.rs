@@ -258,6 +258,7 @@ impl TypeLayoutBuilder {
             U64 => MoveTypeLayout::U64,
             U128 => MoveTypeLayout::U128,
             Address => MoveTypeLayout::Address,
+            TypeParameter(i) => MoveTypeLayout::TypeParameter(*i),
             Signer => bail!("Type layouts cannot contain signer"),
             Vector(elem_t) => {
                 MoveTypeLayout::Vector(Box::new(Self::build(elem_t, resolver, layout_type)?))

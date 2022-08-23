@@ -30,8 +30,9 @@ fn ty_to_sig(ty: &MoveTypeLayout) -> Option<SignatureToken> {
         MoveTypeLayout::U64 => Some(SignatureToken::U64),
         MoveTypeLayout::U128 => Some(SignatureToken::U128),
         MoveTypeLayout::Vector(v) => Some(SignatureToken::Vector(Box::new(ty_to_sig(v.as_ref())?))),
-        MoveTypeLayout::Struct(_) => None,
         MoveTypeLayout::Bool => Some(SignatureToken::Bool),
+        MoveTypeLayout::Struct(_) => None,
+        MoveTypeLayout::TypeParameter(_) => None,
     }
 }
 

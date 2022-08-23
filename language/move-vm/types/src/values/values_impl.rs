@@ -2494,7 +2494,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::U128 => u128::deserialize(deserializer).map(Value::u128),
             L::Address => AccountAddress::deserialize(deserializer).map(Value::address),
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
-
+            L::TypeParameter(index) => Ok(Value::u64(*index as u64)),
             L::Struct(struct_layout) => Ok(Value::struct_(
                 SeedWrapper {
                     layout: struct_layout,

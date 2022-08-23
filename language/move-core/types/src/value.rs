@@ -95,6 +95,8 @@ pub enum MoveTypeLayout {
     Struct(MoveStructLayout),
     #[serde(rename(serialize = "signer", deserialize = "signer"))]
     Signer,
+    #[serde(rename = "parameter", alias = "Parameter")]
+    TypeParameter(u16),
 }
 
 impl MoveValue {
@@ -284,6 +286,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
             MoveTypeLayout::Vector(layout) => Ok(MoveValue::Vector(
                 deserializer.deserialize_seq(VectorElementVisitor(layout))?,
             )),
+            MoveTypeLayout::TypeParameter(idx) => Ok(MoveValue::U64(*idx as u64)),
         }
     }
 }
@@ -479,6 +482,7 @@ impl fmt::Display for MoveTypeLayout {
             Vector(typ) => write!(f, "vector<{}>", typ),
             Struct(s) => write!(f, "{}", s),
             Signer => write!(f, "signer"),
+            TypeParameter(i) => write!(f, "parameter length {}", i),
         }
     }
 }
@@ -520,6 +524,7 @@ impl TryInto<TypeTag> for &MoveTypeLayout {
             MoveTypeLayout::U64 => TypeTag::U64,
             MoveTypeLayout::U128 => TypeTag::U128,
             MoveTypeLayout::Signer => TypeTag::Signer,
+            MoveTypeLayout::TypeParameter(i) => TypeTag::TypeParameter(*i),
             MoveTypeLayout::Vector(v) => {
                 let inner_type = &**v;
                 TypeTag::Vector(Box::new(inner_type.try_into()?))

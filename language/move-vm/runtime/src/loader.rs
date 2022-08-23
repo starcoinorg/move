@@ -797,6 +797,7 @@ impl Loader {
             TypeTag::U128 => Type::U128,
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
+            TypeTag::TypeParameter(idx) => Type::TyParam(*idx as usize),
             TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt, data_store)?)),
             TypeTag::Struct(struct_tag) => {
                 let module_id = ModuleId::new(struct_tag.address, struct_tag.module.clone());

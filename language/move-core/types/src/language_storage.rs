@@ -34,6 +34,8 @@ pub enum TypeTag {
     Vector(Box<TypeTag>),
     #[serde(rename(serialize = "struct", deserialize = "struct"))]
     Struct(StructTag),
+    #[serde(rename(serialize = "parameter", deserialize = "parameter"))]
+    TypeParameter(u16),
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
@@ -162,6 +164,7 @@ impl Display for TypeTag {
             TypeTag::Address => write!(f, "address"),
             TypeTag::Signer => write!(f, "signer"),
             TypeTag::Bool => write!(f, "bool"),
+            TypeTag::TypeParameter(index) => write!(f, "parameter length {}", index),
         }
     }
 }

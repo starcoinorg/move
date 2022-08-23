@@ -101,6 +101,7 @@ impl<'a, T: MoveResolver + ?Sized> Resolver<'a, T> {
             TypeTag::U8 => FatType::U8,
             TypeTag::U64 => FatType::U64,
             TypeTag::U128 => FatType::U128,
+            TypeTag::TypeParameter(_) => FatType::U64,
             TypeTag::Vector(ty) => FatType::Vector(Box::new(self.resolve_type(ty)?)),
         })
     }

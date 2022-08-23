@@ -163,6 +163,7 @@ pub fn convert_move_type_tag(env: &GlobalEnv, tag: &TypeTag) -> PartialVMResult<
         TypeTag::Bool => BaseType::mk_bool(),
         TypeTag::U8 => BaseType::mk_u8(),
         TypeTag::U64 => BaseType::mk_u64(),
+        TypeTag::TypeParameter(_) => BaseType::mk_u64(),
         TypeTag::U128 => BaseType::mk_u128(),
         TypeTag::Address => BaseType::mk_address(),
         TypeTag::Signer => BaseType::mk_signer(),
@@ -290,9 +291,12 @@ fn check_type_instantiation(
 
 fn get_abilities(env: &GlobalEnv, ty: &TypeTag) -> PartialVMResult<AbilitySet> {
     match ty {
-        TypeTag::Bool | TypeTag::U8 | TypeTag::U64 | TypeTag::U128 | TypeTag::Address => {
-            Ok(AbilitySet::PRIMITIVES)
-        }
+        TypeTag::Bool
+        | TypeTag::U8
+        | TypeTag::U64
+        | TypeTag::U128
+        | TypeTag::Address
+        | TypeTag::TypeParameter(_) => Ok(AbilitySet::PRIMITIVES),
         TypeTag::Signer => Ok(AbilitySet::SIGNER),
         TypeTag::Vector(elem_ty) => AbilitySet::polymorphic_abilities(
             AbilitySet::VECTOR,

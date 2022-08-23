@@ -343,6 +343,7 @@ impl From<TypeTag> for Type {
                 name: s.name,
                 type_arguments: s.type_params.into_iter().map(|ty| ty.into()).collect(),
             },
+            TypeTag::TypeParameter(i) => TypeParameter(i),
         }
     }
 }
