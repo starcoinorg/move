@@ -9,6 +9,7 @@ use crate::{
     NativeFunctionRecord,
 };
 use anyhow::{bail, Result};
+use move_binary_format::errors::Location;
 use move_core_types::gas_schedule::CostTable;
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::move_vm::MoveVM;
@@ -81,7 +82,17 @@ pub fn publish(
                         );
                         if let Err(err) = res {
                             // TODO (mengxu): explain publish errors in multi-module publishing
-                            println!("Invalid multi-module publishing: {}", err);
+                            // println!("Invalid multi-module publishing: {}", err);
+                            if let Location::Module(module_id) = err.location() {
+                                // println!("error location is {:?}", err.location());
+                                // find out corresponding CompiledUnitWithSource by name
+                                if let Some(unit) = package.modules()?.into_iter().find(|&x| {
+                                    x.unit.name().to_string() == module_id.name().as_str()
+                                }) {
+                                    // println!("{:?}", unit);
+                                    explain_publish_error(err, state, unit)?;
+                                }
+                            }
                             has_error = true;
                         }
                     }
@@ -120,6 +131,11 @@ pub fn publish(
                         if let Err(err) = res {
                             // TODO (mengxu): explain publish errors in multi-module publishing
                             println!("Invalid multi-module publishing: {}", err);
+                            // find CompiledUnitWithSource by module_id
+                            // if let Some(unit) = module_map.get(module_id.name().as_str()) {
+                            //     // explain publish error
+                            //     explain_publish_error(err, state, unit)?;
+                            // }
                             has_error = true;
                         }
                     }
