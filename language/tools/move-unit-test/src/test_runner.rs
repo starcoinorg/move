@@ -118,7 +118,7 @@ fn print_resources_and_extensions(
     let mut buf = String::new();
     let annotator = MoveValueAnnotator::new(storage);
     for (account_addr, account_state) in cs.accounts() {
-        writeln!(&mut buf, "0x{}:", account_addr.short_str_lossless())?;
+        writeln!(&mut buf, "{}:", account_addr)?;
 
         for (tag, resource_opt) in account_state.resources() {
             if let Some(resource) = resource_opt {

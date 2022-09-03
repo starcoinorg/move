@@ -93,12 +93,8 @@ impl Harness {
         // Initialize actors
         let mut mailbox: VecDeque<Message> = Default::default();
         for (actor, addr) in self.actor_instances.clone() {
-            self.log(format!(
-                "actor 0x{} created from {}",
-                addr.short_str_lossless(),
-                actor.short_str_lossless()
-            ));
-            let result = {
+            self.log(format!("actor {} created from {}", addr, actor));
+            {
                 let mut proxy = HarnessProxy { harness: self };
                 let session = self.vm.new_session(addr, 0, &mut proxy);
                 session.new_actor(&actor, addr, &mut gas)
@@ -116,17 +112,13 @@ impl Harness {
             // Baseline logging
             if let Some((module_id, fun_id)) = self.vm.resolve_message_hash(message_hash).cloned() {
                 self.log(format!(
-                    "actor 0x{} handling {}::{} (hash=0x{:X})",
-                    actor.short_str_lossless(),
-                    module_id.short_str_lossless(),
-                    fun_id,
-                    message_hash
+                    "actor {} handling {}::{} (hash=0x{:X})",
+                    actor, module_id, fun_id, message_hash
                 ));
             } else {
                 self.log(format!(
-                    "actor 0x{} handling ???? (hash={})",
-                    actor.short_str_lossless(),
-                    message_hash
+                    "actor {} handling ???? (hash={})",
+                    actor, message_hash
                 ))
             }
             // Handling
@@ -169,7 +161,7 @@ impl Harness {
                 for m in &success.messages {
                     self.log(format!(
                         "  sent 0x{} <- 0x{:X} argc={}",
-                        m.0.short_str_lossless(),
+                        m.0,
                         m.1,
                         m.2.len()
                     ))
@@ -185,6 +177,7 @@ impl Harness {
         for (addr, change) in changeset.into_inner() {
             for (struct_tag, val) in change.into_inner().1 {
                 self.log(format!(
+<<<<<<< HEAD
                     "  commit 0x{}::{}::{}[0x{}] := {}",
                     struct_tag.address.short_str_lossless(),
                     struct_tag.module,
@@ -193,6 +186,14 @@ impl Harness {
                     val.as_ref()
                         .map(|b| format!("{:02X?}", b))
                         .unwrap_or_else(|| "None".to_string())
+=======
+                    "  commit {}::{}::{}[{}] := {:?}",
+                    struct_tag.address,
+                    struct_tag.module,
+                    struct_tag.module,
+                    addr,
+                    op.as_ref().map(|b| format!("{:02X?}", b))
+>>>>>>> 83bdc50f2 ([address] Remove all usage of short_str_lossless)
                 ));
                 match val {
                     Some(v) => {

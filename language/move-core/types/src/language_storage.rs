@@ -125,21 +125,9 @@ impl Display for ModuleId {
     }
 }
 
-impl ModuleId {
-    pub fn short_str_lossless(&self) -> String {
-        format!("0x{}::{}", self.address.short_str_lossless(), self.name)
-    }
-}
-
 impl Display for StructTag {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}::{}::{}",
-            &self.address, // should not use short_str.
-            self.module,
-            self.name
-        )?;
+        write!(f, "{}::{}::{}", self.address, self.module, self.name)?;
         if let Some(first_ty) = self.type_params.first() {
             write!(f, "<")?;
             write!(f, "{}", first_ty)?;
@@ -169,7 +157,7 @@ impl Display for TypeTag {
 
 impl Display for ResourceKey {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "0x{}/{}", self.address.short_str_lossless(), self.type_)
+        write!(f, "{}/{}", self.address, self.type_)
     }
 }
 
