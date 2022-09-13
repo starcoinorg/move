@@ -883,6 +883,7 @@ fn use_(context: &mut Context, acc: &mut AliasMapBuilder, u: P::UseDecl) {
         P::Use::Module(pmident, alias_opt) => {
             let mident = module_ident(context, pmident);
             if !context.module_members.contains_key(&mident) {
+                dbg!(&context.module_members);
                 context.env.add_diag(unbound_module(&mident));
                 return;
             };
@@ -893,6 +894,7 @@ fn use_(context: &mut Context, acc: &mut AliasMapBuilder, u: P::UseDecl) {
             let members = match context.module_members.get(&mident) {
                 Some(members) => members,
                 None => {
+                    dbg!(&context.module_members);
                     context.env.add_diag(unbound_module(&mident));
                     return;
                 }
