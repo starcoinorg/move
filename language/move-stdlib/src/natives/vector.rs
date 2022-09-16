@@ -259,6 +259,96 @@ pub fn make_native_swap(gas_params: SwapGasParameters) -> NativeFunction {
     )
 }
 
+pub fn native_append(
+    gas_params: &AppendGasParameters,
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    let e = args.pop_back().unwrap();
+    let r = pop_arg!(args, VectorRef);
+    let e: Vector = e.value_as()?;
+    let mut cost = gas_params.base_cost;
+    if gas_params.legacy_unit_cost != 0 {
+        cost += gas_params.legacy_unit_cost * e.get_container_size() as u64;
+    }
+    NativeResult::map_partial_vm_result_empty(
+        cost,
+        r.append(e, &ty_args[0]).map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_append(gas_params: AppendGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_append(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+pub fn native_remove(
+    gas_params: &RemoveGasParameters,
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    let idx: u64 = args.pop_back().unwrap().value_as()?;
+    let r = pop_arg!(args, VectorRef);
+    let len = r.get_container_len();
+    let memory_cost = r.get_container_size() * ((len - idx as usize) as u64) / (len as u64);
+    let mut cost = gas_params.base_cost;
+    if gas_params.legacy_unit_cost != 0 {
+        cost += gas_params.legacy_unit_cost * u64::max(memory_cost, 1) as u64;
+    }
+    NativeResult::map_partial_vm_result_one(
+        cost,
+        r.remove(idx as usize, &ty_args[0])
+            .map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_remove(gas_params: RemoveGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_remove(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+pub fn native_reverse(
+    gas_params: &ReverseGasParameters,
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+    let r = pop_arg!(args, VectorRef);
+    // half of the memory size.
+    let mut cost = gas_params.base_cost;
+    if gas_params.legacy_unit_cost != 0 {
+        cost += gas_params.legacy_unit_cost * u64::max(r.get_container_size() / 2, 1) as u64;
+    }
+    NativeResult::map_partial_vm_result_empty(
+        cost,
+        r.reverse(&ty_args[0]).map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_reverse(gas_params: ReverseGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_reverse(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
 fn native_error_to_abort(err: PartialVMError) -> PartialVMError {
     let (major_status, sub_status_opt, message_opt, exec_state_opt, indices, offsets) =
         err.all_data();
@@ -282,6 +372,42 @@ fn native_error_to_abort(err: PartialVMError) -> PartialVMError {
 }
 
 /***************************************************************************************************
+ * native fun remove
+ *
+ *   gas cost: base_cost + legacy_unit_cost * max(1, size_of(val))
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct RemoveGasParameters {
+    pub base_cost: u64,
+    pub legacy_unit_cost: u64,
+}
+
+/***************************************************************************************************
+ * native fun reverse
+ *
+ *   gas cost: base_cost + legacy_unit_cost * max(1, size_of(val))
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct ReverseGasParameters {
+    pub base_cost: u64,
+    pub legacy_unit_cost: u64,
+}
+
+/***************************************************************************************************
+ * native fun reverse
+ *
+ *   gas cost: base_cost + legacy_unit_cost * max(1, size_of(val))
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct AppendGasParameters {
+    pub base_cost: u64,
+    pub legacy_unit_cost: u64,
+}
+
+/***************************************************************************************************
  * module
  **************************************************************************************************/
 #[derive(Debug, Clone)]
@@ -293,6 +419,9 @@ pub struct GasParameters {
     pub pop_back: PopBackGasParameters,
     pub destroy_empty: DestroyEmptyGasParameters,
     pub swap: SwapGasParameters,
+    pub append: AppendGasParameters,
+    pub remove: RemoveGasParameters,
+    pub reverse: ReverseGasParameters,
 }
 
 pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, NativeFunction)> {
@@ -308,6 +437,9 @@ pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, Nati
             make_native_destroy_empty(gas_params.destroy_empty),
         ),
         ("swap", make_native_swap(gas_params.swap)),
+        ("append", make_native_append(gas_params.append)),
+        ("remove", make_native_remove(gas_params.remove)),
+        ("reverse", make_native_reverse(gas_params.reverse)),
     ];
 
     make_module_natives(natives)

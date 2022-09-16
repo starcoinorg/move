@@ -91,6 +91,18 @@ impl GasParameters {
                 pop_back: vector::PopBackGasParameters { base_cost: 0 },
                 destroy_empty: vector::DestroyEmptyGasParameters { base_cost: 0 },
                 swap: vector::SwapGasParameters { base_cost: 0 },
+                append: vector::AppendGasParameters {
+                    base_cost: 0,
+                    legacy_unit_cost: 0,
+                },
+                remove: vector::RemoveGasParameters {
+                    base_cost: 0,
+                    legacy_unit_cost: 0,
+                },
+                reverse: vector::ReverseGasParameters {
+                    base_cost: 0,
+                    legacy_unit_cost: 0,
+                },
             },
             #[cfg(feature = "testing")]
             unit_test: unit_test::GasParameters {
