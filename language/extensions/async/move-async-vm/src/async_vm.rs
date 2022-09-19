@@ -24,7 +24,7 @@ use move_vm_runtime::{
     native_functions::NativeFunction,
     session::{SerializedReturnValues, Session},
 };
-use move_vm_test_utils::gas_schedule::GasStatus;
+use move_vm_types::gas_schedule::GasStatus;
 use move_vm_types::values::{Reference, Value};
 
 use crate::{

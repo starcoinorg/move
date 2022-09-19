@@ -1759,7 +1759,6 @@ impl VectorRef {
         let other = e.0;
         check_elem_layout(type_param, lhs)?;
         check_elem_layout(type_param, &other)?;
-        let other_size = other.size();
         match (lhs, other) {
             (Container::Vec(c), Container::Vec(r)) => {
                 c.borrow_mut().append(r.borrow_mut().as_mut());
