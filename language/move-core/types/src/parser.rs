@@ -516,7 +516,7 @@ mod tests {
         }
     }
 
-    #[ignore = "starcoin use long address"]
+    #[ignore = "use `test_parse_valid_struct_tag_long_addr` in starcoin"]
     #[test]
     fn test_parse_valid_struct_tag() {
         let valid = vec![
