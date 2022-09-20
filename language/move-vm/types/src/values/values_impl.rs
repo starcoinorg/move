@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{loaded_data::runtime_types::Type, natives::function::NativeResult};
+use crate::{loaded_data::runtime_types::Type};
 use move_binary_format::{
     errors::*,
     file_format::{Constant, SignatureToken},
@@ -10,7 +10,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     gas_schedule::{
-        AbstractMemorySize, GasAlgebra, GasCarrier, InternalGasUnits, CONST_SIZE,
+        AbstractMemorySize, GasAlgebra, GasCarrier, CONST_SIZE,
         MIN_EXISTS_DATA_SIZE, REFERENCE_SIZE, STRUCT_SIZE,
     },
     value::{MoveStructLayout, MoveTypeLayout},
@@ -219,7 +219,7 @@ pub enum GlobalValueEffect<T> {
  **************************************************************************************/
 
 impl Container {
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         match self {
             Self::Locals(r) | Self::Struct(r) | Self::Vec(r) => r.borrow().len(),
             Self::VecU8(r) => r.borrow().len(),
@@ -1699,17 +1699,16 @@ impl VectorRef {
         self.0.mark_dirty();
         Ok(())
     }
+
     pub fn remove(
         &self,
         idx: usize,
-        cost: InternalGasUnits<GasCarrier>,
         type_param: &Type,
-    ) -> PartialVMResult<NativeResult> {
+    ) -> PartialVMResult<Value> {
         let c = self.0.container();
         check_elem_layout(type_param, c)?;
 
         // len must be >0
-        let len = c.len();
         let ret = match c {
             Container::VecU8(r) => Value::u8(r.borrow_mut().remove(idx)),
             Container::VecU64(r) => Value::u64(r.borrow_mut().remove(idx)),
@@ -1721,17 +1720,13 @@ impl VectorRef {
             Container::Locals(_) | Container::Struct(_) => unreachable!(),
         };
         self.0.mark_dirty();
-        // cost with memory
-        let memory_cost = c.size().get() * ((len - idx) as u64) / (len as u64);
-        let cost = cost.mul(AbstractMemorySize::new(std::cmp::max(1, memory_cost)));
-        Ok(NativeResult::ok(cost, smallvec![ret]))
+        Ok(ret)
     }
 
     pub fn reverse(
         &self,
-        cost: InternalGasUnits<GasCarrier>,
         type_param: &Type,
-    ) -> PartialVMResult<NativeResult> {
+    ) -> PartialVMResult<()> {
         let c = self.0.container();
         check_elem_layout(type_param, c)?;
         macro_rules! reverse {
@@ -1752,27 +1747,18 @@ impl VectorRef {
             Container::Locals(_) | Container::Struct(_) => unreachable!(),
         }
         self.0.mark_dirty();
-
-        // half of the memory size.
-        let memory_cost = std::cmp::max(1, c.size().get() / 2);
-        let cost = cost.get() * memory_cost;
-
-        Ok(NativeResult::ok(InternalGasUnits::new(cost), smallvec![]))
+        Ok(())
     }
 
     pub fn append(
         self,
-        cost: InternalGasUnits<GasCarrier>,
         e: Vector,
         type_param: &Type,
-    ) -> PartialVMResult<NativeResult> {
+    ) -> PartialVMResult<()> {
         let lhs = self.0.container();
         let other = e.0;
         check_elem_layout(type_param, lhs)?;
         check_elem_layout(type_param, &other)?;
-        // cost with memory
-        let cost = cost.mul(other.size());
-
         match (lhs, other) {
             (Container::Vec(c), Container::Vec(r)) => {
                 c.borrow_mut().append(r.borrow_mut().as_mut());
@@ -1798,7 +1784,15 @@ impl VectorRef {
         }
         self.0.mark_dirty();
 
-        Ok(NativeResult::ok(cost, smallvec![]))
+        Ok(())
+    }
+
+    pub fn get_container_len(&self) -> usize {
+        self.0.container().len()
+    }
+
+    pub fn get_container_size(&self) -> u64 {
+        self.0.container().size().get()
     }
 }
 
@@ -1907,6 +1901,10 @@ impl Vector {
             )
         }
     }
+
+    pub fn get_container_size(&self) -> u64 {
+        self.0.size().get()
+    }
 }
 
 /***************************************************************************************
@@ -1918,7 +1916,7 @@ impl Vector {
  **************************************************************************************/
 
 impl Container {
-    fn size(&self) -> AbstractMemorySize<GasCarrier> {
+    pub fn size(&self) -> AbstractMemorySize<GasCarrier> {
         match self {
             Self::Locals(r) | Self::Vec(r) | Self::Struct(r) => Struct::size_impl(&*r.borrow()),
             Self::VecU8(r) => AbstractMemorySize::new((r.borrow().len() * size_of::<u8>()) as u64),
@@ -2461,7 +2459,6 @@ use serde::{
     ser::{Error as SerError, SerializeSeq, SerializeTuple},
     Deserialize,
 };
-use smallvec::smallvec;
 
 impl Value {
     pub fn simple_deserialize(blob: &[u8], layout: &MoveTypeLayout) -> Option<Value> {

@@ -23,7 +23,7 @@ use move_core_types::{
     value::{serialize_values, MoveValue},
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_types::gas_schedule::GasStatus;
+use move_vm_types::gas::UnmeteredGasMeter;
 
 // make a script with a given signature for main.
 fn make_script(parameters: Signature) -> Vec<u8> {
@@ -278,13 +278,12 @@ fn call_script_with_args_ty_args_signers(
     let move_vm = MoveVM::new(vec![]).unwrap();
     let remote_view = RemoteStore::new();
     let mut session = move_vm.new_session(&remote_view);
-    let mut gas_status = GasStatus::new_unmetered();
     session
         .execute_script(
             script,
             ty_args,
             combine_signers_and_args(signers, non_signer_args),
-            &mut gas_status,
+            &mut UnmeteredGasMeter,
         )
         .map(|_| ())
 }
@@ -305,13 +304,12 @@ fn call_script_function_with_args_ty_args_signers(
     let id = module.self_id();
     remote_view.add_module(module);
     let mut session = move_vm.new_session(&remote_view);
-    let mut gas_status = GasStatus::new_unmetered();
     session.execute_function_bypass_visibility(
         &id,
         function_name.as_ident_str(),
         ty_args,
         combine_signers_and_args(signers, non_signer_args),
-        &mut gas_status,
+        &mut UnmeteredGasMeter,
     )?;
     Ok(())
 }
@@ -776,7 +774,6 @@ fn call_missing_item() {
     let function_name = IdentStr::new("foo").unwrap();
     // mising module
     let move_vm = MoveVM::new(vec![]).unwrap();
-    let mut gas_status = GasStatus::new_unmetered();
     let mut remote_view = RemoteStore::new();
     let mut session = move_vm.new_session(&remote_view);
     let error = session
@@ -785,7 +782,7 @@ fn call_missing_item() {
             function_name,
             vec![],
             Vec::<Vec<u8>>::new(),
-            &mut gas_status,
+            &mut UnmeteredGasMeter,
         )
         .err()
         .unwrap();
@@ -802,7 +799,7 @@ fn call_missing_item() {
             function_name,
             vec![],
             Vec::<Vec<u8>>::new(),
-            &mut gas_status,
+            &mut UnmeteredGasMeter,
         )
         .err()
         .unwrap();
