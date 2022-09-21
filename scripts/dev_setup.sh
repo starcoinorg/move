@@ -329,6 +329,10 @@ function install_boogie {
     echo "Boogie $BOOGIE_VERSION already installed"
   else
     "${DOTNET_INSTALL_DIR}dotnet" tool update --tool-path "${DOTNET_INSTALL_DIR}tools/" Boogie --version $BOOGIE_VERSION
+    if [[ $? != 0 ]]; then
+      echo "failed to install boogie ${BOOGIE_VERSION}, if there is an more recent version installed, please consider uninstall it with"
+      echo "${DOTNET_INSTALL_DIR}dotnet tool uninstall --tool-path ${DOTNET_INSTALL_DIR}/tools Boogie"
+    fi
   fi
 }
 
