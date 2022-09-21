@@ -41,7 +41,7 @@ fn struct_deserialization() {
         serde_json::to_value(&typed_value).unwrap(),
         json!({
                 "fields": { "f": 7, "g": true },
-                "type": "0x0::MyModule::MyStruct"
+                "type": "0x00000000000000000000000000000000::MyModule::MyStruct"
             }
         )
     );
@@ -94,10 +94,10 @@ fn nested_typed_struct_deserialization() {
             "fields": {
                 "inner": {
                     "fields": { "f": 7},
-                    "type": "0x0::NestedModule::NestedStruct<u8>",
+                    "type": "0x00000000000000000000000000000000::NestedModule::NestedStruct<u8>",
                 }
             },
-            "type": "0x0::MyModule::MyStruct"
+            "type": "0x00000000000000000000000000000000::MyModule::MyStruct"
         })
     );
 }

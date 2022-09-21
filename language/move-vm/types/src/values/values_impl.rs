@@ -28,7 +28,7 @@ use std::{
  * Internal Types
  *
  *   Internal representation of the Move value calculus. These types are abstractions
- *   over the concrete Move concepts and may carry additonal information that is not
+ *   over the concrete Move concepts and may carry additional information that is not
  *   defined by the language, but required by the implementation.
  *
  **************************************************************************************/
