@@ -516,42 +516,42 @@ mod tests {
         }
     }
 
-    #[ignore = "use `test_parse_valid_struct_tag_long_addr` in starcoin"]
-    #[test]
-    fn test_parse_valid_struct_tag() {
-        let valid = vec![
-            "0x1::Diem::Diem",
-            "0x1::Diem_Type::Diem",
-            "0x1::Diem_::Diem",
-            "0x1::X_123::X32_",
-            "0x1::Diem::Diem_Type",
-            "0x1::Diem::Diem<0x1::XDX::XDX>",
-            "0x1::Diem::Diem<0x1::XDX::XDX_Type>",
-            "0x1::Diem::Diem<u8>",
-            "0x1::Diem::Diem<u64>",
-            "0x1::Diem::Diem<u128>",
-            "0x1::Diem::Diem<bool>",
-            "0x1::Diem::Diem<address>",
-            "0x1::Diem::Diem<signer>",
-            "0x1::Diem::Diem<vector<0x1::XDX::XDX>>",
-            "0x1::Diem::Diem<u8,bool>",
-            "0x1::Diem::Diem<u8,   bool>",
-            "0x1::Diem::Diem<u8  ,bool>",
-            "0x1::Diem::Diem<u8 , bool  ,    vector<u8>,address,signer>",
-            "0x1::Diem::Diem<vector<0x1::Diem::Struct<0x1::XUS::XUS>>>",
-            "0x1::Diem::Diem<0x1::Diem::Struct<vector<0x1::XUS::XUS>, 0x1::Diem::Diem<vector<0x1::Diem::Struct<0x1::XUS::XUS>>>>>",
-        ];
-        for text in valid {
-            let st = parse_struct_tag(text).expect("valid StructTag");
-            assert_eq!(
-                st.to_string().replace(" ", ""),
-                text.replace(" ", ""),
-                "text: {:?}, StructTag: {:?}",
-                text,
-                st
-            );
-        }
-    }
+    // #[ignore = "use `test_parse_valid_struct_tag_long_addr` in starcoin"]
+    // #[test]
+    // fn test_parse_valid_struct_tag() {
+    //     let valid = vec![
+    //         "0x1::Diem::Diem",
+    //         "0x1::Diem_Type::Diem",
+    //         "0x1::Diem_::Diem",
+    //         "0x1::X_123::X32_",
+    //         "0x1::Diem::Diem_Type",
+    //         "0x1::Diem::Diem<0x1::XDX::XDX>",
+    //         "0x1::Diem::Diem<0x1::XDX::XDX_Type>",
+    //         "0x1::Diem::Diem<u8>",
+    //         "0x1::Diem::Diem<u64>",
+    //         "0x1::Diem::Diem<u128>",
+    //         "0x1::Diem::Diem<bool>",
+    //         "0x1::Diem::Diem<address>",
+    //         "0x1::Diem::Diem<signer>",
+    //         "0x1::Diem::Diem<vector<0x1::XDX::XDX>>",
+    //         "0x1::Diem::Diem<u8,bool>",
+    //         "0x1::Diem::Diem<u8,   bool>",
+    //         "0x1::Diem::Diem<u8  ,bool>",
+    //         "0x1::Diem::Diem<u8 , bool  ,    vector<u8>,address,signer>",
+    //         "0x1::Diem::Diem<vector<0x1::Diem::Struct<0x1::XUS::XUS>>>",
+    //         "0x1::Diem::Diem<0x1::Diem::Struct<vector<0x1::XUS::XUS>, 0x1::Diem::Diem<vector<0x1::Diem::Struct<0x1::XUS::XUS>>>>>",
+    //     ];
+    //     for text in valid {
+    //         let st = parse_struct_tag(text).expect("valid StructTag");
+    //         assert_eq!(
+    //             st.to_string().replace(" ", ""),
+    //             text.replace(" ", ""),
+    //             "text: {:?}, StructTag: {:?}",
+    //             text,
+    //             st
+    //         );
+    //     }
+    // }
 }
 
 #[test]
