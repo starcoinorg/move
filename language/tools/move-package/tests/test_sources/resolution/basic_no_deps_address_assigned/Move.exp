@@ -25,7 +25,7 @@ ResolutionGraph {
         addresses: Some(
             {
                 "A": Some(
-                    00000000000000000000000000000000,
+                    0x00000000000000000000000000000000,
                 ),
             },
         ),
@@ -54,7 +54,7 @@ ResolutionGraph {
                 addresses: Some(
                     {
                         "A": Some(
-                            00000000000000000000000000000000,
+                            0x00000000000000000000000000000000,
                         ),
                     },
                 ),
@@ -66,7 +66,7 @@ ResolutionGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolution_table: {
-                "A": 00000000000000000000000000000000,
+                "A": 0x00000000000000000000000000000000,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
