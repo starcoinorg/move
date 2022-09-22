@@ -241,10 +241,10 @@ fun ReadVector::read_addr_from_vec($t0|s: ReadVector::S): bool {
      # Formal(0): Read
      # Formal(0)/a: Read
      # Formal(0)/a/[_]: Read
-     # Formal(0)/a/[_]/0x2::ReadVector::Glob/b: Read
+     # Formal(0)/a/[_]/0x00000000000000000000000000000002::ReadVector::Glob/b: Read
      #
      # Locals:
-     # Ret(0): Formal(0)/a/[_]/0x2::ReadVector::Glob/b
+     # Ret(0): Formal(0)/a/[_]/0x00000000000000000000000000000002::ReadVector::Glob/b
      #
   0: $t2 := move($t0)
   1: $t3 := ReadVector::extract_addr_from_vec($t2)

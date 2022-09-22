@@ -84,8 +84,8 @@ fun Counter::call_increment2($t0|a: address) {
      var $t2: &mut Counter::S
      # Accesses:
      # Formal(0): Read
-     # Formal(0)/0x1::Counter::S: Read
-     # Formal(0)/0x1::Counter::S/f: ReadWrite
+     # Formal(0)/0x00000000000000000000000000000001::Counter::S: Read
+     # Formal(0)/0x00000000000000000000000000000001::Counter::S/f: ReadWrite
      #
      # Locals:
      #

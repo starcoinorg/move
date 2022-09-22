@@ -173,12 +173,12 @@ fun SecondaryIndex::call_two_secondary_indexes($t0|s: &SecondaryIndex::S): addre
      # Accesses:
      # Formal(0): Read
      # Formal(0)/f: Read
-     # Formal(0)/f/0x1::SecondaryIndex::A/a_addr: Read
+     # Formal(0)/f/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr: Read
      # Formal(0)/g: Read
-     # Formal(0)/g/0x1::SecondaryIndex::A/a_addr: Read
+     # Formal(0)/g/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr: Read
      #
      # Locals:
-     # Ret(0): {Formal(0)/f/0x1::SecondaryIndex::A/a_addr, Formal(0)/g/0x1::SecondaryIndex::A/a_addr, }
+     # Ret(0): {Formal(0)/f/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr, Formal(0)/g/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr, }
      #
   0: $t1 := move($t0)
   1: $t2 := true
@@ -198,10 +198,10 @@ fun SecondaryIndex::read_secondary_index_from_formal($t0|a: &SecondaryIndex::A):
      # Accesses:
      # Formal(0): Read
      # Formal(0)/a_addr: Read
-     # Formal(0)/a_addr/0x1::SecondaryIndex::B/b_addr: Read
+     # Formal(0)/a_addr/0x00000000000000000000000000000001::SecondaryIndex::B/b_addr: Read
      #
      # Locals:
-     # Ret(0): Formal(0)/a_addr/0x1::SecondaryIndex::B/b_addr
+     # Ret(0): Formal(0)/a_addr/0x00000000000000000000000000000001::SecondaryIndex::B/b_addr
      #
   0: $t1 := move($t0)
   1: $t2 := borrow_field<SecondaryIndex::A>.a_addr($t1)
@@ -222,10 +222,10 @@ fun SecondaryIndex::read_secondary_index_from_formal_interproc($t0|a_addr: addre
      var $t5: address
      # Accesses:
      # Formal(0): Read
-     # Formal(0)/0x1::SecondaryIndex::B/b_addr: Read
+     # Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::B/b_addr: Read
      #
      # Locals:
-     # Ret(0): Formal(0)/0x1::SecondaryIndex::B/b_addr
+     # Ret(0): Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::B/b_addr
      #
   0: $t2 := copy($t0)
   1: $t3 := pack SecondaryIndex::A($t2)
@@ -249,11 +249,11 @@ fun SecondaryIndex::read_secondary_index_from_global($t0|a: address): address {
      var $t9: address
      # Accesses:
      # Formal(0): Read
-     # Formal(0)/0x1::SecondaryIndex::A/a_addr: Read
-     # Formal(0)/0x1::SecondaryIndex::A/a_addr/0x1::SecondaryIndex::B/b_addr: Read
+     # Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr: Read
+     # Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr/0x00000000000000000000000000000001::SecondaryIndex::B/b_addr: Read
      #
      # Locals:
-     # Ret(0): Formal(0)/0x1::SecondaryIndex::A/a_addr/0x1::SecondaryIndex::B/b_addr
+     # Ret(0): Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr/0x00000000000000000000000000000001::SecondaryIndex::B/b_addr
      #
   0: $t2 := copy($t0)
   1: $t3 := borrow_global<SecondaryIndex::A>($t2)
@@ -275,12 +275,12 @@ fun SecondaryIndex::read_secondary_index_from_global_interproc($t0|a: address): 
      var $t3: address
      # Accesses:
      # Formal(0): Read
-     # Formal(0)/0x1::SecondaryIndex::A: Read
-     # Formal(0)/0x1::SecondaryIndex::A/a_addr: Read
-     # Formal(0)/0x1::SecondaryIndex::A/a_addr/0x1::SecondaryIndex::B/b_addr: Read
+     # Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::A: Read
+     # Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr: Read
+     # Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr/0x00000000000000000000000000000001::SecondaryIndex::B/b_addr: Read
      #
      # Locals:
-     # Ret(0): Formal(0)/0x1::SecondaryIndex::A/a_addr/0x1::SecondaryIndex::B/b_addr
+     # Ret(0): Formal(0)/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr/0x00000000000000000000000000000001::SecondaryIndex::B/b_addr
      #
   0: $t1 := copy($t0)
   1: $t2 := borrow_global<SecondaryIndex::A>($t1)
@@ -309,13 +309,13 @@ fun SecondaryIndex::two_secondary_indexes($t0|s: &SecondaryIndex::S, $t1|b: bool
      # Accesses:
      # Formal(0): Read
      # Formal(0)/f: Read
-     # Formal(0)/f/0x1::SecondaryIndex::A/a_addr: Read
+     # Formal(0)/f/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr: Read
      # Formal(0)/g: Read
-     # Formal(0)/g/0x1::SecondaryIndex::A/a_addr: Read
+     # Formal(0)/g/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr: Read
      # Formal(1): Read
      #
      # Locals:
-     # Ret(0): {Formal(0)/f/0x1::SecondaryIndex::A/a_addr, Formal(0)/g/0x1::SecondaryIndex::A/a_addr, }
+     # Ret(0): {Formal(0)/f/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr, Formal(0)/g/0x00000000000000000000000000000001::SecondaryIndex::A/a_addr, }
      #
   0: $t3 := copy($t1)
   1: if ($t3) goto 2 else goto 11

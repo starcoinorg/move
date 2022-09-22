@@ -37,7 +37,7 @@ Failures in 0x1::A:
 │ 
 │ ────── Storage state at point of failure ──────
 │ 0x1:
-│ 	=> key 0x1::A::A {
+│ 	=> key 0x00000000000000000000000000000001::A::A {
 │ 	    dummy_field: false
 │ 	}
 │ 

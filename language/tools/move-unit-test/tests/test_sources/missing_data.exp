@@ -21,7 +21,7 @@ Failures in 0x1::MissingData:
 │     message: None,
 │     location: Module(
 │         ModuleId {
-│             address: 00000000000000000000000000000001,
+│             address: 0x00000000000000000000000000000001,
 │             name: Identifier(
 │                 "MissingData",
 │             ),
