@@ -55,8 +55,8 @@ public fun BoolFootprint::call_get($t0|a: address) {
      var $t3: u64
      # Accesses:
      # Formal(0): Read
-     # Formal(0)/0x1::BoolFootprint::B: Read
-     # Formal(0)/0x1::BoolFootprint::B/b: Read
+     # Formal(0)/0x00000000000000000000000000000001::BoolFootprint::B: Read
+     # Formal(0)/0x00000000000000000000000000000001::BoolFootprint::B/b: Read
      #
      # Locals:
      #
@@ -84,11 +84,11 @@ public fun BoolFootprint::global_get($t0|a: address): bool {
      var $t9: bool
      # Accesses:
      # Formal(0): Read
-     # Formal(0)/0x1::BoolFootprint::B: Read
-     # Formal(0)/0x1::BoolFootprint::B/b: Read
+     # Formal(0)/0x00000000000000000000000000000001::BoolFootprint::B: Read
+     # Formal(0)/0x00000000000000000000000000000001::BoolFootprint::B/b: Read
      #
      # Locals:
-     # Ret(0): Formal(0)/0x1::BoolFootprint::B/b
+     # Ret(0): Formal(0)/0x00000000000000000000000000000001::BoolFootprint::B/b
      #
   0: $t2 := copy($t0)
   1: $t3 := exists<BoolFootprint::B>($t2)

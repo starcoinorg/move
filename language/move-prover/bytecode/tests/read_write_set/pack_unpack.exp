@@ -210,10 +210,10 @@ fun PackUnpack::read_packed_borrow_glob($t0|a2: address): bool {
      var $t10: bool
      # Accesses:
      # Formal(0): Read
-     # Formal(0)/0x1::PackUnpack::Glob/b: Read
+     # Formal(0)/0x00000000000000000000000000000001::PackUnpack::Glob/b: Read
      #
      # Locals:
-     # Ret(0): Formal(0)/0x1::PackUnpack::Glob/b
+     # Ret(0): Formal(0)/0x00000000000000000000000000000001::PackUnpack::Glob/b
      #
   0: $t2 := copy($t0)
   1: $t3 := false
@@ -290,10 +290,10 @@ fun PackUnpack::read_unpacked_borrow_glob($t0|s: PackUnpack::S): bool {
      # Accesses:
      # Formal(0): Read
      # Formal(0)/a1: Read
-     # Formal(0)/a1/0x1::PackUnpack::Glob/b: Read
+     # Formal(0)/a1/0x00000000000000000000000000000001::PackUnpack::Glob/b: Read
      #
      # Locals:
-     # Ret(0): Formal(0)/a1/0x1::PackUnpack::Glob/b
+     # Ret(0): Formal(0)/a1/0x00000000000000000000000000000001::PackUnpack::Glob/b
      #
   0: $t2 := move($t0)
   1: ($t3, $t4, $t5) := unpack PackUnpack::S($t2)

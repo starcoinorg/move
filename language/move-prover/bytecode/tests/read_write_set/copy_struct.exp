@@ -92,7 +92,7 @@ public fun CopyStruct::g() {
      var $t16: &mut CopyStruct::G
      var $t17: &mut u64
      # Accesses:
-     # 0x7/0x1::CopyStruct::G/f: Write
+     # 0x7/0x00000000000000000000000000000001::CopyStruct::G/f: Write
      #
      # Locals:
      #
