@@ -84,7 +84,7 @@ impl AccountAddress {
     }
 
     pub fn from_hex_literal(literal: &str) -> Result<Self, AccountAddressParseError> {
-        if literal.is_empty() {
+        if !literal.starts_with("0x") {
             return Err(AccountAddressParseError);
         }
         let literal = literal.strip_prefix("0x").unwrap_or_else(|| literal);
