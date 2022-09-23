@@ -19,6 +19,12 @@ use move_vm_types::gas_schedule::GasStatus;
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 
 #[test]
+fn x() {
+
+    println!("{}", TEST_ADDR);
+}
+
+#[test]
 fn test_malformed_resource() {
     // Compile the modules and scripts.
     // TODO: find a better way to include the Signer module.
@@ -64,7 +70,7 @@ fn test_malformed_resource() {
             }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_string()));
+    let code = code.replace("{{ADDR}}", &format!("{}", TEST_ADDR.to_string()));
     let mut units = compile_units(&code).unwrap();
 
     let s2 = as_script(units.pop().unwrap());
@@ -160,7 +166,7 @@ fn test_malformed_module() {
         }
     "#;
 
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_string()));
+    let code = code.replace("{{ADDR}}", &format!("{}", TEST_ADDR.to_string()));
     let mut units = compile_units(&code).unwrap();
 
     let m = as_module(units.pop().unwrap());
@@ -214,7 +220,7 @@ fn test_unverifiable_module() {
         }
     "#;
 
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_string()));
+    let code = code.replace("{{ADDR}}", &format!("{}", TEST_ADDR.to_string()));
     let mut units = compile_units(&code).unwrap();
     let m = as_module(units.pop().unwrap());
 
@@ -273,7 +279,7 @@ fn test_missing_module_dependency() {
             public fun bar() { M::foo(); }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_string()));
+    let code = code.replace("{{ADDR}}", &format!("{}", TEST_ADDR.to_string()));
     let mut units = compile_units(&code).unwrap();
     let n = as_module(units.pop().unwrap());
     let m = as_module(units.pop().unwrap());
@@ -320,7 +326,7 @@ fn test_missing_module_dependency() {
 }
 
 #[test]
-fn test_malformed_module_denpency() {
+fn test_malformed_module_dependency() {
     // Compile two modules M, N where N depends on M.
     let code = r#"
         module {{ADDR}}::M {
@@ -333,7 +339,7 @@ fn test_malformed_module_denpency() {
             public fun bar() { M::foo(); }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_string()));
+    let code = code.replace("{{ADDR}}", &format!("{}", TEST_ADDR));
     let mut units = compile_units(&code).unwrap();
     let n = as_module(units.pop().unwrap());
     let m = as_module(units.pop().unwrap());
@@ -399,7 +405,7 @@ fn test_unverifiable_module_dependency() {
             public fun bar() { M::foo(); }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_string()));
+    let code = code.replace("{{ADDR}}", &format!("{}", TEST_ADDR.to_string()));
     let mut units = compile_units(&code).unwrap();
     let n = as_module(units.pop().unwrap());
     let m = as_module(units.pop().unwrap());
@@ -534,7 +540,7 @@ fn test_storage_returns_bogus_error_when_loading_resource() {
             }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_string()));
+    let code = code.replace("{{ADDR}}", &format!("{}", TEST_ADDR.to_string()));
 
     let mut units = compile_units(&code).unwrap();
     let m = as_module(units.pop().unwrap());
