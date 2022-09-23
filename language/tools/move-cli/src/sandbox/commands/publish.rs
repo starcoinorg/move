@@ -13,8 +13,8 @@ use anyhow::{bail, Result};
 use move_command_line_common::env::get_bytecode_version_from_env;
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::move_vm::MoveVM;
-use std::collections::BTreeMap;
 use move_vm_types::gas_schedule::CostTable;
+use std::collections::BTreeMap;
 
 pub fn publish(
     natives: impl IntoIterator<Item = NativeFunctionRecord>,
@@ -66,10 +66,10 @@ pub fn publish(
             None => {
                 let mut sender_opt = None;
                 let mut module_bytes_vec = vec![];
-                for unit in package.all_compiled_units() {
-                    let module_bytes = unit.serialize(None);
+                for unit in package.root_modules() {
+                    let module_bytes = unit.unit.serialize(None);
                     module_bytes_vec.push(module_bytes);
-                    let id = module(&unit)?.self_id();
+                    let id = module(&unit.unit)?.self_id();
                     let sender = *id.address();
                     if sender_opt.is_none() {
                         sender_opt = Some(sender);
