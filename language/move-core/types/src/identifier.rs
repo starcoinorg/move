@@ -32,6 +32,18 @@ use anyhow::{bail, Result};
 use proptest::prelude::*;
 use ref_cast::RefCast;
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "nostd")]
+use alloc::borrow::ToOwned;
+#[cfg(feature = "nostd")]
+use alloc::boxed::Box;
+#[cfg(feature = "nostd")]
+use alloc::string::String;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+#[cfg(feature = "nostd")]
+use core::{borrow::Borrow, fmt, ops::Deref, str::FromStr};
+#[cfg(not(feature = "nostd"))]
 use std::{borrow::Borrow, fmt, ops::Deref, str::FromStr};
 
 /// Return true if this character can appear in a Move identifier.
@@ -310,6 +322,12 @@ macro_rules! ident_str {
         // Note: this lint is unjustified and no longer checked. See issue:
         // https://github.com/rust-lang/rust-clippy/issues/6372
         #[allow(clippy::transmute_ptr_to_ptr)]
+        #[cfg(feature = "nostd")]
+        unsafe {
+            ::core::mem::transmute::<&'static str, &'static $crate::identifier::IdentStr>(s)
+        }
+        #[allow(clippy::transmute_ptr_to_ptr)]
+        #[cfg(not(feature = "nostd"))]
         unsafe {
             ::std::mem::transmute::<&'static str, &'static $crate::identifier::IdentStr>(s)
         }

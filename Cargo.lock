@@ -2323,6 +2323,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "bech32",
+ "hashbrown",
  "hex",
  "once_cell",
  "proptest",

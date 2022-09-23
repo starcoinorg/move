@@ -6,6 +6,11 @@ use crate::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
 };
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+#[cfg(feature = "nostd")]
+use core::fmt::Debug;
+#[cfg(not(feature = "nostd"))]
 use std::fmt::Debug;
 
 /// Traits for resolving Move modules and resources from persistent storage

@@ -9,7 +9,25 @@ use crate::{
     transaction_argument::TransactionArgument,
 };
 use anyhow::{bail, format_err, Result};
+
+#[cfg(feature = "nostd")]
+use alloc::boxed::Box;
+#[cfg(feature = "nostd")]
+use alloc::string::String;
+#[cfg(feature = "nostd")]
+use alloc::vec;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+#[cfg(feature = "nostd")]
+use core::fmt;
+#[cfg(feature = "nostd")]
+use core::iter::Peekable;
+#[cfg(not(feature = "nostd"))]
+use std::fmt;
+#[cfg(not(feature = "nostd"))]
 use std::iter::Peekable;
+#[cfg(not(feature = "nostd"))]
+use std::vec;
 
 #[derive(Eq, PartialEq, Debug)]
 enum Token {
@@ -229,7 +247,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     ) -> Result<Vec<R>>
     where
         F: Fn(&mut Self) -> Result<R>,
-        R: std::fmt::Debug,
+        R: fmt::Debug,
     {
         let mut v = vec![];
         if !(self.peek() == Some(&end_token)) {
@@ -322,7 +340,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
 fn parse<F, T>(s: &str, f: F) -> Result<T>
 where
-    F: Fn(&mut Parser<std::vec::IntoIter<Token>>) -> Result<T>,
+    F: Fn(&mut Parser<vec::IntoIter<Token>>) -> Result<T>,
 {
     let mut tokens: Vec<_> = tokenize(s)?
         .into_iter()
@@ -382,6 +400,10 @@ mod tests {
         parser::{parse_struct_tag, parse_transaction_argument, parse_type_tag},
         transaction_argument::TransactionArgument,
     };
+    #[cfg(feature = "nostd")]
+    use alloc::string::ToString;
+    #[cfg(feature = "nostd")]
+    use alloc::vec;
 
     #[allow(clippy::unreadable_literal)]
     #[test]
@@ -517,25 +539,28 @@ mod tests {
             );
         }
     }
-}
 
-#[test]
-fn tests_parse_type_tag() {
-    for t in &[
-        TypeTag::U8,
-        TypeTag::U64,
-        TypeTag::U128,
-        TypeTag::Address,
-        TypeTag::Bool,
-        TypeTag::Struct(StructTag {
-            address: AccountAddress::random(),
-            module: Identifier::from_utf8("A".to_string().into_bytes()).unwrap(),
-            name: Identifier::from_utf8("B".to_string().into_bytes()).unwrap(),
-            type_params: vec![TypeTag::Address],
-        }),
-        TypeTag::Vector(Box::new(TypeTag::U8)),
-    ] {
-        let actual = parse_type_tag(t.to_string().as_str()).unwrap();
-        assert_eq!(&actual, t);
+    #[test]
+    fn tests_parse_type_tag() {
+        use super::*;
+        #[cfg(feature = "nostd")]
+        use alloc::boxed::Box;
+        for t in &[
+            TypeTag::U8,
+            TypeTag::U64,
+            TypeTag::U128,
+            TypeTag::Address,
+            TypeTag::Bool,
+            TypeTag::Struct(StructTag {
+                address: AccountAddress::random(),
+                module: Identifier::from_utf8("A".to_string().into_bytes()).unwrap(),
+                name: Identifier::from_utf8("B".to_string().into_bytes()).unwrap(),
+                type_params: vec![TypeTag::Address],
+            }),
+            TypeTag::Vector(Box::new(TypeTag::U8)),
+        ] {
+            let actual = parse_type_tag(t.to_string().as_str()).unwrap();
+            assert_eq!(&actual, t);
+        }
     }
 }

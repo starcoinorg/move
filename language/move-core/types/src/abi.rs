@@ -2,6 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "nostd")]
+use alloc::string::String;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+
 use crate::language_storage::{ModuleId, TypeTag};
 use serde::{Deserialize, Serialize};
 

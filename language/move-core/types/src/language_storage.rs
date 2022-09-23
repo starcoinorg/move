@@ -9,7 +9,23 @@ use crate::{
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
+
+#[cfg(feature = "nostd")]
+use alloc::borrow::ToOwned;
+#[cfg(feature = "nostd")]
+use alloc::boxed::Box;
+#[cfg(feature = "nostd")]
+use alloc::format;
+#[cfg(feature = "nostd")]
+use alloc::string::String;
+#[cfg(feature = "nostd")]
+use alloc::vec;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+#[cfg(feature = "nostd")]
+use core::fmt::{self, Display, Formatter};
+#[cfg(not(feature = "nostd"))]
+use std::fmt::{self, Display, Formatter};
 
 pub const CODE_TAG: u8 = 0;
 pub const RESOURCE_TAG: u8 = 1;
@@ -120,7 +136,7 @@ impl ModuleId {
 }
 
 impl Display for ModuleId {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}::{}", self.address, self.name)
     }
 }
@@ -132,7 +148,7 @@ impl ModuleId {
 }
 
 impl Display for StructTag {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "{}::{}::{}",
@@ -153,7 +169,7 @@ impl Display for StructTag {
 }
 
 impl Display for TypeTag {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             TypeTag::Struct(s) => write!(f, "{}", s),
             TypeTag::Vector(ty) => write!(f, "vector<{}>", ty),
@@ -168,7 +184,7 @@ impl Display for TypeTag {
 }
 
 impl Display for ResourceKey {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "0x{}/{}", self.address.short_str_lossless(), self.type_)
     }
 }
@@ -185,6 +201,8 @@ mod tests {
     use crate::{
         account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
     };
+    #[cfg(feature = "nostd")]
+    use alloc::vec;
 
     #[test]
     fn test_type_tag_serde() {

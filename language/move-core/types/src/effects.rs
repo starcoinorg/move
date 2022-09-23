@@ -7,8 +7,18 @@ use crate::{
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
-use anyhow::{format_err, Error, Result};
+#[cfg(feature = "nostd")]
+use alloc::collections::btree_map;
+#[cfg(feature = "nostd")]
+use alloc::collections::BTreeMap;
+#[cfg(feature = "nostd")]
+use alloc::string::String;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+#[cfg(not(feature = "nostd"))]
 use std::collections::btree_map::{self, BTreeMap};
+
+use anyhow::{format_err, Error, Result};
 
 /// A collection of changes to modules and resources under a Move account.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]

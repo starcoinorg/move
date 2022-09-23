@@ -4,6 +4,12 @@
 
 //! Core types for Move.
 
+#![feature(error_in_core)]
+#![cfg_attr(feature = "nostd", no_std)]
+
+#[cfg(feature = "nostd")]
+extern crate alloc;
+
 pub mod abi;
 pub mod account_address;
 pub mod effects;
@@ -18,6 +24,7 @@ pub mod parser;
 pub mod proptest_types;
 pub mod resolver;
 pub mod transaction_argument;
+#[cfg(not(feature = "nostd"))]
 #[cfg(test)]
 mod unit_tests;
 pub mod value;

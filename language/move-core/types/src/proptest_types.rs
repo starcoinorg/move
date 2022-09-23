@@ -2,6 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "nostd")]
+use alloc::boxed::Box;
+
 use crate::{
     account_address::AccountAddress,
     identifier::Identifier,

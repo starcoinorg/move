@@ -8,6 +8,15 @@
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+#[cfg(feature = "nostd")]
+use core::{
+    ops::{Add, Div, Mul, Sub},
+    u64,
+};
+#[cfg(not(feature = "nostd"))]
 use std::{
     ops::{Add, Div, Mul, Sub},
     u64,
@@ -139,8 +148,7 @@ define_gas_unit! {
 pub const ONE_GAS_UNIT: InternalGasUnits<GasCarrier> = InternalGasUnits(1);
 
 /// The maximum size representable by AbstractMemorySize
-pub const MAX_ABSTRACT_MEMORY_SIZE: AbstractMemorySize<GasCarrier> =
-    AbstractMemorySize(std::u64::MAX);
+pub const MAX_ABSTRACT_MEMORY_SIZE: AbstractMemorySize<GasCarrier> = AbstractMemorySize(u64::MAX);
 
 /// The size in bytes for a non-string or address constant on the stack
 pub const CONST_SIZE: AbstractMemorySize<GasCarrier> = AbstractMemorySize(16);

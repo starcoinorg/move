@@ -2,6 +2,21 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "nostd")]
+use alloc::borrow::ToOwned;
+#[cfg(feature = "nostd")]
+use alloc::format;
+#[cfg(feature = "nostd")]
+use alloc::string::String;
+#[cfg(feature = "nostd")]
+use alloc::string::ToString;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+#[cfg(feature = "nostd")]
+use core::{convert::TryFrom, fmt, str::FromStr};
+#[cfg(not(feature = "nostd"))]
+use std::{convert::TryFrom, fmt, str::FromStr};
+
 use bech32::ToBase32;
 use hex::FromHex;
 use rand::{rngs::OsRng, Rng};
@@ -11,7 +26,6 @@ use schemars::{
     JsonSchema,
 };
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
-use std::{convert::TryFrom, fmt, str::FromStr};
 
 /// A struct that represents an account address.
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy)]
@@ -165,7 +179,7 @@ impl AsRef<[u8]> for AccountAddress {
         &self.0
     }
 }
-
+#[cfg(not(feature = "nostd"))]
 impl std::ops::Deref for AccountAddress {
     type Target = [u8; Self::LENGTH];
 
@@ -174,8 +188,17 @@ impl std::ops::Deref for AccountAddress {
     }
 }
 
+#[cfg(feature = "nostd")]
+impl core::ops::Deref for AccountAddress {
+    type Target = [u8; Self::LENGTH];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl fmt::Display for AccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Forward to the LowerHex impl with a "0x" prepended (the # flag).
         write!(f, "{:#x}", self)
     }
@@ -291,7 +314,7 @@ impl FromStr for AccountAddress {
 }
 
 impl<'de> Deserialize<'de> for AccountAddress {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -313,7 +336,7 @@ impl<'de> Deserialize<'de> for AccountAddress {
 }
 
 impl Serialize for AccountAddress {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -330,18 +353,38 @@ impl Serialize for AccountAddress {
 pub struct AccountAddressParseError;
 
 impl fmt::Display for AccountAddressParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "unable to parse AccountAddress")
     }
 }
 
+#[cfg(not(feature = "nostd"))]
+
 impl std::error::Error for AccountAddressParseError {}
+
+#[cfg(feature = "nostd")]
+impl core::error::Error for AccountAddressParseError {}
 
 #[cfg(test)]
 mod tests {
     use super::AccountAddress;
+    #[cfg(feature = "nostd")]
+    use alloc::format;
+    #[cfg(feature = "nostd")]
+    use alloc::string::ToString;
+    #[cfg(feature = "nostd")]
+    use alloc::vec;
+    #[cfg(feature = "nostd")]
+    use alloc::vec::Vec;
+    #[cfg(feature = "nostd")]
+    use core::{
+        convert::{AsRef, TryFrom},
+        str::FromStr,
+    };
     use hex::FromHex;
+    #[cfg(not(feature = "nostd"))]
     use proptest::prelude::*;
+    #[cfg(not(feature = "nostd"))]
     use std::{
         convert::{AsRef, TryFrom},
         str::FromStr,
@@ -474,6 +517,7 @@ mod tests {
         assert_eq!(address, json_bech32_address);
     }
 
+    #[cfg(not(feature = "nostd"))]
     proptest! {
         #[test]
         fn test_address_string_roundtrip(addr in any::<AccountAddress>()) {

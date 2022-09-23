@@ -5,6 +5,17 @@
 use crate::language_storage::ModuleId;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "nostd")]
+use alloc::collections::BTreeMap;
+#[cfg(feature = "nostd")]
+use alloc::format;
+#[cfg(feature = "nostd")]
+use alloc::string::String;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+
+#[cfg(not(feature = "nostd"))]
 use std::{
     collections::BTreeMap,
     fs::File,
@@ -76,12 +87,14 @@ impl ErrorMapping {
         Ok(())
     }
 
+    #[cfg(not(feature = "nostd"))]
     pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
         let mut bytes = Vec::new();
         File::open(path).unwrap().read_to_end(&mut bytes).unwrap();
         bcs::from_bytes(&bytes).unwrap()
     }
 
+    #[cfg(not(feature = "nostd"))]
     pub fn to_file<P: AsRef<Path>>(&self, path: P) {
         let bytes = bcs::to_bytes(self).unwrap();
         let mut file = File::create(path).unwrap();

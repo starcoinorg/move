@@ -13,6 +13,19 @@ use serde::{
     ser::{SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple},
     Deserialize, Serialize,
 };
+
+#[cfg(feature = "nostd")]
+use alloc::boxed::Box;
+#[cfg(feature = "nostd")]
+use alloc::string::ToString;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+#[cfg(feature = "nostd")]
+use core::{
+    convert::TryInto,
+    fmt::{self, Debug},
+};
+#[cfg(not(feature = "nostd"))]
 use std::{
     convert::TryInto,
     fmt::{self, Debug},
@@ -463,13 +476,13 @@ impl serde::Serialize for MoveStruct {
 }
 
 impl fmt::Display for MoveFieldLayout {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}: {}", self.name, self.layout)
     }
 }
 
 impl fmt::Display for MoveTypeLayout {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use MoveTypeLayout::*;
         match self {
             Bool => write!(f, "bool"),
@@ -485,7 +498,7 @@ impl fmt::Display for MoveTypeLayout {
 }
 
 impl fmt::Display for MoveStructLayout {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{ ")?;
         match self {
             Self::Runtime(layouts) => {

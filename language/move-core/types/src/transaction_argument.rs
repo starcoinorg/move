@@ -3,8 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{account_address::AccountAddress, value::MoveValue};
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
 use anyhow::{anyhow, Error, Result};
+#[cfg(feature = "nostd")]
+use core::{convert::TryFrom, fmt};
 use serde::{Deserialize, Serialize};
+#[cfg(not(feature = "nostd"))]
 use std::{convert::TryFrom, fmt};
 
 #[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -122,6 +127,13 @@ impl fmt::Display for TransactionArgument {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "nostd")]
+    use alloc::string::ToString;
+    #[cfg(feature = "nostd")]
+    use alloc::vec;
+    #[cfg(feature = "nostd")]
+    use core::convert::{From, TryInto};
+    #[cfg(not(feature = "nostd"))]
     use std::convert::{From, TryInto};
 
     use crate::{
@@ -156,6 +168,7 @@ mod tests {
             TransactionArgument::Address(AccountAddress::random()),
             TransactionArgument::U8Vector(vec![0xde, 0xad, 0xbe, 0xef]),
         ] {
+            #[cfg(not(feature = "nostd"))]
             println!("{}", arg);
             let actual = parse_transaction_argument(&arg.to_string()).unwrap();
 

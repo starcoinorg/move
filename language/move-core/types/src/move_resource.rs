@@ -9,6 +9,13 @@ use crate::{
 };
 use serde::de::DeserializeOwned;
 
+#[cfg(feature = "nostd")]
+use alloc::borrow::ToOwned;
+#[cfg(feature = "nostd")]
+use alloc::vec;
+#[cfg(feature = "nostd")]
+use alloc::vec::Vec;
+
 pub trait MoveStructType {
     const ADDRESS: AccountAddress = crate::language_storage::CORE_CODE_ADDRESS;
     const MODULE_NAME: &'static IdentStr;

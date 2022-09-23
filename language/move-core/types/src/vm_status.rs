@@ -11,7 +11,13 @@ use proptest::prelude::*;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{de, ser, Deserialize, Serialize};
-use std::{convert::TryFrom, fmt};
+
+#[cfg(feature = "nostd")]
+use alloc::format;
+#[cfg(feature = "nostd")]
+use core::{convert::TryFrom, fmt, result};
+#[cfg(not(feature = "nostd"))]
+use std::{convert::TryFrom, fmt, result};
 
 /// The minimum status code for validation statuses
 pub static VALIDATION_STATUS_MIN_CODE: u64 = 0;
@@ -316,7 +322,10 @@ impl fmt::Debug for AbortLocation {
     }
 }
 
+#[cfg(not(feature = "nostd"))]
 impl std::error::Error for VMStatus {}
+#[cfg(feature = "nostd")]
+impl core::error::Error for VMStatus {}
 
 pub mod known_locations {
     use crate::{
@@ -325,6 +334,8 @@ pub mod known_locations {
         language_storage::{ModuleId, CORE_CODE_ADDRESS},
         vm_status::AbortLocation,
     };
+    #[cfg(feature = "nostd")]
+    use alloc::borrow::ToOwned;
     use once_cell::sync::Lazy;
 
     /// The Identifier for the Account module.
@@ -389,7 +400,8 @@ macro_rules! derive_status_try_from_repr {
             ),*
         }
 
-        impl std::convert::TryFrom<$repr_ty> for $enum_name {
+        #[cfg(feature = "nostd")]
+        impl core::convert::TryFrom<$repr_ty> for $enum_name {
             type Error = &'static str;
             fn try_from(value: $repr_ty) -> Result<Self, Self::Error> {
                 match value {
@@ -400,6 +412,18 @@ macro_rules! derive_status_try_from_repr {
                 }
             }
         }
+        #[cfg(not(feature = "nostd"))]
+        impl std::convert::TryFrom<$repr_ty> for $enum_name {
+                    type Error = &'static str;
+                    fn try_from(value: $repr_ty) -> Result<Self, Self::Error> {
+                        match value {
+                            $(
+                                $value => Ok($enum_name::$variant),
+                            )*
+                            _ => Err("invalid StatusCode"),
+                        }
+                    }
+                }
 
         #[cfg(any(test, feature = "fuzzing"))]
         const STATUS_CODE_VALUES: &'static [$repr_ty] = &[
@@ -744,7 +768,7 @@ impl StatusCode {
 
 // TODO(#1307)
 impl ser::Serialize for StatusCode {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> result::Result<S::Ok, S::Error>
     where
         S: ser::Serializer,
     {
@@ -753,7 +777,7 @@ impl ser::Serialize for StatusCode {
 }
 
 impl<'de> de::Deserialize<'de> for StatusCode {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> result::Result<Self, D::Error>
     where
         D: de::Deserializer<'de>,
     {
@@ -765,7 +789,7 @@ impl<'de> de::Deserialize<'de> for StatusCode {
                 formatter.write_str("StatusCode as u64")
             }
 
-            fn visit_u64<E>(self, v: u64) -> std::result::Result<StatusCode, E>
+            fn visit_u64<E>(self, v: u64) -> result::Result<StatusCode, E>
             where
                 E: de::Error,
             {
@@ -815,7 +839,7 @@ impl Arbitrary for StatusCode {
 
 #[test]
 fn test_status_codes() {
-    use std::collections::HashSet;
+    use hashbrown::HashSet;
     // Make sure that within the 0-EXECUTION_STATUS_MAX_CODE that all of the status codes succeed
     // when they should, and fail when they should.
     for possible_major_status_code in 0..=EXECUTION_STATUS_MAX_CODE {
