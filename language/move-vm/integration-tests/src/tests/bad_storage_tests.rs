@@ -19,12 +19,6 @@ use move_vm_types::gas_schedule::GasStatus;
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 
 #[test]
-fn x() {
-
-    println!("{}", TEST_ADDR);
-}
-
-#[test]
 fn test_malformed_resource() {
     // Compile the modules and scripts.
     // TODO: find a better way to include the Signer module.
