@@ -580,18 +580,14 @@ where
         handle_known_task(&mut output, &mut adapter, &mut ctx, first_task);
     }
     println!("0x-----------------------------");
-    let status = {
+    let run_task = || {
         for task in tasks {
-            let task = task.parse(&ctx);
-            match task {
-                Ok(task) => {
-                    handle_known_task(&mut output, &mut adapter, &mut ctx, task);
-                }
-                Err(e) => e,
-            }
+            let task = task.parse(&ctx)?;
+            handle_known_task(&mut output, &mut adapter, &mut ctx, task);
         }
         Ok(())
     };
+    let status = run_task();
     handle_expected_output(path, output)?;
     status
 }
