@@ -579,7 +579,7 @@ where
     if let Some(first_task) = first_task {
         handle_known_task(&mut output, &mut adapter, &mut ctx, first_task);
     }
-    println!("0x-----------------------------");
+
     let run_task = || {
         for task in tasks {
             let task = task.parse(&ctx)?;
