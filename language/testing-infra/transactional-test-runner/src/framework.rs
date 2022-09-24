@@ -579,10 +579,16 @@ where
     if let Some(first_task) = first_task {
         handle_known_task(&mut output, &mut adapter, &mut ctx, first_task);
     }
+    println!("0x-----------------------------");
     let status = {
         for task in tasks {
-            let task = task.parse(&ctx)?;
-            handle_known_task(&mut output, &mut adapter, &mut ctx, task);
+            let task = task.parse(&ctx);
+            match task {
+                Ok(task) => {
+                    handle_known_task(&mut output, &mut adapter, &mut ctx, task);
+                }
+                Err(e) => e,
+            }
         }
         Ok(())
     };
