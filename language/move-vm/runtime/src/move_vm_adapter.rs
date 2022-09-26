@@ -15,8 +15,9 @@ use move_core_types::{
     resolver::*,
     vm_status::StatusCode,
 };
+use move_vm_types::data_store::DataStore;
+use move_vm_types::gas::GasMeter;
 use move_vm_types::loaded_data::runtime_types::Type;
-use move_vm_types::{data_store::DataStore, gas_schedule::GasStatus};
 use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -72,7 +73,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         function_name: &IdentStr,
         ty_args: Vec<TypeTag>,
         args: Vec<impl Borrow<[u8]>>,
-        gas_status: &mut GasStatus,
+        gas_meter: &mut impl GasMeter,
         sender: AccountAddress,
     ) -> VMResult<SerializedReturnValues> {
         let (_, func, _) = self.session.runtime.loader.load_function(
@@ -87,7 +88,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             sender,
         )?;
         self.session
-            .execute_entry_function(module, function_name, ty_args, final_args, gas_status)
+            .execute_entry_function(module, function_name, ty_args, final_args, gas_meter)
     }
 
     /// wrapper of Session, push signer as the first argument of function.
@@ -97,7 +98,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         function_name: &IdentStr,
         ty_args: Vec<TypeTag>,
         args: Vec<impl Borrow<[u8]>>,
-        gas_status: &mut GasStatus,
+        gas_meter: &mut impl GasMeter,
         sender: AccountAddress,
     ) -> VMResult<SerializedReturnValues> {
         let (_, func, _) = self.session.runtime.loader.load_function(
@@ -116,7 +117,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             function_name,
             ty_args,
             final_args,
-            gas_status,
+            gas_meter,
         )
     }
 
@@ -126,7 +127,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         script: impl Borrow<[u8]>,
         ty_args: Vec<TypeTag>,
         args: Vec<impl Borrow<[u8]>>,
-        gas_status: &mut GasStatus,
+        gas_meter: &mut impl GasMeter,
         sender: AccountAddress,
     ) -> VMResult<SerializedReturnValues> {
         let (main, _) = self.session.runtime.loader.load_script(
@@ -140,7 +141,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             sender,
         )?;
         self.session
-            .execute_script(script, ty_args, final_args, gas_status)
+            .execute_script(script, ty_args, final_args, gas_meter)
     }
 
     fn check_and_rearrange_args_by_signer_position(
@@ -187,11 +188,11 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         &mut self,
         modules: Vec<Vec<u8>>,
         sender: AccountAddress,
-        gas_status: &mut GasStatus,
+        gas_meter: &mut impl GasMeter,
         option: PublishModuleBundleOption,
     ) -> VMResult<()> {
         let compiled_modules =
-            self.verify_module_bundle(modules.clone(), sender, gas_status, option)?;
+            self.verify_module_bundle(modules.clone(), sender, gas_meter, option)?;
 
         let data_store = &mut self.session.data_cache;
         // All modules verified, publish them to data cache
@@ -212,7 +213,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         &mut self,
         modules: Vec<Vec<u8>>,
         sender: AccountAddress,
-        _gas_status: &mut GasStatus,
+        _gas_meter: &mut impl GasMeter,
         option: PublishModuleBundleOption,
     ) -> VMResult<Vec<CompiledModule>> {
         let data_store = &mut self.session.data_cache;

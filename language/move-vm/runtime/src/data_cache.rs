@@ -179,9 +179,9 @@ impl<'r, 'l, S: MoveResolver> DataStore for TransactionDataCache<'r, 'l, S> {
                 TypeTag::Struct(s_tag) => s_tag,
                 _ =>
                 // non-struct top-level value; can't happen
-                    {
-                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
-                    }
+                {
+                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
+                }
             };
             let ty_layout = self.loader.type_to_type_layout(ty)?;
 
@@ -211,9 +211,7 @@ impl<'r, 'l, S: MoveResolver> DataStore for TransactionDataCache<'r, 'l, S> {
                 }
             };
 
-            account_cache
-                .data_map
-                .insert(ty.clone(), (ty_layout, gv));
+            account_cache.data_map.insert(ty.clone(), (ty_layout, gv));
         }
 
         Ok(account_cache

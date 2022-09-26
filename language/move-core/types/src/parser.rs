@@ -11,6 +11,7 @@ use crate::{
 use anyhow::{bail, format_err, Result};
 use std::iter::Peekable;
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Eq, PartialEq, Debug)]
 enum Token {
     U8Type,

@@ -15,9 +15,6 @@ use move_compiler::{
     shared::{Flags, NumericalAddress, PackagePaths},
     unit_test::{ExpectedFailure, ModuleTestPlan, TestCase, TestPlan},
 };
-use move_vm_types::{
-    gas_schedule::{CostTable,GasCost,GasStatus, zero_cost_schedule},
-};
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},

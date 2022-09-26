@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{loaded_data::runtime_types::Type};
+use crate::loaded_data::runtime_types::Type;
 use move_binary_format::{
     errors::*,
     file_format::{Constant, SignatureToken},
@@ -1711,11 +1711,7 @@ impl VectorRef {
         Ok(())
     }
 
-    pub fn remove(
-        &self,
-        idx: usize,
-        type_param: &Type,
-    ) -> PartialVMResult<Value> {
+    pub fn remove(&self, idx: usize, type_param: &Type) -> PartialVMResult<Value> {
         let c = self.0.container();
         check_elem_layout(type_param, c)?;
 
@@ -1734,10 +1730,7 @@ impl VectorRef {
         Ok(ret)
     }
 
-    pub fn reverse(
-        &self,
-        type_param: &Type,
-    ) -> PartialVMResult<()> {
+    pub fn reverse(&self, type_param: &Type) -> PartialVMResult<()> {
         let c = self.0.container();
         check_elem_layout(type_param, c)?;
         macro_rules! reverse {
@@ -1761,11 +1754,7 @@ impl VectorRef {
         Ok(())
     }
 
-    pub fn append(
-        self,
-        e: Vector,
-        type_param: &Type,
-    ) -> PartialVMResult<()> {
+    pub fn append(self, e: Vector, type_param: &Type) -> PartialVMResult<()> {
         let lhs = self.0.container();
         let other = e.0;
         check_elem_layout(type_param, lhs)?;
@@ -1802,8 +1791,8 @@ impl VectorRef {
         self.0.container().len()
     }
 
-    pub fn get_container_size(&self) -> u64 {
-        u64::from(self.0.container().size())
+    pub fn get_container_size(&self) -> AbstractMemorySize {
+        self.0.container().size()
     }
 }
 
@@ -1913,8 +1902,8 @@ impl Vector {
         }
     }
 
-    pub fn get_container_size(&self) -> u64 {
-        u64::from(self.0.size())
+    pub fn get_container_size(&self) -> AbstractMemorySize {
+        self.0.size()
     }
 }
 

@@ -22,8 +22,8 @@ use move_core_types::{
 };
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::move_vm::MoveVM;
+use move_vm_test_utils::gas_schedule::CostTable;
 use std::{fs, path::Path};
-use move_vm_types::gas_schedule::CostTable;
 
 pub fn run(
     natives: impl IntoIterator<Item = NativeFunctionRecord>,

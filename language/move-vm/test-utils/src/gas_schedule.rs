@@ -7,7 +7,6 @@
 //! It is important to note that the cost schedule defined in this file does not track hashing
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
-use crate::gas::GasMeter;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -24,6 +23,7 @@ use move_core_types::{
     },
     vm_status::StatusCode,
 };
+use move_vm_types::gas::GasMeter;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{

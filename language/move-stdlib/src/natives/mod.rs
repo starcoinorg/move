@@ -47,7 +47,9 @@ impl GasParameters {
             },
 
             event: event::GasParameters {
-                write_to_event_store: event::WriteToEventStoreGasParameters { unit_cost: 0 },
+                write_to_event_store: event::WriteToEventStoreGasParameters {
+                    unit_cost: 0.into(),
+                },
             },
 
             hash: hash::GasParameters {
@@ -108,16 +110,16 @@ impl GasParameters {
                     base_cost: 0.into(),
                 },
                 append: vector::AppendGasParameters {
-                    base_cost: 0,
-                    legacy_unit_cost: 0,
+                    base_cost: 0.into(),
+                    legacy_unit_cost: 0.into(),
                 },
                 remove: vector::RemoveGasParameters {
-                    base_cost: 0,
-                    legacy_unit_cost: 0,
+                    base_cost: 0.into(),
+                    legacy_unit_cost: 0.into(),
                 },
                 reverse: vector::ReverseGasParameters {
-                    base_cost: 0,
-                    legacy_unit_cost: 0,
+                    base_cost: 0.into(),
+                    legacy_unit_cost: 0.into(),
                 },
             },
             #[cfg(feature = "testing")]
@@ -129,8 +131,12 @@ impl GasParameters {
             },
             #[cfg(feature = "testing")]
             debug: debug::GasParameters {
-                print: debug::PrintGasParameters { base_cost: 0 },
-                print_stack_trace: debug::PrintStackTraceGasParameters { base_cost: 0 },
+                print: debug::PrintGasParameters {
+                    base_cost: 0.into(),
+                },
+                print_stack_trace: debug::PrintStackTraceGasParameters {
+                    base_cost: 0.into(),
+                },
             },
         }
     }

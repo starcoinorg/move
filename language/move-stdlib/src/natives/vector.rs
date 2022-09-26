@@ -4,6 +4,7 @@
 
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::gas_algebra::AbstractMemorySize;
 use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit},
     vm_status::StatusCode,
@@ -273,8 +274,8 @@ pub fn native_append(
     let r = pop_arg!(args, VectorRef);
     let e: Vector = e.value_as()?;
     let mut cost = gas_params.base_cost;
-    if gas_params.legacy_unit_cost != 0 {
-        cost += gas_params.legacy_unit_cost * e.get_container_size() as u64;
+    if gas_params.legacy_unit_cost != 0.into() {
+        cost += gas_params.legacy_unit_cost * e.get_container_size();
     }
     NativeResult::map_partial_vm_result_empty(
         cost,
@@ -302,10 +303,12 @@ pub fn native_remove(
     let idx: u64 = args.pop_back().unwrap().value_as()?;
     let r = pop_arg!(args, VectorRef);
     let len = r.get_container_len();
-    let memory_cost = r.get_container_size() * ((len - idx as usize) as u64) / (len as u64);
+    let memory_cost =
+        u64::from(r.get_container_size()) * ((len - idx as usize) as u64) / (len as u64);
     let mut cost = gas_params.base_cost;
-    if gas_params.legacy_unit_cost != 0 {
-        cost += gas_params.legacy_unit_cost * u64::max(memory_cost, 1) as u64;
+    if gas_params.legacy_unit_cost != 0.into() {
+        cost += gas_params.legacy_unit_cost
+            * std::cmp::max(AbstractMemorySize::from(memory_cost), 1.into());
     }
     NativeResult::map_partial_vm_result_one(
         cost,
@@ -333,8 +336,12 @@ pub fn native_reverse(
     let r = pop_arg!(args, VectorRef);
     // half of the memory size.
     let mut cost = gas_params.base_cost;
-    if gas_params.legacy_unit_cost != 0 {
-        cost += gas_params.legacy_unit_cost * u64::max(r.get_container_size() / 2, 1) as u64;
+    if gas_params.legacy_unit_cost != 0.into() {
+        cost += gas_params.legacy_unit_cost
+            * std::cmp::max(
+                AbstractMemorySize::from(u64::from(r.get_container_size()) / 2),
+                1.into(),
+            );
     }
     NativeResult::map_partial_vm_result_empty(
         cost,
@@ -380,8 +387,8 @@ fn native_error_to_abort(err: PartialVMError) -> PartialVMError {
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct RemoveGasParameters {
-    pub base_cost: u64,
-    pub legacy_unit_cost: u64,
+    pub base_cost: InternalGas,
+    pub legacy_unit_cost: InternalGasPerAbstractMemoryUnit,
 }
 
 /***************************************************************************************************
@@ -392,8 +399,8 @@ pub struct RemoveGasParameters {
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct ReverseGasParameters {
-    pub base_cost: u64,
-    pub legacy_unit_cost: u64,
+    pub base_cost: InternalGas,
+    pub legacy_unit_cost: InternalGasPerAbstractMemoryUnit,
 }
 
 /***************************************************************************************************
@@ -404,8 +411,8 @@ pub struct ReverseGasParameters {
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct AppendGasParameters {
-    pub base_cost: u64,
-    pub legacy_unit_cost: u64,
+    pub base_cost: InternalGas,
+    pub legacy_unit_cost: InternalGasPerAbstractMemoryUnit,
 }
 
 /***************************************************************************************************

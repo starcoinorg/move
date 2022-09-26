@@ -24,8 +24,8 @@ use move_core_types::{
     account_address::AccountAddress, errmap::ErrorMapping, identifier::Identifier,
 };
 use move_vm_runtime::native_functions::NativeFunction;
+use move_vm_test_utils::gas_schedule::CostTable;
 use std::path::PathBuf;
-use move_vm_types::gas_schedule::CostTable;
 
 type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunction);
 
