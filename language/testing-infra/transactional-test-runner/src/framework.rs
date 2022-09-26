@@ -579,12 +579,17 @@ where
     if let Some(first_task) = first_task {
         handle_known_task(&mut output, &mut adapter, &mut ctx, first_task);
     }
-    for task in tasks {
-        let task = task.parse(&ctx)?;
-        handle_known_task(&mut output, &mut adapter, &mut ctx, task);
-    }
+
+    let run_task = || {
+        for task in tasks {
+            let task = task.parse(&ctx)?;
+            handle_known_task(&mut output, &mut adapter, &mut ctx, task);
+        }
+        Ok(())
+    };
+    let status = run_task();
     handle_expected_output(path, output)?;
-    Ok(())
+    status
 }
 
 fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
