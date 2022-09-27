@@ -18,10 +18,23 @@ use move_vm_types::{
     data_store::DataStore, gas_schedule::GasStatus, loaded_data::runtime_types::Type,
     natives::function::NativeResult, values::Value,
 };
+#[cfg(not(feature = "nostd"))]
 use std::{
     collections::{HashMap, VecDeque},
     fmt::Write,
 };
+
+#[cfg(feature = "nostd")]
+use alloc::{
+    collections:: VecDeque,
+    string::String,
+    boxed::Box,
+    vec::Vec,
+};
+#[cfg(feature = "nostd")]
+use hashbrown::HashMap;
+#[cfg(feature = "nostd")]
+use core::fmt::Write;
 
 pub type NativeFunction =
     fn(&mut NativeContext, Vec<Type>, VecDeque<Value>) -> PartialVMResult<NativeResult>;

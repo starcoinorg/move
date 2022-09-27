@@ -2,7 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(not(feature = "nostd"))]
 use std::sync::Arc;
+#[cfg(feature = "nostd")]
+use alloc::sync::Arc;
 
 use crate::{
     data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,

@@ -17,9 +17,17 @@ use move_core_types::{
 };
 use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::{data_store::DataStore, gas_schedule::GasStatus};
-use std::borrow::Borrow;
-use std::collections::BTreeSet;
-use std::sync::Arc;
+#[cfg(not(feature = "nostd"))]
+use std::{borrow::Borrow,collections::BTreeSet,sync::Arc};
+#[cfg(feature = "nostd")]
+use alloc::{
+    borrow::Borrow,
+    collections:: BTreeSet,
+    sync::Arc,
+    vec::Vec,
+    vec,
+    format
+};
 use tracing::warn;
 
 /// Publish module bundle options
