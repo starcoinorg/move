@@ -2233,6 +2233,10 @@ impl VectorRef {
 
         Ok(())
     }
+
+    pub fn get_container_len(&self) -> usize {
+        self.0.container().len()
+    }
 }
 
 impl Vector {
