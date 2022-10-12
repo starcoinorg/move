@@ -10,6 +10,9 @@ use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_sta
 
 pub const TYPE_DEPTH_MAX: usize = 256;
 
+#[cfg(feature = "nostd")]
+use alloc::{boxed::Box, format, vec, vec::Vec};
+
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct StructType {
     pub fields: Vec<Type>,

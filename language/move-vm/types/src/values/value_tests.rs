@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::values::*;
+#[cfg(feature = "nostd")]
+use alloc::{vec, vec::Vec};
 use move_binary_format::errors::*;
 
 #[test]

@@ -26,6 +26,12 @@ use smallvec::{smallvec, SmallVec};
 pub use move_binary_format::errors::{PartialVMError, PartialVMResult};
 pub use move_core_types::vm_status::StatusCode;
 
+#[cfg(feature = "nostd")]
+use core::cmp::max;
+
+#[cfg(not(feature = "nostd"))]
+use std::cmp::max;
+
 /// Result of a native function execution requires charges for execution cost.
 ///
 /// An execution that causes an invariant violation would not return a `NativeResult` but
@@ -113,7 +119,7 @@ pub fn native_gas(
     size: usize,
 ) -> InternalGasUnits<GasCarrier> {
     let gas_amt = table.native_cost(native_table_idx.into());
-    let memory_size = AbstractMemorySize::new(std::cmp::max(1, size) as GasCarrier);
+    let memory_size = AbstractMemorySize::new(max(1, size) as GasCarrier);
     debug_assert!(memory_size.get() > 0);
     gas_amt.total().mul(memory_size)
 }

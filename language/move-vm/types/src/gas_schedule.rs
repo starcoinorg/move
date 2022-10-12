@@ -7,6 +7,8 @@
 //! It is important to note that the cost schedule defined in this file does not track hashing
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
+#[cfg(feature = "nostd")]
+use core::cmp::max;
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
@@ -24,7 +26,11 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use once_cell::sync::Lazy;
+#[cfg(not(feature = "nostd"))]
 use std::cmp::max;
+
+#[cfg(feature = "nostd")]
+use alloc::{vec, vec::Vec};
 
 static ZERO_COST_SCHEDULE: Lazy<CostTable> =
     Lazy::new(|| zero_cost_schedule(NUMBER_OF_NATIVE_FUNCTIONS));
@@ -103,7 +109,7 @@ impl<'a> GasStatus<'a> {
         size: AbstractMemorySize<GasCarrier>,
     ) -> PartialVMResult<()> {
         // Make sure that the size is always non-zero
-        let size = size.map(|x| std::cmp::max(1, x));
+        let size = size.map(|x| max(1, x));
         debug_assert!(size.get() > 0);
         self.deduct_gas(
             self.cost_table
@@ -437,11 +443,10 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
         (N::CREATE_SIGNER, GasCost::new(24, 1)),
         (N::DESTROY_SIGNER, GasCost::new(212, 1)),
         (N::EMIT_EVENT, GasCost::new(52, 1)),
-        (N::STRING_CHECK_UT8, GasCost::new(4,1)),
-        (N::STRING_SUB_STR,GasCost::new(4,1)),
-        (N::STRING_CHAR_BOUNDARY,GasCost::new(4,1)),
-        (N::STRING_INDEX_OF,GasCost::new(4,1)),
-
+        (N::STRING_CHECK_UT8, GasCost::new(4, 1)),
+        (N::STRING_SUB_STR, GasCost::new(4, 1)),
+        (N::STRING_CHAR_BOUNDARY, GasCost::new(4, 1)),
+        (N::STRING_INDEX_OF, GasCost::new(4, 1)),
     ];
     native_table.sort_by_key(|cost| cost.0 as u64);
     let raw_native_table = native_table
