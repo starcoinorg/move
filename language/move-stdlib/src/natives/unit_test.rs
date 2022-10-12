@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "nostd")]
+use alloc::{collections::VecDeque, vec::Vec};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_schedule::ONE_GAS_UNIT;
 use move_vm_runtime::native_functions::NativeContext;
@@ -9,6 +11,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
 use smallvec::smallvec;
+#[cfg(not(feature = "nostd"))]
 use std::collections::VecDeque;
 
 use move_core_types::account_address::AccountAddress;

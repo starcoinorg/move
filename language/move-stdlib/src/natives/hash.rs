@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "nostd")]
+use alloc::{collections::VecDeque, vec::Vec};
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
@@ -14,8 +16,8 @@ use move_vm_types::{
 use sha2::{Digest, Sha256};
 use sha3::Sha3_256;
 use smallvec::smallvec;
+#[cfg(not(feature = "nostd"))]
 use std::collections::VecDeque;
-
 // use tiny_keccak::Hasher;
 
 pub fn native_sha2_256(

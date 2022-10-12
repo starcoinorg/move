@@ -4,17 +4,22 @@
 
 //! Implementation of native functions for utf8 strings.
 
+#[cfg(feature = "nostd")]
+use alloc::{collections::VecDeque, vec::Vec};
+#[cfg(feature = "nostd")]
+use core::str;
 use move_binary_format::errors::PartialVMResult;
-use move_vm_runtime::native_functions::NativeContext;
 use move_core_types::vm_status::sub_status::NFE_STRING_INVALID_ARG_FAILURE;
+use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
+    gas_schedule::NativeCostIndex,
     loaded_data::runtime_types::Type,
     natives::function::{native_gas, NativeResult},
     pop_arg,
     values::{Value, VectorRef},
-    gas_schedule::NativeCostIndex,
 };
-use std::collections::VecDeque;
+#[cfg(not(feature = "nostd"))]
+use std::{collections::VecDeque, str};
 // The implementation approach delegates all utf8 handling to Rust.
 // This is possible without copying of bytes because (a) we can
 // get a `std::cell::Ref<Vec<u8>>` from a `vector<u8>` and in turn a `&[u8]`
@@ -26,7 +31,7 @@ use std::collections::VecDeque;
 /***************************************************************************************************
  * native fun native_check_utf8
  *
- *   
+ *
  *
  **************************************************************************************************/
 
@@ -38,7 +43,7 @@ pub fn native_check_utf8(
     debug_assert!(ty_args.is_empty());
     debug_assert!(arguments.len() == 1);
     let s_arg = pop_arg!(arguments, VectorRef);
-    let ok = std::str::from_utf8(s_arg.as_bytes_ref().as_slice()).is_ok();
+    let ok = str::from_utf8(s_arg.as_bytes_ref().as_slice()).is_ok();
 
     let cost = native_gas(
         context.cost_table(),
@@ -51,7 +56,7 @@ pub fn native_check_utf8(
 /***************************************************************************************************
  * native fun native_is_char_boundary
  *
- *  
+ *
  *
  **************************************************************************************************/
 pub fn native_is_char_boundary(
@@ -65,7 +70,7 @@ pub fn native_is_char_boundary(
     let s_arg = pop_arg!(arguments, VectorRef);
     let ok = unsafe {
         // This is safe because we guarantee the bytes to be utf8.
-        std::str::from_utf8_unchecked(s_arg.as_bytes_ref().as_slice()).is_char_boundary(i as usize)
+        str::from_utf8_unchecked(s_arg.as_bytes_ref().as_slice()).is_char_boundary(i as usize)
     };
     let cost = native_gas(
         context.cost_table(),
@@ -78,7 +83,7 @@ pub fn native_is_char_boundary(
 /***************************************************************************************************
  * native fun native_sub_string
  *
- *  
+ *
  *
  **************************************************************************************************/
 
@@ -105,18 +110,17 @@ pub fn native_sub_string(
     let s_ref = s_arg.as_bytes_ref();
     let s_str = unsafe {
         // This is safe because we guarantee the bytes to be utf8.
-        std::str::from_utf8_unchecked(s_ref.as_slice())
+        str::from_utf8_unchecked(s_ref.as_slice())
     };
     let v = Value::vector_u8((&s_str[i..j]).as_bytes().iter().cloned());
 
-    
     NativeResult::map_partial_vm_result_one(cost, Ok(v))
 }
 
 /***************************************************************************************************
  * native fun native_index_of
  *
- *  
+ *
  *
  **************************************************************************************************/
 
@@ -129,10 +133,10 @@ pub fn native_index_of(
     debug_assert!(arguments.len() == 2);
     let r_arg = pop_arg!(arguments, VectorRef);
     let r_ref = r_arg.as_bytes_ref();
-    let r_str = unsafe { std::str::from_utf8_unchecked(r_ref.as_slice()) };
+    let r_str = unsafe { str::from_utf8_unchecked(r_ref.as_slice()) };
     let s_arg = pop_arg!(arguments, VectorRef);
     let s_ref = s_arg.as_bytes_ref();
-    let s_str = unsafe { std::str::from_utf8_unchecked(s_ref.as_slice()) };
+    let s_str = unsafe { str::from_utf8_unchecked(s_ref.as_slice()) };
     let pos = match s_str.find(r_str) {
         Some(size) => size,
         None => s_str.len(),

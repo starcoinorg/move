@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "nostd")]
+use alloc::{collections::VecDeque, vec::Vec};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_schedule::GasAlgebra;
 use move_vm_runtime::native_functions::NativeContext;
@@ -13,8 +15,8 @@ use move_vm_types::{
     values::Value,
 };
 use smallvec::smallvec;
+#[cfg(not(feature = "nostd"))]
 use std::collections::VecDeque;
-
 pub fn write_to_event_store(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,

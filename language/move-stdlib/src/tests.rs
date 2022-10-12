@@ -4,6 +4,7 @@
 
 use tempfile::tempdir;
 
+#[cfg(not(feature = "nostd"))]
 #[test]
 fn check_that_docs_are_updated() {
     let temp_dir = tempdir().unwrap();
@@ -16,6 +17,7 @@ fn check_that_docs_are_updated() {
     )
 }
 
+#[cfg(not(feature = "nostd"))]
 #[test]
 fn check_that_the_errmap_is_updated() {
     let temp_file = tempfile::NamedTempFile::new().unwrap();

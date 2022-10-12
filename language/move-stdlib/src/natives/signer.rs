@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "nostd")]
+use alloc::{collections::VecDeque, vec::Vec};
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
@@ -12,8 +14,8 @@ use move_vm_types::{
     values::{values_impl::SignerRef, Value},
 };
 use smallvec::smallvec;
+#[cfg(not(feature = "nostd"))]
 use std::collections::VecDeque;
-
 pub fn native_borrow_address(
     context: &mut NativeContext,
     _ty_args: Vec<Type>,

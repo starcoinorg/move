@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "nostd")]
+use alloc::{collections::VecDeque, vec::Vec};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE;
 use move_vm_runtime::native_functions::NativeContext;
@@ -13,6 +15,7 @@ use move_vm_types::{
     values::{values_impl::Reference, Value},
 };
 use smallvec::smallvec;
+#[cfg(not(feature = "nostd"))]
 use std::collections::VecDeque;
 // use std::convert::TryFrom;
 

@@ -13,6 +13,9 @@ use move_vm_types::{
     values::{Value, Vector, VectorRef},
 };
 
+#[cfg(feature = "nostd")]
+use alloc::{collections::VecDeque, vec::Vec};
+#[cfg(not(feature = "nostd"))]
 use std::collections::VecDeque;
 
 pub fn native_empty(
