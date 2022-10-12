@@ -94,7 +94,6 @@ fn reference_analysis_crash() {
         code: Some(code_unit),
         function: FunctionHandleIndex(0),
         visibility: Visibility::Public,
-        is_entry: false,
         acquires_global_resources: vec![],
     };
 
