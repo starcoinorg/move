@@ -18,7 +18,9 @@ use crate::{
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
-use std::u8;
+
+#[cfg(feature = "nostd")]
+use alloc::format;
 
 enum BoundsCheckingContext {
     Module,

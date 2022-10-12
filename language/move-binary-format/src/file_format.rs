@@ -34,6 +34,10 @@ use crate::{
     internals::ModuleIndex,
     IndexKind, SignatureTokenKind,
 };
+#[cfg(feature = "nostd")]
+use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec, vec::Vec};
+#[cfg(feature = "nostd")]
+use core::{convert, fmt, ops::BitOr};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -47,7 +51,8 @@ use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
 use proptest_derive::Arbitrary;
 use ref_cast::RefCast;
 use serde::{Deserialize, Serialize};
-use std::ops::BitOr;
+#[cfg(not(feature = "nostd"))]
+use std::{convert, fmt, ops::BitOr};
 use variant_count::VariantCount;
 
 /// Generic index into one of the tables in the binary format.
@@ -72,14 +77,14 @@ macro_rules! define_index {
             }
         }
 
-        impl ::std::fmt::Display for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 write!(f, "{}", self.0)
             }
         }
 
-        impl ::std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        impl fmt::Debug for $name {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 write!(f, "{}({})", stringify!($name), self.0)
             }
         }
@@ -296,8 +301,14 @@ pub struct FunctionHandle {
 
 /// A field access info (owner type and offset)
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    derive(Arbitrary)
+)]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    proptest(no_params)
+)]
 pub struct FieldHandle {
     pub owner: StructDefinitionIndex,
     pub field: MemberCount,
@@ -308,8 +319,14 @@ pub struct FieldHandle {
 
 /// `StructFieldInformation` indicates whether a struct is native or has user-specified fields
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    derive(Arbitrary)
+)]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    proptest(no_params)
+)]
 pub enum StructFieldInformation {
     Native,
     Declared(Vec<FieldDefinition>),
@@ -358,8 +375,14 @@ pub struct FieldInstantiation {
 /// A `StructDefinition` is a type definition. It either indicates it is native or defines all the
 /// user-specified fields declared on the type.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    derive(Arbitrary)
+)]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    proptest(no_params)
+)]
 pub struct StructDefinition {
     /// The `StructHandle` for this `StructDefinition`. This has the name and the abilities
     /// for the type.
@@ -402,8 +425,14 @@ pub struct FieldDefinition {
 /// `Visibility` restricts the accessibility of the associated entity.
 /// - For function visibility, it restricts who may call into the associated function.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    derive(Arbitrary)
+)]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    proptest(no_params)
+)]
 #[repr(u8)]
 pub enum Visibility {
     /// Accessible within its defining module only.
@@ -422,7 +451,7 @@ impl Default for Visibility {
     }
 }
 
-impl std::convert::TryFrom<u8> for Visibility {
+impl convert::TryFrom<u8> for Visibility {
     type Error = ();
 
     fn try_from(v: u8) -> Result<Self, Self::Error> {
@@ -439,8 +468,14 @@ impl std::convert::TryFrom<u8> for Visibility {
 /// A `FunctionDefinition` is the implementation of a function. It defines
 /// the *prototype* of the function and the function body.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    derive(Arbitrary)
+)]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    proptest(params = "usize")
+)]
 pub struct FunctionDefinition {
     /// The prototype of the function (module, name, signature).
     pub function: FunctionHandleIndex,
@@ -459,7 +494,7 @@ pub struct FunctionDefinition {
     pub acquires_global_resources: Vec<StructDefinitionIndex>,
     /// Code for this function.
     #[cfg_attr(
-        any(test, feature = "fuzzing"),
+        all(not(feature = "nostd"), any(test, feature = "fuzzing")),
         proptest(strategy = "any_with::<CodeUnit>(params).prop_map(Some)")
     )]
     pub code: Option<CodeUnit>,
@@ -546,7 +581,10 @@ pub type TypeParameterIndex = u16;
 /// An `Ability` classifies what operations are permitted for a given type
 #[repr(u8)]
 #[derive(Debug, Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    derive(Arbitrary)
+)]
 pub enum Ability {
     /// Allows values of types with this ability to be copied, via CopyLoc or ReadRef
     Copy = 0x1,
@@ -774,8 +812,8 @@ impl IntoIterator for AbilitySet {
     }
 }
 
-impl std::fmt::Debug for AbilitySet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Debug for AbilitySet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "[")?;
         for ability in *self {
             write!(f, "{:?}, ", ability)?;
@@ -930,8 +968,8 @@ impl Arbitrary for SignatureToken {
     }
 }
 
-impl std::fmt::Debug for SignatureToken {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl fmt::Debug for SignatureToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SignatureToken::Bool => write!(f, "Bool"),
             SignatureToken::U8 => write!(f, "U8"),
@@ -1071,14 +1109,20 @@ pub struct Constant {
 
 /// A `CodeUnit` is the body of a function. It has the function header and the instruction stream.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    derive(Arbitrary)
+)]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    proptest(params = "usize")
+)]
 pub struct CodeUnit {
     /// List of locals type. All locals are typed.
     pub locals: SignatureIndex,
     /// Code stream, function body.
     #[cfg_attr(
-        any(test, feature = "fuzzing"),
+        all(not(feature = "nostd"), any(test, feature = "fuzzing")),
         proptest(strategy = "vec(any::<Bytecode>(), 0..=params)")
     )]
     pub code: Vec<Bytecode>,
@@ -1090,8 +1134,15 @@ pub struct CodeUnit {
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
 #[derive(Clone, Hash, Eq, VariantCount, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    derive(Arbitrary)
+)]
+#[cfg_attr(
+    all(not(feature = "nostd"), any(test, feature = "fuzzing")),
+    proptest(no_params)
+)]
+
 pub enum Bytecode {
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be an copyable type.
@@ -1549,8 +1600,8 @@ pub enum Bytecode {
 
 pub const NUMBER_OF_NATIVE_FUNCTIONS: usize = 21;
 
-impl ::std::fmt::Debug for Bytecode {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl fmt::Debug for Bytecode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Bytecode::Pop => write!(f, "Pop"),
             Bytecode::Ret => write!(f, "Ret"),
@@ -1780,6 +1831,7 @@ pub struct CompiledModule {
 
 // Need a custom implementation of Arbitrary because as of proptest-derive 0.1.1, the derivation
 // doesn't work for structs with more than 10 fields.
+#[cfg(not(feature = "nostd"))]
 #[cfg(any(test, feature = "fuzzing"))]
 impl Arbitrary for CompiledScript {
     type Strategy = BoxedStrategy<Self>;
@@ -1833,6 +1885,7 @@ impl Arbitrary for CompiledScript {
     }
 }
 
+#[cfg(not(feature = "nostd"))]
 #[cfg(any(test, feature = "fuzzing"))]
 impl Arbitrary for CompiledModule {
     type Strategy = BoxedStrategy<Self>;
