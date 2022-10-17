@@ -120,14 +120,14 @@ pub fn all_natives(
         };
     }
 
-    add_natives!("BCS", bcs::make_all(gas_params.bcs));
-    add_natives!("Hash", hash::make_all(gas_params.hash));
-    add_natives!("Signer", signer::make_all(gas_params.signer));
-    add_natives!("String", string::make_all(gas_params.string));
-    add_natives!("Vector", vector::make_all(gas_params.vector));
+    add_natives!("bcs", bcs::make_all(gas_params.bcs));
+    add_natives!("hash", hash::make_all(gas_params.hash));
+    add_natives!("signer", signer::make_all(gas_params.signer));
+    add_natives!("string", string::make_all(gas_params.string));
+    add_natives!("vector", vector::make_all(gas_params.vector));
     #[cfg(feature = "testing")]
     {
-        add_natives!("UnitTest", unit_test::make_all(gas_params.unit_test));
+        add_natives!("unit_test", unit_test::make_all(gas_params.unit_test));
     }
 
     make_table_from_iter(move_std_addr, natives)
@@ -173,8 +173,8 @@ pub fn nursery_natives(
         };
     }
 
-    add_natives!("Event", event::make_all(gas_params.event));
-    add_natives!("Debug", debug::make_all(gas_params.debug));
+    add_natives!("event", event::make_all(gas_params.event));
+    add_natives!("debug", debug::make_all(gas_params.debug));
 
     make_table_from_iter(move_std_addr, natives)
 }
