@@ -1,15 +1,14 @@
-use move_binary_format::errors::*;
-use move_core_types::vm_status::StatusCode;
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::loader::Function;
 use crate::session::{LoadedFunctionInstantiation, SerializedReturnValues, Session};
+use move_binary_format::errors::*;
 use move_binary_format::{
-    access::ModuleAccess, compatibility::Compatibility, normalized, CompiledModule,
-    IndexKind,
+    access::ModuleAccess, compatibility::Compatibility, normalized, CompiledModule, IndexKind,
 };
 use move_core_types::value::MoveValue;
+use move_core_types::vm_status::StatusCode;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
