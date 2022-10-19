@@ -118,7 +118,6 @@ pub trait MoveTestAdapter<'a>: Sized {
     fn compiled_state(&mut self) -> &mut CompiledState<'a>;
     fn default_syntax(&self) -> SyntaxChoice;
     fn init(
-        test_path: &Path,
         default_syntax: SyntaxChoice,
         option: Option<&'a FullyCompiledProgram>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
