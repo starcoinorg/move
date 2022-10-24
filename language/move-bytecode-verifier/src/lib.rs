@@ -32,5 +32,6 @@ pub use verifier::{verify_module, verify_script};
 mod acquires_list_verifier;
 mod locals_safety;
 mod reference_safety;
+mod regression_tests;
 mod stack_usage_verifier;
 mod type_safety;
