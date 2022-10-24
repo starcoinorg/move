@@ -99,7 +99,7 @@ impl OnDiskStateView {
 
     fn get_addr_path(&self, addr: &AccountAddress) -> PathBuf {
         let mut path = self.storage_dir.clone();
-        path.push(format!("0x{}", addr.to_string()));
+        path.push(format!("{}", addr.to_string()));
         path
     }
 
@@ -464,7 +464,7 @@ impl ToString for StructID {
         // TODO: TypeTag parser insists on leading 0x for StructTag's, so we insert one here.
         // Would be nice to expose a StructTag parser and get rid of the 0x here
         format!(
-            "0x{}::{}::{}{}",
+            "{}::{}::{}{}",
             tag.address,
             tag.module,
             tag.name,

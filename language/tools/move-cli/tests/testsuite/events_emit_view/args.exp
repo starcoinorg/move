@@ -27,7 +27,7 @@ Changed resource(s) under 1 address(es):
           }
       }
 Wrote 106 bytes of resource ID's and data
-Command `sandbox view storage/0x0x0000000000000000000000000000000a/events/0.bcs`:
+Command `sandbox view storage/0x0000000000000000000000000000000a/events/0.bcs`:
 copy drop store 0x00000000000000000000000000000002::Events::AnEvent {
     i: 5
 }
@@ -53,7 +53,7 @@ Changed resource(s) under 1 address(es):
              }
          }
 Wrote 65 bytes of resource ID's and data
-Command `sandbox view storage/0x0x0000000000000000000000000000000a/events/0.bcs`:
+Command `sandbox view storage/0x0000000000000000000000000000000a/events/0.bcs`:
 copy drop store 0x00000000000000000000000000000002::Events::AnEvent {
     i: 5
 }
