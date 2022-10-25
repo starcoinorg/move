@@ -699,7 +699,7 @@ where
         _ => (Some(first_task), None),
     };
     let (mut adapter, result_opt) =
-        Adapter::init(path, default_syntax, fully_compiled_program_opt, init_opt);
+        Adapter::init( default_syntax, fully_compiled_program_opt, init_opt);
     if let Some(result) = result_opt {
         writeln!(output, "\ninit:\n{}", result)?;
     }
