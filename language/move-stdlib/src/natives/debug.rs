@@ -70,9 +70,10 @@ pub struct PrintStackTraceGasParameters {
 }
 
 #[inline]
+#[allow(unused_variables)]
 fn native_print_stack_trace(
     gas_params: &PrintStackTraceGasParameters,
-    _context: &mut NativeContext,
+    context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

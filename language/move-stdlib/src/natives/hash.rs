@@ -136,35 +136,6 @@ pub fn make_native_sha3_256(gas_params: Sha3_256GasParameters) -> NativeFunction
 }
 
 /***************************************************************************************************
- * native fun native_keccak_256
- *
- *   gas cost: base_cost + per_byte * data_length
- *
- **************************************************************************************************/
-pub struct Keccak256HashGasParameters {
-    pub base: InternalGas,
-    pub per_byte: InternalGasPerByte,
-}
-
-pub fn native_keccak_256(
-    gas_params: &Keccak256HashGasParameters,
-    _context: &mut NativeContext,
-    _ty_args: Vec<Type>,
-    mut arguments: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(_ty_args.is_empty());
-    debug_assert!(arguments.len() == 1);
-
-    let input_arg = pop_arg!(arguments, Vec<u8>);
-
-    let cost = gas_params.base + gas_params.per_byte * NumBytes::new(input_arg.len() as u64);
-
-    let output = crate::ecrecover::keccak(input_arg.as_slice());
-
-    Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(output)]))
-}
-
-/***************************************************************************************************
  * module
  **************************************************************************************************/
 #[derive(Debug, Clone)]
