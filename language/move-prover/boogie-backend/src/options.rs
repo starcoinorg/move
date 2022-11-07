@@ -306,6 +306,9 @@ impl BoogieOptions {
                     tool
                 ));
             }
+            if gn > en {
+                break;
+            }
         }
         Ok(())
     }
