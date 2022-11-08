@@ -1,4 +1,5 @@
 // Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -10,14 +11,13 @@ use crate::{
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript, Constant,
         FieldHandle, FieldInstantiation, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandle, FunctionInstantiation, ModuleHandle, Signature, SignatureToken,
+        FunctionHandle, FunctionInstantiation, LocalIndex, ModuleHandle, Signature, SignatureToken,
         StructDefInstantiation, StructDefinition, StructFieldInformation, StructHandle, TableIndex,
     },
     internals::ModuleIndex,
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
-use std::u8;
 
 enum BoundsCheckingContext {
     Module,
@@ -37,21 +37,31 @@ impl<'a> BoundsChecker<'a> {
         };
         bounds_check.verify_impl()?;
 
-        let signatures = &script.signatures;
-        let parameters = &script.parameters;
-        match signatures.get(parameters.into_index()) {
-            // The bounds checker has already checked each function definition's code, but a script's
-            // code exists outside of any function definition. It gets checked here.
-            Some(signature) => {
-                bounds_check.check_code(&script.code, &script.type_parameters, signature)
+        let type_param_count = script.type_parameters.len();
+
+        check_bounds_impl(bounds_check.view.signatures(), script.parameters)?;
+        if let Some(sig) = bounds_check
+            .view
+            .signatures()
+            .get(script.parameters.into_index())
+        {
+            for ty in &sig.0 {
+                bounds_check.check_type_parameter(ty, type_param_count)?
             }
-            None => Err(bounds_error(
-                StatusCode::INDEX_OUT_OF_BOUNDS,
-                IndexKind::Signature,
-                parameters.into_index() as u16,
-                signatures.len(),
-            )),
         }
+
+        // The bounds checker has already checked each function definition's code, but a
+        // script's code exists outside of any function definition. It gets checked here.
+        bounds_check.check_code(
+            &script.code,
+            &script.type_parameters,
+            bounds_check
+                .view
+                .signatures()
+                .get(script.parameters.into_index())
+                .unwrap(),
+            CompiledScript::MAIN_INDEX.into_index(),
+        )
     }
 
     pub fn verify_module(module: &'a CompiledModule) -> PartialVMResult<()> {
@@ -314,24 +324,24 @@ impl<'a> BoundsChecker<'a> {
             None => return Ok(()),
         };
 
-        debug_assert!(function_def.function.into_index() < self.view.function_handles().len());
-        let function_handle = &self.view.function_handles()[function_def.function.into_index()];
-
-        debug_assert!(function_handle.parameters.into_index() < self.view.signatures().len());
-        let parameters = &self.view.signatures()[function_handle.parameters.into_index()];
-
-        // check if the number of parameters + locals is less than u8::MAX
-        let locals_count = self.get_locals(code_unit)?.len() + parameters.len();
-
-        if locals_count > (u8::MAX as usize) + 1 {
+        if function_def.function.into_index() >= self.view.function_handles().len() {
             return Err(verification_error(
-                StatusCode::TOO_MANY_LOCALS,
+                StatusCode::INDEX_OUT_OF_BOUNDS,
                 IndexKind::FunctionDefinition,
                 function_def_idx as TableIndex,
             ));
         }
+        let function_handle = &self.view.function_handles()[function_def.function.into_index()];
+        if function_handle.parameters.into_index() >= self.view.signatures().len() {
+            return Err(verification_error(
+                StatusCode::INDEX_OUT_OF_BOUNDS,
+                IndexKind::FunctionDefinition,
+                function_def_idx as TableIndex,
+            ));
+        }
+        let parameters = &self.view.signatures()[function_handle.parameters.into_index()];
 
-        self.check_code(code_unit, &function_handle.type_parameters, parameters)
+        self.check_code(code_unit, &function_handle.type_parameters, parameters, function_def_idx)
     }
 
     fn check_code(
@@ -339,11 +349,22 @@ impl<'a> BoundsChecker<'a> {
         code_unit: &CodeUnit,
         type_parameters: &[AbilitySet],
         parameters: &Signature,
+        index: usize,
     ) -> PartialVMResult<()> {
         check_bounds_impl(self.view.signatures(), code_unit.locals)?;
 
         let locals = self.get_locals(code_unit)?;
-        let locals_count = locals.len() + parameters.len();
+        // Use saturating add for stability
+        let locals_count = locals.len().saturating_add(parameters.len());
+
+        if locals_count > LocalIndex::MAX as usize {
+            return Err(verification_error(
+                StatusCode::TOO_MANY_LOCALS,
+                IndexKind::FunctionDefinition,
+                index as TableIndex,
+            ));
+        }
+
 
         // if there are locals check that the type parameters in local signature are in bounds.
         let type_param_count = type_parameters.len();
