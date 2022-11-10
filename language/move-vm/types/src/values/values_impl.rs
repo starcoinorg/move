@@ -949,6 +949,28 @@ impl Locals {
         self.swap_loc(idx, x)?;
         Ok(())
     }
+
+    /// Drop all Move values onto a different Vec to avoid leaking memory.
+    /// References are excluded since they may point to invalid data.
+    pub fn drop_all_values(&mut self) -> impl Iterator<Item = (usize, Value)> {
+        let mut locals = self.0.borrow_mut();
+        let mut res = vec![];
+
+        for idx in 0..locals.len() {
+            match &locals[idx] {
+                ValueImpl::Invalid => (),
+                ValueImpl::ContainerRef(_) | ValueImpl::IndexedRef(_) => {
+                    locals[idx] = ValueImpl::Invalid;
+                }
+                _ => res.push((
+                    idx,
+                    Value(std::mem::replace(&mut locals[idx], ValueImpl::Invalid)),
+                )),
+            }
+        }
+
+        res.into_iter()
+    }
 }
 
 /***************************************************************************************

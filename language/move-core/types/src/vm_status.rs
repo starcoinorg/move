@@ -1,4 +1,5 @@
 // Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::unit_arg)]
@@ -630,6 +631,11 @@ pub enum StatusCode {
     INVALID_PHANTOM_TYPE_PARAM_POSITION = 1108,
     VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR = 1109,
     VEC_BORROW_ELEMENT_EXISTS_MUTABLE_BORROW_ERROR = 1110,
+    // Loops are too deeply nested.
+    LOOP_MAX_DEPTH_REACHED = 1111,
+    TOO_MANY_TYPE_PARAMETERS = 1112,
+    TOO_MANY_PARAMETERS = 1113,
+    TOO_MANY_BASIC_BLOCKS = 1114,
 
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
@@ -694,6 +700,9 @@ pub enum StatusCode {
     CALL_STACK_OVERFLOW = 4021,
     VM_MAX_TYPE_DEPTH_REACHED = 4024,
     VM_MAX_VALUE_DEPTH_REACHED = 4025,
+    VM_EXTENSION_ERROR = 4026,
+    STORAGE_WRITE_LIMIT_REACHED = 4027,
+    MEMORY_LIMIT_EXCEEDED = 4028,
 
     // A reserved status to represent an unknown vm status.
     // this is std::u64::MAX, but we can't pattern match on that, so put the hardcoded value in

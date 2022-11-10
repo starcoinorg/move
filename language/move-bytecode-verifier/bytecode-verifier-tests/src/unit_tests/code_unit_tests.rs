@@ -3,7 +3,7 @@
 
 use crate::support::dummy_procedure_module;
 use move_binary_format::file_format::Bytecode;
-use move_bytecode_verifier::CodeUnitVerifier;
+use move_bytecode_verifier::{CodeUnitVerifier, VerifierConfig};
 use move_core_types::vm_status::StatusCode;
 
 #[test]
@@ -56,4 +56,25 @@ fn valid_fallthrough_abort() {
     let module = dummy_procedure_module(vec![Bytecode::LdU64(7), Bytecode::Abort]);
     let result = CodeUnitVerifier::verify_module(&module);
     assert!(result.is_ok());
+}
+
+#[test]
+fn test_max_basic_blocks() {
+    let mut code = (0..17)
+        .map(|idx| Bytecode::Branch(idx + 1))
+        .collect::<Vec<_>>();
+    code.push(Bytecode::Ret);
+    let module = dummy_procedure_module(code);
+
+    let result = CodeUnitVerifier::verify_module(
+        &VerifierConfig {
+            max_basic_blocks: Some(16),
+            ..Default::default()
+        },
+        &module,
+    );
+    assert_eq!(
+        result.unwrap_err().major_status(),
+        StatusCode::TOO_MANY_BASIC_BLOCKS
+    );
 }
