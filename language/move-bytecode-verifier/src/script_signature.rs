@@ -18,6 +18,13 @@ use move_binary_format::{
 };
 use move_core_types::{identifier::IdentStr, vm_status::StatusCode};
 
+pub type FnCheckScriptSignature = fn(
+    &BinaryIndexedView,
+    /* is_entry */ bool,
+    SignatureIndex,
+    Option<SignatureIndex>,
+) -> PartialVMResult<()>;
+
 /// This function checks the extra requirements on the signature of the main function of a script.
 pub fn verify_script(script: &CompiledScript) -> VMResult<()> {
     let resolver = &BinaryIndexedView::Script(script);
@@ -25,6 +32,18 @@ pub fn verify_script(script: &CompiledScript) -> VMResult<()> {
     let return_type_opt = None;
     verify_main_signature_impl(resolver, parameters, return_type_opt)
         .map_err(|e| e.finish(Location::Script))
+}
+
+pub fn verify_module(
+    _module: &CompiledModule,
+    _check_signature: FnCheckScriptSignature,
+) -> VMResult<()> {
+    // important for not breaking old modules
+    // if module.version < VERSION_5 {
+    //     return Ok(());
+    // }
+    // Enable this check when upgrade to VERSION_5
+    Ok(())
 }
 
 /// This function checks the extra requirements on the signature of the script visible function
@@ -93,3 +112,13 @@ fn verify_main_signature_impl(
         Ok(())
     }
 }
+
+pub fn no_additional_script_signature_checks(
+    _resolver: &BinaryIndexedView,
+    _is_entry: bool,
+    _parameters: SignatureIndex,
+    _return_type: Option<SignatureIndex>,
+) -> PartialVMResult<()> {
+    Ok(())
+}
+

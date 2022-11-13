@@ -81,5 +81,5 @@ pub fn verify_script_with_config(config: &VerifierConfig, script: &CompiledScrip
     InstructionConsistency::verify_script(script)?;
     constants::verify_script(script)?;
     CodeUnitVerifier::verify_script(config, script)?;
-    script_signature::verify_script(script, no_additional_script_signature_checks)
+    script_signature::verify_script(script)
 }
