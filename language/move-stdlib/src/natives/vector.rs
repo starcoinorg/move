@@ -448,9 +448,9 @@ pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, Nati
             make_native_destroy_empty(gas_params.destroy_empty),
         ),
         ("swap", make_native_swap(gas_params.swap)),
-        ("append", make_native_append(gas_params.append)),
-        ("remove", make_native_remove(gas_params.remove)),
-        ("reverse", make_native_reverse(gas_params.reverse)),
+        ("native_append", make_native_append(gas_params.append)),
+        ("native_remove", make_native_remove(gas_params.remove)),
+        ("native_reverse", make_native_reverse(gas_params.reverse)),
     ];
 
     make_module_natives(natives)
