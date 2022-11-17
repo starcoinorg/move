@@ -84,6 +84,7 @@ impl<'a> GasStatus<'a> {
         if !self.charge {
             return Ok(());
         }
+        println!("YSG cost {:#?}", amount);
         let backtrace = format!("{:#?}", Backtrace::new());
         println!("backtrace: {}", backtrace);
         if self
