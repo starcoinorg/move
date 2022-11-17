@@ -25,6 +25,7 @@ use move_core_types::{
 };
 use once_cell::sync::Lazy;
 use std::cmp::max;
+use backtrace::Backtrace;
 
 static ZERO_COST_SCHEDULE: Lazy<CostTable> =
     Lazy::new(|| zero_cost_schedule(NUMBER_OF_NATIVE_FUNCTIONS));
@@ -83,6 +84,8 @@ impl<'a> GasStatus<'a> {
         if !self.charge {
             return Ok(());
         }
+        let backtrace = format!("{:#?}", Backtrace::new());
+        println!("backtrace: {}", backtrace);
         if self
             .gas_left
             .app(&amount, |curr_gas, gas_amt| curr_gas >= gas_amt)
