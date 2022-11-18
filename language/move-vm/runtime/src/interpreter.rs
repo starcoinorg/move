@@ -27,7 +27,7 @@ use move_vm_types::{
     },
 };
 use std::{cmp::min, collections::VecDeque, fmt::Write, mem, sync::Arc};
-use tracing::error;
+use tracing::{error, info};
 
 macro_rules! debug_write {
     ($($toks: tt)*) => {
@@ -268,6 +268,7 @@ impl Interpreter {
         let mut native_context = NativeContext::new(self, data_store, gas_status, resolver);
         let native_function = function.get_native()?;
         let result = native_function(&mut native_context, ty_args, arguments)?;
+        info!("charge_NATIVE_FUNCTION cost {}", amount);
         gas_status.deduct_gas(result.cost)?;
         let return_values = result
             .result
