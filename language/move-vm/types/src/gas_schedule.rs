@@ -6,6 +6,7 @@
 //! It is important to note that the cost schedule defined in this file does not track hashing
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
+use log::info;
 use mirai_annotations::*;
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
@@ -25,12 +26,9 @@ use move_core_types::{
 };
 use once_cell::sync::Lazy;
 use std::cmp::max;
-use log::info;
 
 static ZERO_COST_SCHEDULE: Lazy<CostTable> =
-    Lazy::new(|| {
-        zero_cost_schedule(NUMBER_OF_NATIVE_FUNCTIONS)
-    });
+    Lazy::new(|| zero_cost_schedule(NUMBER_OF_NATIVE_FUNCTIONS));
 
 /// The Move VM implementation of state for gas metering.
 ///
@@ -108,20 +106,19 @@ impl<'a> GasStatus<'a> {
         // Make sure that the size is always non-zero
         let size = size.map(|x| std::cmp::max(1, x));
         debug_assert!(size.get() > 0);
-        let cost = self.cost_table
+        let cost = self
+            .cost_table
             .instruction_cost(opcode as u8)
             .total()
             .mul(size);
-        info!("charge_{:#?} cost {:?}", opcode, cost);
-        self.deduct_gas(
-            cost
-        )
+        info!(target: "charge", "charge_{:#?} cost {:?}", opcode, cost);
+        self.deduct_gas(cost)
     }
 
     /// Charge an instruction and fail if not enough gas units are left.
     pub fn charge_instr(&mut self, opcode: Opcodes) -> PartialVMResult<()> {
         let cost = self.cost_table.instruction_cost(opcode as u8).total();
-        info!("charge_simple_instr instr {:#?} cost {:?}", opcode, cost);
+        info!(target: "charge", "charge_simple_instr instr {:#?} cost {:?}", opcode, cost);
         self.deduct_gas(cost)
     }
 
