@@ -25,9 +25,12 @@ use move_core_types::{
 };
 use once_cell::sync::Lazy;
 use std::cmp::max;
+use log::info;
 
 static ZERO_COST_SCHEDULE: Lazy<CostTable> =
-    Lazy::new(|| zero_cost_schedule(NUMBER_OF_NATIVE_FUNCTIONS));
+    Lazy::new(|| {
+        zero_cost_schedule(NUMBER_OF_NATIVE_FUNCTIONS)
+    });
 
 /// The Move VM implementation of state for gas metering.
 ///
@@ -109,7 +112,7 @@ impl<'a> GasStatus<'a> {
             .instruction_cost(opcode as u8)
             .total()
             .mul(size);
-        println!("charge_{:#?} cost {:?}", opcode, cost);
+        info!("charge_{:#?} cost {:?}", opcode, cost);
         self.deduct_gas(
             cost
         )
@@ -118,7 +121,7 @@ impl<'a> GasStatus<'a> {
     /// Charge an instruction and fail if not enough gas units are left.
     pub fn charge_instr(&mut self, opcode: Opcodes) -> PartialVMResult<()> {
         let cost = self.cost_table.instruction_cost(opcode as u8).total();
-        println!("charge_simple_instr instr {:#?} cost {:?}", opcode, cost);
+        info!("charge_simple_instr instr {:#?} cost {:?}", opcode, cost);
         self.deduct_gas(cost)
     }
 
