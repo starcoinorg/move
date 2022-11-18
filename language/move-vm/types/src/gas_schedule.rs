@@ -25,7 +25,6 @@ use move_core_types::{
 };
 use once_cell::sync::Lazy;
 use std::cmp::max;
-use backtrace::Backtrace;
 
 static ZERO_COST_SCHEDULE: Lazy<CostTable> =
     Lazy::new(|| zero_cost_schedule(NUMBER_OF_NATIVE_FUNCTIONS));
@@ -84,9 +83,6 @@ impl<'a> GasStatus<'a> {
         if !self.charge {
             return Ok(());
         }
-        println!("YSG cost {:#?}", amount);
-        let backtrace = format!("{:#?}", Backtrace::new());
-        println!("backtrace: {}", backtrace);
         if self
             .gas_left
             .app(&amount, |curr_gas, gas_amt| curr_gas >= gas_amt)
@@ -109,17 +105,21 @@ impl<'a> GasStatus<'a> {
         // Make sure that the size is always non-zero
         let size = size.map(|x| std::cmp::max(1, x));
         debug_assert!(size.get() > 0);
+        let cost = self.cost_table
+            .instruction_cost(opcode as u8)
+            .total()
+            .mul(size);
+        println!("charge_{:#?} cost {:?}", opcode, cost);
         self.deduct_gas(
-            self.cost_table
-                .instruction_cost(opcode as u8)
-                .total()
-                .mul(size),
+            cost
         )
     }
 
     /// Charge an instruction and fail if not enough gas units are left.
     pub fn charge_instr(&mut self, opcode: Opcodes) -> PartialVMResult<()> {
-        self.deduct_gas(self.cost_table.instruction_cost(opcode as u8).total())
+        let cost = self.cost_table.instruction_cost(opcode as u8).total();
+        println!("charge_simple_instr instr {:#?} cost {:?}", opcode, cost);
+        self.deduct_gas(cost)
     }
 
     /// Charge gas related to the overall size of a transaction and fail if not enough
