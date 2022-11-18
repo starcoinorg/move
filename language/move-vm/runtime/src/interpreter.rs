@@ -268,7 +268,7 @@ impl Interpreter {
         let mut native_context = NativeContext::new(self, data_store, gas_status, resolver);
         let native_function = function.get_native()?;
         let result = native_function(&mut native_context, ty_args, arguments)?;
-        info!("charge_NATIVE_FUNCTION cost {}", amount);
+        info!("charge_NATIVE_FUNCTION cost {:?}", result.cost);
         gas_status.deduct_gas(result.cost)?;
         let return_values = result
             .result
