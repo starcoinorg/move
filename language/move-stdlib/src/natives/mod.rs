@@ -17,7 +17,7 @@ mod helpers;
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::{make_table_from_iter, NativeFunctionTable};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasParameters {
     pub bcs: bcs::GasParameters,
     pub hash: hash::GasParameters,
@@ -137,7 +137,7 @@ pub fn all_natives(
     make_table_from_iter(move_std_addr, natives)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NurseryGasParameters {
     pub event: event::GasParameters,
     pub debug: debug::GasParameters,

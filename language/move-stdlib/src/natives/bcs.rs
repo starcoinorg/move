@@ -30,7 +30,7 @@ use std::{collections::VecDeque, sync::Arc};
  *             will be charged.
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToBytesGasParameters {
     pub per_byte_serialized: InternalGasPerByte,
     pub legacy_min_output_size: NumBytes,
@@ -96,7 +96,7 @@ pub fn make_native_to_bytes(gas_params: ToBytesGasParameters) -> NativeFunction 
  *   gas cost: base_cost + unit_cost * data_length
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToAddressGasParameters {
     pub base: InternalGas,
     pub per_byte: InternalGasPerByte,
@@ -136,7 +136,7 @@ pub fn make_native_to_address(gas_params: ToAddressGasParameters) -> NativeFunct
 /***************************************************************************************************
  * module
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasParameters {
     pub to_bytes: ToBytesGasParameters,
     pub to_address: ToAddressGasParameters,
