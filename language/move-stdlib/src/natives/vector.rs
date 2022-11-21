@@ -25,7 +25,7 @@ use move_core_types::gas_algebra::AbstractMemorySize;
  *   gas cost: base_cost
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct EmptyGasParameters {
     pub base: InternalGas,
 }
@@ -55,7 +55,7 @@ pub fn make_native_empty(gas_params: EmptyGasParameters) -> NativeFunction {
  *   gas cost: base_cost
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct LengthGasParameters {
     pub base: InternalGas,
 }
@@ -87,7 +87,7 @@ pub fn make_native_length(gas_params: LengthGasParameters) -> NativeFunction {
  *   gas cost: base_cost + legacy_unit_cost * max(1, size_of(val))
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct PushBackGasParameters {
     pub base: InternalGas,
     pub legacy_per_abstract_memory_unit: InternalGasPerAbstractMemoryUnit,
@@ -128,7 +128,7 @@ pub fn make_native_push_back(gas_params: PushBackGasParameters) -> NativeFunctio
  *   gas cost: base_cost
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct BorrowGasParameters {
     pub base: InternalGas,
 }
@@ -165,7 +165,7 @@ pub fn make_native_borrow(gas_params: BorrowGasParameters) -> NativeFunction {
  *   gas cost: base_cost
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct PopBackGasParameters {
     pub base: InternalGas,
 }
@@ -200,7 +200,7 @@ pub fn make_native_pop_back(gas_params: PopBackGasParameters) -> NativeFunction 
  *   gas cost: base_cost
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct DestroyEmptyGasParameters {
     pub base: InternalGas,
 }
@@ -232,7 +232,7 @@ pub fn make_native_destroy_empty(gas_params: DestroyEmptyGasParameters) -> Nativ
 /***************************************************************************************************
  * native fun swap
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct SwapGasParameters {
     pub base: InternalGas,
 }
@@ -270,7 +270,7 @@ pub fn make_native_swap(gas_params: SwapGasParameters) -> NativeFunction {
  *   gas cost: base_cost + legacy_unit_cost * max(1, size_of(val))
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct AppendGasParameters {
     pub base: InternalGas,
     pub legacy_per_abstract_memory_unit: InternalGasPerAbstractMemoryUnit,
@@ -312,7 +312,7 @@ pub fn make_native_append(gas_params: AppendGasParameters) -> NativeFunction {
  *   gas cost: base_cost + legacy_unit_cost * max(1, size_of(val))
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct RemoveGasParameters {
     pub base: InternalGas,
     pub legacy_per_abstract_memory_unit: InternalGasPerAbstractMemoryUnit,
@@ -358,7 +358,7 @@ pub fn make_native_remove(gas_params: RemoveGasParameters) -> NativeFunction {
  *   gas cost: base_cost + legacy_unit_cost * max(1, size_of(val))
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct ReverseGasParameters {
     pub base: InternalGas,
     pub legacy_per_abstract_memory_unit: InternalGasPerAbstractMemoryUnit,
@@ -421,7 +421,7 @@ fn native_error_to_abort(err: PartialVMError) -> PartialVMError {
 /***************************************************************************************************
  * module
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq)]
 pub struct GasParameters {
     pub empty: EmptyGasParameters,
     pub length: LengthGasParameters,
