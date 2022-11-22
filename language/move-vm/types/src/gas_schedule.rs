@@ -118,7 +118,7 @@ impl<'a> GasStatus<'a> {
     /// Charge an instruction and fail if not enough gas units are left.
     pub fn charge_instr(&mut self, opcode: Opcodes) -> PartialVMResult<()> {
         let cost = self.cost_table.instruction_cost(opcode as u8).total();
-        info!(target: "charge", "charge_simple_instr instr {:#?} cost {:?}", opcode, cost);
+        info!("simple_instr {:#?} cost {:?}", opcode, cost);
         self.deduct_gas(cost)
     }
 
