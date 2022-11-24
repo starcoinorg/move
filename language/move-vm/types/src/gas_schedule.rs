@@ -111,14 +111,14 @@ impl<'a> GasStatus<'a> {
             .instruction_cost(opcode as u8)
             .total()
             .mul(size);
-        info!(target: "charge", "charge_{:#?} cost {:?}", opcode, cost);
+        info!("{:#?} cost {:?} {}", opcode, cost, self.charge);
         self.deduct_gas(cost)
     }
 
     /// Charge an instruction and fail if not enough gas units are left.
     pub fn charge_instr(&mut self, opcode: Opcodes) -> PartialVMResult<()> {
         let cost = self.cost_table.instruction_cost(opcode as u8).total();
-        info!("simple_instr {:#?} cost {:?}", opcode, cost);
+        info!("simple_instr {:#?} cost {:?} {}", opcode, cost, self.charge);
         self.deduct_gas(cost)
     }
 
@@ -129,13 +129,17 @@ impl<'a> GasStatus<'a> {
         intrinsic_cost: AbstractMemorySize<GasCarrier>,
     ) -> VMResult<()> {
         let cost = calculate_intrinsic_gas(intrinsic_cost, &self.cost_table.gas_constants);
-        info!(target: "charge", "charge_intrinsic_gas cost {:?}", cost);
+        info!("charge_intrinsic_gas cost {:?} {}", cost, self.charge);
         self.deduct_gas(cost)
             .map_err(|e| e.finish(Location::Undefined))
     }
 
     pub fn set_metering(&mut self, enabled: bool) {
         self.charge = enabled
+    }
+
+    pub fn get_metering(&self) -> bool {
+        self.charge
     }
 }
 

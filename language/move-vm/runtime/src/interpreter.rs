@@ -269,7 +269,7 @@ impl Interpreter {
         let native_function = function.get_native()?;
         let result = native_function(&mut native_context, ty_args, arguments)?;
         let name = function.name();
-        info!("{} NATIVE_FUNCTION cost {:?}", name, result.cost);
+        info!("{} NATIVE_FUNCTION cost {:?} {}", name, result.cost, gas_status.get_metering());
         gas_status.deduct_gas(result.cost)?;
         let return_values = result
             .result
