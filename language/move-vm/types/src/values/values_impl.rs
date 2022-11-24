@@ -1711,12 +1711,17 @@ impl VectorRef {
         self.0.mark_dirty();
         Ok(())
     }
-    pub fn remove(&self, idx: usize, type_param: &Type) -> PartialVMResult<Value> {
+    pub fn remove(
+        &self,
+        memory_cost: &mut u64,
+        idx: usize,
+        type_param: &Type,
+    ) -> PartialVMResult<Value> {
         let c = self.0.container();
         check_elem_layout(type_param, c)?;
 
         // len must be >0
-        // let len = c.len();
+        let len = c.len();
         let ret = match c {
             Container::VecU8(r) => Value::u8(r.borrow_mut().remove(idx)),
             Container::VecU64(r) => Value::u64(r.borrow_mut().remove(idx)),
@@ -1731,10 +1736,11 @@ impl VectorRef {
         // cost with memory
         // let memory_cost = c.size().get() * ((len - idx) as u64) / (len as u64);
         // let cost = cost.mul(AbstractMemorySize::new(std::cmp::max(1, memory_cost)));
+        *memory_cost = u64::from(c.legacy_size()) * ((len - idx) as u64) / (len as u64);
         Ok(ret)
     }
 
-    pub fn reverse(&self, type_param: &Type) -> PartialVMResult<()> {
+    pub fn reverse(&self, memory_cost: &mut u64, type_param: &Type) -> PartialVMResult<()> {
         let c = self.0.container();
         check_elem_layout(type_param, c)?;
         macro_rules! reverse {
@@ -1759,17 +1765,23 @@ impl VectorRef {
         // half of the memory size.
         //let memory_cost = std::cmp::max(1, c.size().get() / 2);
         //let cost = cost.get() * memory_cost;
-
+        *memory_cost = std::cmp::max(1, u64::from(c.legacy_size()) / 2);
         Ok(())
     }
 
-    pub fn append(self, e: Vector, type_param: &Type) -> PartialVMResult<()> {
+    pub fn append(
+        self,
+        memory_cost: &mut AbstractMemorySize,
+        e: Vector,
+        type_param: &Type,
+    ) -> PartialVMResult<()> {
         let lhs = self.0.container();
         let other = e.0;
         check_elem_layout(type_param, lhs)?;
         check_elem_layout(type_param, &other)?;
         // cost with memory
         // let cost = cost.mul(other.size());
+        *memory_cost = other.legacy_size();
 
         match (lhs, other) {
             (Container::Vec(c), Container::Vec(r)) => {
@@ -1797,10 +1809,6 @@ impl VectorRef {
         self.0.mark_dirty();
 
         Ok(())
-    }
-
-    pub fn get_container_len(&self) -> usize {
-        self.0.container().len()
     }
 }
 
