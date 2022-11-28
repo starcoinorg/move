@@ -124,6 +124,7 @@ impl Interpreter {
         args: Vec<Value>,
     ) -> VMResult<Vec<Value>> {
         let mut locals = Locals::new(function.local_count());
+        info!("YSG ty_args {:#?} args {:#?}", ty_args, args);
         for (i, value) in args.into_iter().enumerate() {
             locals
                 .store_loc(i, value)
@@ -136,6 +137,7 @@ impl Interpreter {
             let exit_code = current_frame //self
                 .execute_code(&resolver, self, data_store, gas_status)
                 .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
+            info!("YSG exit_code {:#?}", exit_code);
             match exit_code {
                 ExitCode::Return => {
                     if let Some(frame) = self.call_stack.pop() {
@@ -156,6 +158,8 @@ impl Interpreter {
                             AbstractMemorySize::new(func.arg_count() as GasCarrier),
                         )
                         .map_err(|e| set_err_info!(current_frame, e))?;
+                    let name = func.name();
+                    info!("YSG call native function {}", name);
                     if func.is_native() {
                         self.call_native(&resolver, data_store, gas_status, func, vec![])?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
