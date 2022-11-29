@@ -158,9 +158,13 @@ impl Interpreter {
                             AbstractMemorySize::new(func.arg_count() as GasCarrier),
                         )
                         .map_err(|e| set_err_info!(current_frame, e))?;
-                    let name = func.name();
-                    info!("YSG call native function {}", name);
+                    if !func.is_native() {
+                        let name = func.name();
+                        info!("YSG call function {}", name);
+                    }
                     if func.is_native() {
+                        let name = func.name();
+                        info!("YSG call native function {}", name);
                         self.call_native(&resolver, data_store, gas_status, func, vec![])?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
                         continue;
@@ -273,7 +277,7 @@ impl Interpreter {
         let native_function = function.get_native()?;
         let result = native_function(&mut native_context, ty_args, arguments)?;
         let name = function.name();
-        info!("{} NATIVE_FUNCTION cost {:?} {}", name, result.cost, gas_status.get_metering());
+       // info!("{} NATIVE_FUNCTION cost {:?} {}", name, result.cost, gas_status.get_metering());
         gas_status.deduct_gas(result.cost)?;
         let return_values = result
             .result
@@ -781,7 +785,7 @@ impl Frame {
                     Bytecode::MoveLoc(idx) => {
                         let local = self.locals.move_loc(*idx as usize)?;
                         gas_status.charge_instr_with_size(Opcodes::MOVE_LOC, local.size())?;
-
+                        info!("YSG MoveLoc idx {} {:#?}", *idx, local);
                         interpreter.operand_stack.push(local)?;
                     }
                     Bytecode::StLoc(idx) => {
@@ -813,7 +817,15 @@ impl Frame {
                         };
                         gas_status.charge_instr(opcode)?;
 
-                        let reference = interpreter.operand_stack.pop_as::<StructRef>()?;
+                        let elem = interpreter.operand_stack.pop();
+                        if elem.is_err() {
+                            return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                                .with_message(format!("cannot cast {:?} to struct", elem,)));
+                        }
+                        info!("YSG ImmBorrowField {:#?}", elem);
+                        let reference = elem.unwrap().value_as::<StructRef>()?;
+
+                        // let reference = interpreter.operand_stack.pop_as::<StructRef>()?;
                         let offset = resolver.field_offset(*fh_idx);
                         let field_ref = reference.borrow_field(offset)?;
                         interpreter.operand_stack.push(field_ref)?;

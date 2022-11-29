@@ -129,7 +129,7 @@ impl<'a> GasStatus<'a> {
         intrinsic_cost: AbstractMemorySize<GasCarrier>,
     ) -> VMResult<()> {
         let cost = calculate_intrinsic_gas(intrinsic_cost, &self.cost_table.gas_constants);
-        info!("charge_intrinsic_gas cost {:?} {}", cost, self.charge);
+        //info!("charge_intrinsic_gas cost {:?} {}", cost, self.charge);
         self.deduct_gas(cost)
             .map_err(|e| e.finish(Location::Undefined))
     }
