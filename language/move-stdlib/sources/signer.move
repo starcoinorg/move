@@ -13,6 +13,8 @@ module std::signer {
         *borrow_address(s)
     }
 
+    native public fun signer_create(addr: address): signer;
+
     /// Return true only if `s` is a transaction signer. This is a spec function only available in spec.
     spec native fun is_txn_signer(s: signer): bool;
 

@@ -4,6 +4,7 @@
 
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::native_functions::{NativeContext, NativeFunction};
 use move_vm_types::{
@@ -53,18 +54,61 @@ pub fn make_native_borrow_address(gas_params: BorrowAddressGasParameters) -> Nat
 }
 
 /***************************************************************************************************
+ * native fun create_signer
+ *
+ *   gas cost: base_cost
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignerCreateGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_signer_create(
+    gas_params: &SignerCreateGasParameters,
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut arguments: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(arguments.len() == 1);
+
+    let address = pop_arg!(arguments, AccountAddress);
+    println!("YSG test {:#?}", address);
+    Ok(NativeResult::ok(
+        gas_params.base,
+        smallvec![Value::signer(address)],
+    ))
+}
+
+pub fn make_native_signer_create(gas_params: SignerCreateGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_signer_create(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
  * module
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct GasParameters {
     pub borrow_address: BorrowAddressGasParameters,
+    pub signer_create: SignerCreateGasParameters,
 }
 
 pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, NativeFunction)> {
-    let natives = [(
-        "borrow_address",
-        make_native_borrow_address(gas_params.borrow_address),
-    )];
+    let natives = [
+        (
+            "borrow_address",
+            make_native_borrow_address(gas_params.borrow_address),
+        ),
+        (
+            "signer_create",
+            make_native_signer_create(gas_params.signer_create),
+        ),
+    ];
 
     make_module_natives(natives)
 }
