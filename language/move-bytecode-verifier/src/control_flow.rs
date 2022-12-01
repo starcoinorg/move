@@ -20,16 +20,9 @@ pub fn verify(
     code: &CodeUnit,
 ) -> PartialVMResult<()> {
     let current_function = current_function_opt.unwrap_or(FunctionDefinitionIndex(0));
-    // check fall through
-    // Check to make sure that the bytecode vector ends with a branching instruction.
-    match code.code.last() {
-        None => return Err(PartialVMError::new(StatusCode::EMPTY_CODE_UNIT)),
-        Some(last) if !last.is_unconditional_branch() => {
-            return Err(PartialVMError::new(StatusCode::INVALID_FALL_THROUGH)
-                .at_code_offset(current_function, (code.code.len() - 1) as CodeOffset))
-        }
-        Some(_) => (),
-    }
+
+    // check fallthrough
+    verify_fallthrough(current_function, &code.code)?;
 
     // check jumps
     let context = &ControlFlowVerifier {
@@ -38,6 +31,21 @@ pub fn verify(
     };
     let labels = instruction_labels(context);
     check_jumps(verifier_config, context, labels)
+}
+
+fn verify_fallthrough(
+    current_function: FunctionDefinitionIndex,
+    code: &Vec<Bytecode>,
+) -> PartialVMResult<()> {
+    // Check to make sure that the bytecode vector ends with a branching instruction.
+    match code.last() {
+        None => Err(PartialVMError::new(StatusCode::EMPTY_CODE_UNIT)),
+        Some(last) if !last.is_unconditional_branch() => {
+            Err(PartialVMError::new(StatusCode::INVALID_FALL_THROUGH)
+                .at_code_offset(current_function, (code.len() - 1) as CodeOffset))
+        }
+        Some(_) => Ok(()),
+    }
 }
 
 #[derive(Clone, Copy)]

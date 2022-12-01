@@ -188,7 +188,6 @@ fn big_signature_test() {
         ],
         address_identifiers: vec![AccountAddress::ONE],
         constant_pool: vec![],
-        metadata: vec![],
         struct_defs: vec![StructDefinition {
             struct_handle: StructHandleIndex(0),
             field_information: StructFieldInformation::Native,
@@ -196,7 +195,6 @@ fn big_signature_test() {
         function_defs: vec![FunctionDefinition {
             function: FunctionHandleIndex(0),
             visibility: Public,
-            is_entry: true,
             acquires_global_resources: vec![],
             code: Some(CodeUnit {
                 locals: SignatureIndex(0),

@@ -221,7 +221,6 @@ fn big_vec_unpacks() {
         ],
         address_identifiers: vec![AccountAddress::ONE],
         constant_pool: vec![],
-        metadata: vec![],
         struct_defs: vec![StructDefinition {
             struct_handle: StructHandleIndex(0),
             field_information: StructFieldInformation::Native,
@@ -229,7 +228,6 @@ fn big_vec_unpacks() {
         function_defs: vec![FunctionDefinition {
             function: FunctionHandleIndex(0),
             visibility: Visibility::Public,
-            is_entry: true,
             acquires_global_resources: vec![],
             code: Some(CodeUnit {
                 locals: SignatureIndex(0),
