@@ -20,7 +20,7 @@ use move_vm_types::{data_store::DataStore, gas_schedule::GasStatus};
 use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use tracing::warn;
+use tracing::{info, warn};
 
 /// Publish module bundle options
 /// - force_publish: force publish without compatibility check.
@@ -86,6 +86,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             args.into_iter().map(|b| b.borrow().to_vec()).collect(),
             sender,
         )?;
+        info!("YSG function_name {} ty_args {:#?} final_args {:#?}", function_name, ty_args, final_args);
         self.session
             .execute_entry_function(module, function_name, ty_args, final_args, gas_status)
     }

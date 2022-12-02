@@ -10,6 +10,7 @@ use crate::{
     native_functions::{NativeFunction, NativeFunctions},
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
 };
+use log::info;
 use move_binary_format::{
     access::ModuleAccess,
     compatibility::Compatibility,
@@ -349,7 +350,11 @@ impl VMRuntime {
             .map(|ty| ty.subst(&ty_args))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
-
+        let name = func.name();
+        info!(
+            "YSG func {} ty_args {:#?} de_args {:#?}",
+            name, ty_args, deserialized_args
+        );
         let return_values = Interpreter::entrypoint(
             func,
             ty_args,
