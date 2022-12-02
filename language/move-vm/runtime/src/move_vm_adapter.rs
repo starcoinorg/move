@@ -202,6 +202,9 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             } else {
                 false
             };
+            if republish {
+                self.session.runtime.loader.mark_as_invalid();
+            }
             data_store.publish_module(&module.self_id(), blob, republish)?;
         }
         Ok(())
