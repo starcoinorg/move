@@ -202,7 +202,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             } else {
                 false
             };
-            data_store.publish_module(&module.self_id(), blob, republish)?;
+            data_store.publish_module(&module.self_id(), blob, true)?;
         }
         Ok(())
     }
