@@ -388,6 +388,8 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
 
     /// Clear vm runtimer loader's cache to reload new modules from state cache
     pub fn empty_loader_cache(&self) -> VMResult<()> {
-        self.session.runtime.loader.empty_cache()
+        self.session.runtime.loader.mark_as_invalid();
+        self.session.runtime.loader.flush_if_invalidated();
+        Ok(())
     }
 }
