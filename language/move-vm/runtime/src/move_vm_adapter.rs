@@ -202,6 +202,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             } else {
                 false
             };
+            println!("YSG publish module {} {}", &module.self_id(), republish);
             data_store.publish_module(&module.self_id(), blob, republish)?;
         }
         Ok(())
