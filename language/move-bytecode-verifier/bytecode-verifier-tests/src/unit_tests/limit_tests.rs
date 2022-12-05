@@ -255,6 +255,6 @@ fn big_vec_unpacks() {
     );
     assert_eq!(
         res.unwrap_err().major_status(),
-        StatusCode::VALUE_STACK_OVERFLOW
+        StatusCode::VALUE_STACK_PUSH_OVERFLOW
     );
 }
