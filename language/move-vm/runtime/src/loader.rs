@@ -76,21 +76,6 @@ where
     fn get(&self, key: &K) -> Option<&Arc<V>> {
         self.id_map.get(key).and_then(|idx| self.binaries.get(*idx))
     }
-
-    // fn remove(&mut self, key: &K) {
-    //     match self.id_map.get(&key) {
-    //         Some(idx) => {
-    //             self.binaries.remove(*idx);
-    //             self.id_map.remove(&key);
-    //         }
-    //         None => {}
-    //     }
-    // }
-
-    fn empty(&mut self) {
-        self.binaries.clear();
-        self.id_map.clear();
-    }
 }
 
 // A script cache is a map from the hash value of a script and the `Script` itself.
@@ -134,10 +119,6 @@ impl ScriptCache {
             }
         }
     }
-
-    fn empty(&mut self) {
-        self.scripts.empty();
-    }
 }
 
 // A ModuleCache is the core structure in the Loader.
@@ -177,27 +158,6 @@ impl ModuleCache {
     // Retrieve a struct by index
     fn struct_at(&self, idx: CachedStructIndex) -> Arc<StructType> {
         Arc::clone(&self.structs[idx.0])
-    }
-
-    // fn remove(&mut self, id: ModuleId, _log_context: &impl LogContext) -> VMResult<()> {
-    //     match self.module_at(&id) {
-    //         Some(_module) => {
-    //             // remove module
-    //             self.modules.remove(&id);
-    //             self.structs
-    //                 .retain(|struct_type| &struct_type.module != &id);
-    //             self.functions
-    //                 .retain(|function| function.module_id() != Some(&id));
-    //         }
-    //         None => {}
-    //     }
-    //     Ok(())
-    // }
-
-    fn empty(&mut self) {
-        self.modules.empty();
-        self.functions.clear();
-        self.structs.clear();
     }
 
     //
@@ -1238,22 +1198,6 @@ impl Loader {
         Ok(())
     }
 
-    #[allow(unused)]
-    pub(crate) fn empty_cache(&self) -> VMResult<()> {
-        //println!("empty the code cache");
-        self.scripts.write().empty();
-        self.module_cache.write().empty();
-        self.type_cache.write().empty();
-        Ok(())
-    }
-
-    // pub(crate) fn module_cached(&self, module_id: &ModuleId) -> bool {
-    //     match self.module_cache.read().module_at(module_id) {
-    //         Some(_) => true,
-    //         None => false,
-    //     }
-    // }
-
     //
     // Internal helpers
     //
@@ -2232,10 +2176,6 @@ impl TypeCache {
         Self {
             structs: HashMap::new(),
         }
-    }
-
-    fn empty(&mut self) {
-        self.structs.clear();
     }
 }
 

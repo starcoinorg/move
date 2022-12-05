@@ -195,14 +195,20 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             self.verify_module_bundle(modules.clone(), sender, gas_meter, option)?;
 
         let data_store = &mut self.session.data_cache;
+        let mut clean_cache = false;
         // All modules verified, publish them to data cache
         for (module, blob) in compiled_modules.into_iter().zip(modules.into_iter()) {
             let republish = if data_store.exists_module(&module.self_id())? {
+                clean_cache = true;
                 true
             } else {
                 false
             };
             data_store.publish_module(&module.self_id(), blob, republish)?;
+        }
+        if clean_cache {
+            self.session.runtime.loader.mark_as_invalid();
+            self.session.runtime.loader.flush_if_invalidated();
         }
         Ok(())
     }
@@ -384,10 +390,5 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             .map_err(|err| err.finish(Location::Undefined))?;
 
         Ok(())
-    }
-
-    /// Clear vm runtimer loader's cache to reload new modules from state cache
-    pub fn empty_loader_cache(&self) -> VMResult<()> {
-        self.session.runtime.loader.empty_cache()
     }
 }
