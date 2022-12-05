@@ -22,6 +22,7 @@ use move_binary_format::{
     IndexKind,
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
+use move_core_types::account_address::AccountAddress;
 use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
@@ -2879,5 +2880,13 @@ impl Loader {
         let ty = self.load_type(type_tag, move_storage)?;
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    pub(crate) fn update_native_functions(
+        &mut self,
+        natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
+    ) -> PartialVMResult<()> {
+        self.natives = NativeFunctions::new(natives)?;
+        Ok(())
     }
 }
