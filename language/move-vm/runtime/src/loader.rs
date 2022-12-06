@@ -40,6 +40,7 @@ use std::{
 use tracing::error;
 use move_binary_format::file_format::StructHandleIndex;
 use move_core_types::value::MoveFieldLayout;
+use crate::config::VMConfig;
 
 type ScriptHash = [u8; 32];
 
@@ -477,6 +478,7 @@ pub(crate) struct Loader {
     module_cache: RwLock<ModuleCache>,
     type_cache: RwLock<TypeCache>,
     natives: NativeFunctions,
+    vm_config: VMConfig,
 }
 
 impl Loader {
@@ -486,6 +488,7 @@ impl Loader {
             module_cache: RwLock::new(ModuleCache::new()),
             type_cache: RwLock::new(TypeCache::new()),
             natives,
+            vm_config: VMConfig::default(),
         }
     }
 
