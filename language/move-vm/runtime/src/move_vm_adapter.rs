@@ -21,6 +21,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use std::borrow::Borrow;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
+use log::info;
 use tracing::warn;
 use move_core_types::language_storage::CORE_CODE_ADDRESS;
 
@@ -205,6 +206,7 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             } else {
                 false
             };
+            info!("YSG publish module {} {} {}", &module.self_id(), sender, republish);
             data_store.publish_module(&module.self_id(), blob, republish)?;
         }
 
