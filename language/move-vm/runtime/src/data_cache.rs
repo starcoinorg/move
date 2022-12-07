@@ -4,6 +4,7 @@
 
 use crate::loader::Loader;
 
+use log::info;
 use move_binary_format::errors::*;
 use move_core_types::{
     account_address::AccountAddress,
@@ -19,6 +20,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, GlobalValueEffect, Value},
 };
+use sha2::Digest;
 use std::collections::btree_map::BTreeMap;
 
 pub struct AccountDataCache {
@@ -202,11 +204,23 @@ impl<'r, 'l, S: MoveResolver> DataStore for TransactionDataCache<'r, 'l, S> {
     fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
         if let Some(account_cache) = self.account_map.get(module_id.address()) {
             if let Some(blob) = account_cache.module_map.get(module_id.name()) {
+                info!(
+                    "YSG load_module {} from account_cache hash {:?}",
+                    module_id.name(),
+                    sha2::Sha256::digest(blob)
+                );
                 return Ok(blob.clone());
             }
         }
         match self.remote.get_module(module_id) {
-            Ok(Some(bytes)) => Ok(bytes),
+            Ok(Some(bytes)) => {
+                info!(
+                    "YSG load_module {} from remote hash {:?}",
+                    module_id.name(),
+                    sha2::Sha256::digest(bytes.as_slice())
+                );
+                Ok(bytes)
+            }
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find {:?} in data cache", module_id))
                 .finish(Location::Undefined)),

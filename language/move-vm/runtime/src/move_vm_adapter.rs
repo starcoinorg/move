@@ -86,7 +86,10 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             args.into_iter().map(|b| b.borrow().to_vec()).collect(),
             sender,
         )?;
-        info!("YSG function_name {} ty_args {:#?} final_args {:#?}", function_name, ty_args, final_args);
+        info!(
+            "YSG execute_entry_function func {} ty_args {:#?} final_args {:#?}",
+            function_name, ty_args, final_args
+        );
         self.session
             .execute_entry_function(module, function_name, ty_args, final_args, gas_status)
     }
@@ -197,6 +200,17 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         let data_store = &mut self.session.data_cache;
         // All modules verified, publish them to data cache
         for (module, blob) in compiled_modules.into_iter().zip(modules.into_iter()) {
+            let republish = if data_store.exists_module(&module.self_id())? {
+                true
+            } else {
+                false
+            };
+            info!(
+                "YSG publish module {} {} {}",
+                &module.self_id(),
+                sender,
+                republish
+            );
             data_store.publish_module(&module.self_id(), blob)?;
         }
         Ok(())

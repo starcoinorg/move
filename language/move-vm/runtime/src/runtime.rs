@@ -350,10 +350,11 @@ impl VMRuntime {
             .map(|ty| ty.subst(&ty_args))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
-        let name = func.name();
         info!(
-            "YSG func {} ty_args {:#?} de_args {:#?}",
-            name, ty_args, deserialized_args
+            "YSG execute_function_impl func {} ty_args {:#?} de_args {:#?}",
+            func.name(),
+            ty_args,
+            deserialized_args
         );
         let return_values = Interpreter::entrypoint(
             func,

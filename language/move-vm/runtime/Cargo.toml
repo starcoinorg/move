@@ -19,6 +19,7 @@ parking_lot = "0.11.1"
 sha3 = "0.9.1"
 tracing = "0.1.26"
 log = "0.4.14"
+sha2 = "0.9.3"
 
 move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
 move-core-types = { path = "../../move-core/types" }
