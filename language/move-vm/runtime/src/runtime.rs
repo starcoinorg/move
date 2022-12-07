@@ -337,7 +337,7 @@ impl VMRuntime {
         param_types: Vec<Type>,
         return_types: Vec<Type>,
         serialized_args: Vec<impl Borrow<[u8]>>,
-        data_store: &mut impl DataStore,
+        data_store: &mut (impl DataStore + std::fmt::Debug),
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
     ) -> VMResult<SerializedReturnValues> {
@@ -368,6 +368,7 @@ impl VMRuntime {
             ty_args,
             deserialized_args
         );
+        let func_name = func.name().to_string();
         let return_values = Interpreter::entrypoint(
             func,
             ty_args,
@@ -377,7 +378,10 @@ impl VMRuntime {
             extensions,
             &self.loader,
         )?;
-
+        info!(
+            "YSG execute_function_impl func {} return_values {:#?}",
+            func_name, return_values
+        );
         let serialized_return_values = self
             .serialize_return_values(&return_types, return_values)
             .map_err(|e| e.finish(Location::Undefined))?;
@@ -407,7 +411,7 @@ impl VMRuntime {
         function_name: &IdentStr,
         ty_args: Vec<TypeTag>,
         serialized_args: Vec<impl Borrow<[u8]>>,
-        data_store: &mut impl DataStore,
+        data_store: &mut (impl DataStore + std::fmt::Debug),
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         bypass_declared_entry_check: bool,
@@ -471,7 +475,7 @@ impl VMRuntime {
         script: impl Borrow<[u8]>,
         ty_args: Vec<TypeTag>,
         serialized_args: Vec<impl Borrow<[u8]>>,
-        data_store: &mut impl DataStore,
+        data_store: &mut (impl DataStore + std::fmt::Debug),
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
     ) -> VMResult<SerializedReturnValues> {
