@@ -3,6 +3,7 @@
 
 use crate::loader::Function;
 use crate::session::{LoadedFunctionInstantiation, SerializedReturnValues, Session};
+use log::info;
 use move_binary_format::{
     access::ModuleAccess, compatibility::Compatibility, errors::*, normalized, CompiledModule,
     IndexKind,
@@ -20,7 +21,7 @@ use move_vm_types::{data_store::DataStore, gas_schedule::GasStatus};
 use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::warn;
 
 /// Publish module bundle options
 /// - force_publish: force publish without compatibility check.
