@@ -3699,6 +3699,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.11.2",
  "proptest",
+ "sha2",
  "sha3 0.9.1",
  "tracing",
 ]

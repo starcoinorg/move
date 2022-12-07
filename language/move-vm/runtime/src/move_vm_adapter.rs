@@ -89,6 +89,10 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             args.into_iter().map(|b| b.borrow().to_vec()).collect(),
             sender,
         )?;
+        info!(
+            "YSG execute_entry_function func {} ty_args {:#?} final_args {:#?}",
+            function_name, ty_args, final_args
+        );
         self.session
             .execute_entry_function(module, function_name, ty_args, final_args, gas_meter)
     }
