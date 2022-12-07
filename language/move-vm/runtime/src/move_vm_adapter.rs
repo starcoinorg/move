@@ -23,7 +23,6 @@ use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use log::info;
 use tracing::warn;
-use move_core_types::language_storage::CORE_CODE_ADDRESS;
 
 /// Publish module bundle options
 /// - force_publish: force publish without compatibility check.
