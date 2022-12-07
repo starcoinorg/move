@@ -206,9 +206,10 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             };
             data_store.publish_module(&module.self_id(), blob, republish)?;
         }
+        
+        // Clear vm runtimer loader's cache to reload new modules from state cache
         if clean_cache {
-            self.session.runtime.loader.mark_as_invalid();
-            self.session.runtime.loader.flush_if_invalidated();
+            self.empty_loader_cache()?;
         }
         Ok(())
     }
@@ -392,6 +393,13 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             .deserialize_args(arg_tys, final_args)
             .map_err(|err| err.finish(Location::Undefined))?;
 
+        Ok(())
+    }
+
+    /// Clear vm runtimer loader's cache to reload new modules from state cache
+    fn empty_loader_cache(&self) -> VMResult<()> {
+        self.session.runtime.loader.mark_as_invalid();
+        self.session.runtime.loader.flush_if_invalidated();
         Ok(())
     }
 }
