@@ -22,7 +22,9 @@ use move_vm_types::{
 };
 use sha2::Digest;
 use std::collections::btree_map::BTreeMap;
+use std::fmt::Formatter;
 
+#[derive(Debug)]
 pub struct AccountDataCache {
     data_map: BTreeMap<StructTag, (MoveTypeLayout, GlobalValue)>,
     module_map: BTreeMap<Identifier, Vec<u8>>,
@@ -276,5 +278,12 @@ impl<'r, 'l, S: MoveResolver> DataStore for TransactionDataCache<'r, 'l, S> {
 
     fn events(&self) -> &Vec<(Vec<u8>, u64, Type, MoveTypeLayout, Value)> {
         &self.event_data
+    }
+}
+
+impl<'r, 'l, S: MoveResolver> std::fmt::Debug for TransactionDataCache<'r, 'l, S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "account_map {:#?}",self.account_map)?;
+        write!(f, "event_data {:#?}",self.event_data)
     }
 }

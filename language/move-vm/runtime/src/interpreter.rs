@@ -30,6 +30,7 @@ use move_vm_types::{
 
 use crate::native_extensions::NativeContextExtensions;
 use std::{cmp::min, collections::VecDeque, fmt::Write, mem, sync::Arc};
+use log::info;
 use tracing::error;
 
 macro_rules! debug_write {
@@ -75,7 +76,7 @@ impl Interpreter {
         function: Arc<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-        data_store: &mut impl DataStore,
+        data_store: &mut (impl DataStore + std::fmt::Debug),
         gas_status: &mut GasStatus,
         extensions: &mut NativeContextExtensions,
         loader: &Loader,
@@ -101,7 +102,7 @@ impl Interpreter {
     fn execute(
         &mut self,
         loader: &Loader,
-        data_store: &mut impl DataStore,
+        data_store: &mut (impl DataStore + std::fmt::Debug),
         gas_status: &mut GasStatus,
         extensions: &mut NativeContextExtensions,
         function: Arc<Function>,
@@ -126,13 +127,14 @@ impl Interpreter {
     fn execute_main(
         &mut self,
         loader: &Loader,
-        data_store: &mut impl DataStore,
+        data_store: &mut (impl DataStore + std::fmt::Debug),
         gas_status: &mut GasStatus,
         extensions: &mut NativeContextExtensions,
         function: Arc<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<Vec<Value>> {
+        info!("YSG data_store {:#?}", data_store);
         let mut locals = Locals::new(function.local_count());
         for (i, value) in args.into_iter().enumerate() {
             locals
