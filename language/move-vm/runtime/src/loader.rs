@@ -41,6 +41,7 @@ use std::{
     hash::Hash,
     sync::Arc,
 };
+use log::info;
 use tracing::error;
 
 type ScriptHash = [u8; 32];
@@ -941,6 +942,7 @@ impl Loader {
     ) -> VMResult<Arc<Module>> {
         // if the module is already in the code cache, load the cached version
         if let Some(cached) = self.module_cache.read().module_at(id) {
+            info!("YSG load {} from loader.module_cache", id);
             self.module_cache_hits.write().insert(id.clone());
             return Ok(cached);
         }

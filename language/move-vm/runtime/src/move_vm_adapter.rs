@@ -214,7 +214,8 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             data_store.publish_module(&module.self_id(), blob, republish)?;
         }
 
-        if accounts.contains(&CORE_CODE_ADDRESS) {
+        if !accounts.is_empty() {
+            info!("republish account {:?}", accounts);
             self.session.runtime.loader.mark_as_invalid();
             self.session.runtime.loader.flush_if_invalidated();
         }
