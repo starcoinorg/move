@@ -19,10 +19,9 @@ use move_vm_types::data_store::DataStore;
 use move_vm_types::gas::GasMeter;
 use move_vm_types::loaded_data::runtime_types::Type;
 use std::borrow::Borrow;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use tracing::warn;
-use move_core_types::language_storage::CORE_CODE_ADDRESS;
 
 /// Publish module bundle options
 /// - force_publish: force publish without compatibility check.
@@ -196,11 +195,11 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             self.verify_module_bundle(modules.clone(), sender, gas_meter, option)?;
 
         let data_store = &mut self.session.data_cache;
-        let mut accounts = HashSet::new();
+        let mut clean_cache = false;
         // All modules verified, publish them to data cache
         for (module, blob) in compiled_modules.into_iter().zip(modules.into_iter()) {
             let republish = if data_store.exists_module(&module.self_id())? {
-                accounts.insert(module.address().clone());
+                clean_cache = true;
                 true
             } else {
                 false
@@ -208,9 +207,9 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             data_store.publish_module(&module.self_id(), blob, republish)?;
         }
 
-        if accounts.contains(&CORE_CODE_ADDRESS) {
-            self.session.runtime.loader.mark_as_invalid();
-            self.session.runtime.loader.flush_if_invalidated();
+        // Clear vm runtimer loader's cache to reload new modules from state cache
+        if clean_cache {
+            self.empty_loader_cache()?;
         }
         Ok(())
     }
@@ -391,6 +390,13 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
             .deserialize_args(arg_tys, final_args)
             .map_err(|err| err.finish(Location::Undefined))?;
 
+        Ok(())
+    }
+
+    /// Clear vm runtimer loader's cache to reload new modules from state cache
+    fn empty_loader_cache(&self) -> VMResult<()> {
+        self.session.runtime.loader.mark_as_invalid();
+        self.session.runtime.loader.flush_if_invalidated();
         Ok(())
     }
 }
