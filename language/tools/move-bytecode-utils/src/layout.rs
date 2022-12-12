@@ -175,7 +175,11 @@ impl<T: GetModule> SerdeLayoutBuilder<T> {
                         declaring_module.borrow().name()
                     )
                 });
-            let normalized_struct = Struct::new(declaring_module.borrow(), def).1;
+            let normalized_struct = Struct::new(declaring_module.borrow(), def);
+            let normalized_struct = match normalized_struct {
+                Ok((_, normalized_struct)) => normalized_struct,
+                _ => panic!("Can't extract for native struct {}::{}", module_id, name),
+            };
             assert_eq!(
                 normalized_struct.type_parameters.len(),
                 type_arguments.len(),

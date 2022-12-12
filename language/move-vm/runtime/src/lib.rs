@@ -30,5 +30,5 @@ mod debug;
 #[cfg(test)]
 mod unit_tests;
 
-pub mod move_vm_adapter;
 mod config;
+pub mod move_vm_adapter;
