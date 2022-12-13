@@ -345,12 +345,12 @@ pub(crate) fn explain_publish_error(
             let old_api = normalized::Module::new(&old_module);
             let old_api = match old_api {
                 Ok(old_api) => old_api,
-                e => return Err(format_err!("get module {:?} error {:?}", old_module, e))
+                e => return Err(format_err!("get module {:?} error {:?}", old_module, e)),
             };
             let new_api = normalized::Module::new(module);
             let new_api = match new_api {
                 Ok(new_api) => new_api,
-                e => return Err(format_err!("get module {:?} error {:?}", module, e))
+                e => return Err(format_err!("get module {:?} error {:?}", module, e)),
             };
             let compat = Compatibility::check(&old_api, &new_api);
             // the only way we get this error code is compatibility checking failed, so assert here

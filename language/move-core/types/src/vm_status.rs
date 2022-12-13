@@ -640,7 +640,6 @@ pub enum StatusCode {
     TOO_MANY_TYPE_NODES = 1116,
     VALUE_STACK_PUSH_OVERFLOW = 1117,
 
-    INVALID_EXTRACT_FOR_NATIVE_STRUCT = 1118,
 
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.

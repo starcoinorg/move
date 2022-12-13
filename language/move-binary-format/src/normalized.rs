@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::{Location, PartialVMError, PartialVMResult, VMResult};
+use crate::errors::{Location, PartialVMError, VMResult};
 use crate::{
     access::ModuleAccess,
     file_format::{
@@ -278,10 +278,8 @@ impl Struct {
         let handle = m.struct_handle_at(def.struct_handle);
         let fields = match &def.field_information {
             StructFieldInformation::Native => {
-                return Err(
-                    PartialVMError::new(StatusCode::INVALID_EXTRACT_FOR_NATIVE_STRUCT)
-                        .finish(Location::Undefined),
-                );
+                return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
+                    .finish(Location::Undefined));
             }
             StructFieldInformation::Declared(fields) => {
                 fields.iter().map(|f| Field::new(m, f)).collect()
