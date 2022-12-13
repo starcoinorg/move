@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
-use anyhow::{bail, Result};
+use anyhow::{bail, format_err, Result};
 use colored::Colorize;
 use difference::{Changeset, Difference};
 use move_binary_format::{
@@ -342,8 +342,16 @@ pub(crate) fn explain_publish_error(
             println!("Breaking change detected--publishing aborted. Re-run with --ignore-breaking-changes to publish anyway.");
 
             let old_module = state.get_module_by_id(&module_id)?.unwrap();
-            let old_api = normalized::Module::new(&old_module).unwrap();
-            let new_api = normalized::Module::new(module).unwrap();
+            let old_api = normalized::Module::new(&old_module);
+            let old_api = match old_api {
+                Ok(old_api) => old_api,
+                e => return Err(format_err!("get module {:?} error {:?}", old_module, e))
+            };
+            let new_api = normalized::Module::new(module);
+            let new_api = match new_api {
+                Ok(new_api) => new_api,
+                e => return Err(format_err!("get module {:?} error {:?}", module, e))
+            };
             let compat = Compatibility::check(&old_api, &new_api);
             // the only way we get this error code is compatibility checking failed, so assert here
             assert!(!compat.is_fully_compatible());
