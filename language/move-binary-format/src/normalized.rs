@@ -1,7 +1,6 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::{Location, PartialVMError, VMResult};
 use crate::{
     access::ModuleAccess,
     file_format::{
@@ -10,7 +9,6 @@ use crate::{
         Visibility,
     },
 };
-use move_core_types::vm_status::StatusCode;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -100,13 +98,9 @@ impl Module {
     /// Extract a normalized module from a `CompiledModule`. The module `m` should be verified.
     /// Nothing will break here if that is not the case, but there is little point in computing a
     /// normalized representation of a module that won't verify (since it can't be published).
-    pub fn new(m: &CompiledModule) -> VMResult<Self> {
+    pub fn new(m: &CompiledModule) -> Self {
         let friends = m.immediate_friends();
-        let structs = m
-            .struct_defs()
-            .iter()
-            .map(|d| Struct::new(m, d))
-            .collect::<VMResult<BTreeMap<_, _>>>()?;
+        let structs = m.struct_defs().iter().map(|d| Struct::new(m, d)).collect();
         let exposed_functions = m
             .function_defs()
             .iter()
@@ -115,14 +109,15 @@ impl Module {
                 Visibility::Private => false,
             })
             .map(|func_def| Function::new(m, func_def))
-            .collect::<VMResult<BTreeMap<_, _>>>()?;
-        Ok(Self {
+            .collect();
+
+        Self {
             address: *m.address(),
             name: m.name().to_owned(),
             friends,
             structs,
             exposed_functions,
-        })
+        }
     }
 
     pub fn module_id(&self) -> ModuleId {
@@ -274,13 +269,10 @@ impl Field {
 impl Struct {
     /// Create a `Struct` for `StructDefinition` `def` in module `m`. Panics if `def` is a
     /// a native struct definition.
-    pub fn new(m: &CompiledModule, def: &StructDefinition) -> VMResult<(Identifier, Self)> {
+    pub fn new(m: &CompiledModule, def: &StructDefinition) -> (Identifier, Self) {
         let handle = m.struct_handle_at(def.struct_handle);
         let fields = match &def.field_information {
-            StructFieldInformation::Native => {
-                return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
-                    .finish(Location::Undefined));
-            }
+            StructFieldInformation::Native => vec![],
             StructFieldInformation::Declared(fields) => {
                 fields.iter().map(|f| Field::new(m, f)).collect()
             }
@@ -291,7 +283,7 @@ impl Struct {
             type_parameters: handle.type_parameters.clone(),
             fields,
         };
-        Ok((name, s))
+        (name, s)
     }
 
     pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
@@ -301,7 +293,7 @@ impl Struct {
 
 impl Function {
     /// Create a `FunctionSignature` for `FunctionHandle` `f` in module `m`.
-    pub fn new(m: &CompiledModule, def: &FunctionDefinition) -> VMResult<(Identifier, Self)> {
+    pub fn new(m: &CompiledModule, def: &FunctionDefinition) -> (Identifier, Self) {
         let fhandle = m.function_handle_at(def.function);
         let name = m.identifier_at(fhandle.name).to_owned();
         let f = Function {
@@ -320,16 +312,14 @@ impl Function {
                 .map(|s| Type::new(m, s))
                 .collect(),
         };
-        Ok((name, f))
+        (name, f)
     }
 
     /// Create a `Function` for function named `func_name` in module `m`.
     pub fn new_from_name(m: &CompiledModule, func_name: &IdentStr) -> Option<Self> {
         for func_defs in &m.function_defs {
             if m.identifier_at(m.function_handle_at(func_defs.function).name) == func_name {
-                if let Ok((_, func)) = Self::new(m, func_defs) {
-                    return Some(func);
-                }
+                return Some(Self::new(m, func_defs).1);
             }
         }
         None
