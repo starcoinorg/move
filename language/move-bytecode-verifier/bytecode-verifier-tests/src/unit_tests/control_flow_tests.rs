@@ -34,6 +34,7 @@ fn verify_module(verifier_config: &VerifierConfig, module: &CompiledModule) -> P
 // Simple cases -  Copied from code unit verifier
 //**************************************************************************************************
 
+
 #[test]
 fn empty_bytecode() {
     let module = dummy_procedure_module(vec![]);

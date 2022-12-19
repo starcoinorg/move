@@ -1,12 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::VMConfig;
 use crate::{
     logging::expect_no_verification_errors,
     native_functions::{NativeFunction, NativeFunctions},
 };
-use move_binary_format::file_format::StructHandleIndex;
 use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
     binary_views::BinaryIndexedView,
@@ -21,7 +19,6 @@ use move_binary_format::{
     IndexKind,
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies, script_signature};
-use move_core_types::value::MoveFieldLayout;
 use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
@@ -41,6 +38,9 @@ use std::{
     sync::Arc,
 };
 use tracing::error;
+use move_binary_format::file_format::StructHandleIndex;
+use move_core_types::value::MoveFieldLayout;
+use crate::config::VMConfig;
 
 type ScriptHash = [u8; 32];
 
@@ -2312,6 +2312,7 @@ impl Loader {
         let field_node_count = *count - count_before;
 
         let struct_layout = MoveStructLayout::Runtime(field_layouts);
+
 
         let mut cache = self.type_cache.write();
         let info = cache

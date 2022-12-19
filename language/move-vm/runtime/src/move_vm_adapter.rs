@@ -142,8 +142,8 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
                     .loader
                     .load_module(&module_id, data_store)?;
                 let old_module = old_module_ref.module();
-                let old_m = normalized::Module::new(old_module)?;
-                let new_m = normalized::Module::new(&module)?;
+                let old_m = normalized::Module::new(old_module);
+                let new_m = normalized::Module::new(&module);
                 let compat = Compatibility::check(&old_m, &new_m);
                 if !compat.is_fully_compatible() && !option.force_publish {
                     return Err(PartialVMError::new(

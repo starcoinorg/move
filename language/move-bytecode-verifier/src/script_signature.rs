@@ -121,3 +121,4 @@ pub fn no_additional_script_signature_checks(
 ) -> PartialVMResult<()> {
     Ok(())
 }
+
