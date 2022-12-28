@@ -139,7 +139,7 @@ pub fn all_natives(
     add_natives!("vector", vector::make_all(gas_params.vector));
     #[cfg(feature = "testing")]
     {
-        add_natives!("UnitTest", unit_test::make_all(gas_params.unit_test));
+        add_natives!("unit_test", unit_test::make_all(gas_params.unit_test));
     }
 
     make_table_from_iter(move_std_addr, natives)
