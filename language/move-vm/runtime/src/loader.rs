@@ -2473,7 +2473,7 @@ const VALUE_DEPTH_MAX: usize = 128;
 
 /// Maximal nodes which are allowed when converting to layout. This includes the the types of
 /// fields for struct types.
-const MAX_TYPE_TO_LAYOUT_NODES: usize = 256;
+const MAX_TYPE_TO_LAYOUT_NODES: usize = 1536;
 
 /// Maximal nodes which are all allowed when instantiating a generic type. This does not include
 /// field types of structs.
