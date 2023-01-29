@@ -108,6 +108,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "base-x"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cbbc9d0964165b47557570cce6c952866c2678457aca742aafc9fb771d30270"
+
+[[package]]
 name = "base64"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -227,12 +233,6 @@ name = "block-padding"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
-
-[[package]]
-name = "bs58"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
 
 [[package]]
 name = "bstr"
@@ -555,6 +555,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
+name = "core2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -783,6 +792,26 @@ name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
+
+[[package]]
+name = "data-encoding-macro"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86927b7cd2fe88fa698b87404b287ab98d1a0063a34071d92e575b72d3029aca"
+dependencies = [
+ "data-encoding",
+ "data-encoding-macro-internal",
+]
+
+[[package]]
+name = "data-encoding-macro-internal"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5bbed42daaa95e780b60a50546aa345b8413a1e46f9a40a12907d3598f038db"
+dependencies = [
+ "data-encoding",
+ "syn 1.0.98",
+]
 
 [[package]]
 name = "datatest-stable"
@@ -2143,12 +2172,12 @@ dependencies = [
  "hex",
  "mirai-annotations",
  "once_cell",
+ "openrpc-schema",
  "proptest",
  "proptest-derive",
  "rand 0.8.5",
  "ref-cast",
  "regex",
- "schemars",
  "serde 1.0.141",
  "serde_bytes",
  "serde_json",
@@ -2724,14 +2753,14 @@ dependencies = [
 
 [[package]]
 name = "multiaddr"
-version = "0.13.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48ee4ea82141951ac6379f964f71b20876d43712bea8faf6dd1a375e08a46499"
+checksum = "a4aebdb21e90f81d13ed01dc84123320838e53963c2ca94b60b305d3fa64f31e"
 dependencies = [
  "arrayref",
- "bs58",
  "byteorder",
  "data-encoding",
+ "multibase",
  "multihash",
  "percent-encoding",
  "serde 1.0.141",
@@ -2741,21 +2770,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "multihash"
-version = "0.14.0"
+name = "multibase"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "752a61cd890ff691b4411423d23816d5866dd5621e4d1c5687a53b94b5a979d8"
+checksum = "9b3539ec3c1f04ac9748a260728e855f261b4977f5c3406612c884564f329404"
 dependencies = [
- "generic-array 0.14.6",
+ "base-x",
+ "data-encoding",
+ "data-encoding-macro",
+]
+
+[[package]]
+name = "multihash"
+version = "0.16.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c346cf9999c631f002d8f977c4eaeaa0e6386f16007202308d0b3757522c2cc"
+dependencies = [
+ "core2",
  "multihash-derive",
  "unsigned-varint",
 ]
 
 [[package]]
 name = "multihash-derive"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "424f6e86263cd5294cbd7f1e95746b95aca0e0d66bff31e5a40d6baa87b4aa99"
+checksum = "fc076939022111618a5026d3be019fd8b366e76314538ff9a1b59ffbcbf98bcd"
 dependencies = [
  "proc-macro-crate",
  "proc-macro-error",
@@ -3029,6 +3069,16 @@ name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
+
+[[package]]
+name = "openrpc-schema"
+version = "0.1.0"
+source = "git+https://github.com/starcoinorg/openrpc-rs?rev=f8ab047e30927cdf2f605b61a219c975d6c4f666#f8ab047e30927cdf2f605b61a219c975d6c4f666"
+dependencies = [
+ "schemars",
+ "serde 1.0.141",
+ "serde_json",
+]
 
 [[package]]
 name = "ordered-float"
@@ -3957,7 +4007,7 @@ dependencies = [
 [[package]]
 name = "schemars"
 version = "0.8.8"
-source = "git+https://github.com/starcoinorg/schemars?rev=6972da92f4360e1779168bb3fe0274c521d324e2#6972da92f4360e1779168bb3fe0274c521d324e2"
+source = "git+https://github.com/starcoinorg/schemars?rev=9b3705780b8fe9c8676ff82919869ba7405b1062#9b3705780b8fe9c8676ff82919869ba7405b1062"
 dependencies = [
  "dyn-clone",
  "multiaddr",
@@ -3969,7 +4019,7 @@ dependencies = [
 [[package]]
 name = "schemars_derive"
 version = "0.8.8"
-source = "git+https://github.com/starcoinorg/schemars?rev=6972da92f4360e1779168bb3fe0274c521d324e2#6972da92f4360e1779168bb3fe0274c521d324e2"
+source = "git+https://github.com/starcoinorg/schemars?rev=9b3705780b8fe9c8676ff82919869ba7405b1062#9b3705780b8fe9c8676ff82919869ba7405b1062"
 dependencies = [
  "proc-macro2 1.0.42",
  "quote 1.0.20",
