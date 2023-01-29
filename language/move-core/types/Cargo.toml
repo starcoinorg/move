@@ -22,7 +22,7 @@ ref-cast = "1.0.6"
 serde = { version = "1.0.124", default-features = false }
 serde_bytes = "0.11.5"
 bech32 = "0.8"
-schemars = {git = "https://github.com/starcoinorg/schemars", rev= "6972da92f4360e1779168bb3fe0274c521d324e2"}
+openrpc-schema = {git = "https://github.com/starcoinorg/openrpc-rs",rev = "f8ab047e30927cdf2f605b61a219c975d6c4f666"}
 
 [dev-dependencies]
 proptest = "1.0.0"
