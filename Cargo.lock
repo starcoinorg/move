@@ -603,7 +603,6 @@ dependencies = [
 name = "bytecode-verifier-tests"
 version = "0.1.0"
 dependencies = [
- "fail",
  "invalid-mutations",
  "move-binary-format",
  "move-bytecode-verifier",
@@ -3131,7 +3130,6 @@ name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "fail",
  "hex-literal",
  "invalid-mutations",
  "move-binary-format",
