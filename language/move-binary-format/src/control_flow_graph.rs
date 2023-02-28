@@ -45,9 +45,6 @@ pub trait ControlFlowGraph {
     /// Checks if the the edge from cur->next is a back edge
     /// returns false if the edge is not in the cfg
     fn is_back_edge(&self, cur: BlockId, next: BlockId) -> bool;
-
-    /// Return the number of back edges in the cfg
-    fn num_back_edges(&self) -> usize;
 }
 
 struct BasicBlock {
@@ -327,11 +324,5 @@ impl ControlFlowGraph for VMControlFlowGraph {
         self.loop_heads
             .get(&next)
             .map_or(false, |back_edges| back_edges.contains(&cur))
-    }
-
-    fn num_back_edges(&self) -> usize {
-        self.loop_heads
-            .iter()
-            .fold(0, |acc, (_, edges)| acc + edges.len())
     }
 }
