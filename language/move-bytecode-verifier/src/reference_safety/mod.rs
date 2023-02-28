@@ -10,13 +10,7 @@
 
 mod abstract_state;
 
-use crate::{
-    absint::{AbstractInterpreter, TransferFunctions},
-    meter::{Meter, Scope},
-    reference_safety::abstract_state::{
-        STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
-    },
-};
+use crate::absint::{AbstractInterpreter, TransferFunctions};
 use abstract_state::{AbstractState, AbstractValue};
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
@@ -56,12 +50,11 @@ pub(crate) fn verify<'a>(
     resolver: &'a BinaryIndexedView<'a>,
     function_view: &FunctionView,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
-    meter: &mut impl Meter,
 ) -> PartialVMResult<()> {
     let initial_state = AbstractState::new(function_view);
 
     let mut verifier = ReferenceSafetyAnalysis::new(resolver, function_view, name_def_map);
-    verifier.analyze_function(initial_state, function_view, meter)
+    verifier.analyze_function(initial_state, function_view)
 }
 
 fn call(
@@ -69,7 +62,6 @@ fn call(
     state: &mut AbstractState,
     offset: CodeOffset,
     function_handle: &FunctionHandle,
-    meter: &mut impl Meter,
 ) -> PartialVMResult<()> {
     let parameters = verifier.resolver.signature_at(function_handle.parameters);
     let arguments = parameters
@@ -92,7 +84,7 @@ fn call(
         None => BTreeSet::new(),
     };
     let return_ = verifier.resolver.signature_at(function_handle.return_);
-    let values = state.call(offset, arguments, &acquired_resources, return_, meter)?;
+    let values = state.call(offset, arguments, &acquired_resources, return_)?;
     for value in values {
         verifier.stack.push(value)
     }
@@ -147,16 +139,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     offset: CodeOffset,
-    meter: &mut impl Meter,
 ) -> PartialVMResult<()> {
-    meter.add(Scope::Function, STEP_BASE_COST)?;
-    meter.add_items(Scope::Function, STEP_PER_LOCAL_COST, state.local_count())?;
-    meter.add_items(
-        Scope::Function,
-        STEP_PER_GRAPH_ITEM_COST,
-        state.graph_size(),
-    )?;
-
     match bytecode {
         Bytecode::Pop => state.release_value(safe_unwrap!(verifier.stack.pop())),
 
@@ -266,12 +249,12 @@ fn execute_inner(
 
         Bytecode::Call(idx) => {
             let function_handle = verifier.resolver.function_handle_at(*idx);
-            call(verifier, state, offset, function_handle, meter)?
+            call(verifier, state, offset, function_handle)?
         }
         Bytecode::CallGeneric(idx) => {
             let func_inst = verifier.resolver.function_instantiation_at(*idx);
             let function_handle = verifier.resolver.function_handle_at(func_inst.handle);
-            call(verifier, state, offset, function_handle, meter)?
+            call(verifier, state, offset, function_handle)?
         }
 
         Bytecode::Ret => {
@@ -433,9 +416,8 @@ impl<'a> TransferFunctions for ReferenceSafetyAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        meter: &mut impl Meter,
     ) -> PartialVMResult<()> {
-        execute_inner(self, state, bytecode, index, meter)?;
+        execute_inner(self, state, bytecode, index)?;
         if index == last_index {
             safe_assert!(self.stack.is_empty());
             *state = state.construct_canonical_state()

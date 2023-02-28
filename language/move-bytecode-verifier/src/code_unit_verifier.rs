@@ -6,13 +6,8 @@
 //! The overall verification is split between stack_usage_verifier.rs and
 //! abstract_interpreter.rs. CodeUnitVerifier simply orchestrates calls into these two files.
 use crate::{
-    acquires_list_verifier::AcquiresVerifier,
-    control_flow, locals_safety,
-    meter::{BoundMeter, Meter, Scope},
-    reference_safety,
-    stack_usage_verifier::StackUsageVerifier,
-    type_safety,
-    verifier::VerifierConfig,
+    acquires_list_verifier::AcquiresVerifier, control_flow, locals_safety, reference_safety,
+    stack_usage_verifier::StackUsageVerifier, type_safety, verifier::VerifierConfig,
 };
 use move_binary_format::{
     access::ModuleAccess,
@@ -47,7 +42,6 @@ impl<'a> CodeUnitVerifier<'a> {
         verifier_config: &VerifierConfig,
         module: &CompiledModule,
     ) -> PartialVMResult<()> {
-        let mut meter = BoundMeter::new(verifier_config);
         let mut name_def_map = HashMap::new();
         for (idx, func_def) in module.function_defs().iter().enumerate() {
             let fh = module.function_handle_at(func_def.function);
@@ -62,7 +56,6 @@ impl<'a> CodeUnitVerifier<'a> {
                 function_definition,
                 module,
                 &name_def_map,
-                &mut meter,
             )
             .map_err(|err| err.at_index(IndexKind::FunctionDefinition, index.0))?;
             total_back_edges += num_back_edges;
@@ -86,7 +79,6 @@ impl<'a> CodeUnitVerifier<'a> {
         verifier_config: &VerifierConfig,
         script: &'a CompiledScript,
     ) -> PartialVMResult<()> {
-        let mut meter = BoundMeter::new(verifier_config);
         // create `FunctionView` and `BinaryIndexedView`
         let function_view = control_flow::verify_script(verifier_config, script)?;
         let resolver = BinaryIndexedView::Script(script);
@@ -105,13 +97,12 @@ impl<'a> CodeUnitVerifier<'a> {
         }
 
         //verify
-        meter.enter_scope("script", Scope::Function);
         let code_unit_verifier = CodeUnitVerifier {
             resolver,
             function_view,
             name_def_map: &name_def_map,
         };
-        code_unit_verifier.verify_common(verifier_config, &mut meter)
+        code_unit_verifier.verify_common(verifier_config)
     }
 
     fn verify_function(
@@ -120,14 +111,7 @@ impl<'a> CodeUnitVerifier<'a> {
         function_definition: &FunctionDefinition,
         module: &CompiledModule,
         name_def_map: &HashMap<IdentifierIndex, FunctionDefinitionIndex>,
-        meter: &mut impl Meter,
     ) -> PartialVMResult<usize> {
-        meter.enter_scope(
-            module
-                .identifier_at(module.function_handle_at(function_definition.function).name)
-                .as_str(),
-            Scope::Function,
-        );
         // nothing to verify for native function
         let code = match &function_definition.code {
             Some(code) => code,
@@ -141,7 +125,6 @@ impl<'a> CodeUnitVerifier<'a> {
             index,
             function_definition,
             code,
-            meter,
         )?;
 
         if let Some(limit) = verifier_config.max_basic_blocks {
@@ -168,27 +151,16 @@ impl<'a> CodeUnitVerifier<'a> {
             function_view,
             name_def_map,
         };
-        code_unit_verifier.verify_common(verifier_config, meter)?;
-        AcquiresVerifier::verify(module, index, function_definition, meter)?;
-
-        meter.transfer(Scope::Function, Scope::Module, 1.0)?;
+        code_unit_verifier.verify_common(verifier_config)?;
+        AcquiresVerifier::verify(module, index, function_definition)?;
 
         Ok(num_back_edges)
     }
 
-    fn verify_common(
-        &self,
-        verifier_config: &VerifierConfig,
-        meter: &mut impl Meter,
-    ) -> PartialVMResult<()> {
-        StackUsageVerifier::verify(verifier_config, &self.resolver, &self.function_view, meter)?;
-        type_safety::verify(&self.resolver, &self.function_view, meter)?;
-        locals_safety::verify(&self.resolver, &self.function_view, meter)?;
-        reference_safety::verify(
-            &self.resolver,
-            &self.function_view,
-            self.name_def_map,
-            meter,
-        )
+    fn verify_common(&self, verifier_config: &VerifierConfig) -> PartialVMResult<()> {
+        StackUsageVerifier::verify(verifier_config, &self.resolver, &self.function_view)?;
+        type_safety::verify(&self.resolver, &self.function_view)?;
+        locals_safety::verify(&self.resolver, &self.function_view)?;
+        reference_safety::verify(&self.resolver, &self.function_view, self.name_def_map)
     }
 }

@@ -15,7 +15,6 @@
 use crate::{
     control_flow_v5,
     loop_summary::{LoopPartition, LoopSummary},
-    meter::Meter,
     verifier::VerifierConfig,
 };
 use move_binary_format::{
@@ -38,7 +37,6 @@ pub fn verify_function<'a>(
     index: FunctionDefinitionIndex,
     function_definition: &'a FunctionDefinition,
     code: &'a CodeUnit,
-    _meter: &mut impl Meter, // TODO: metering
 ) -> PartialVMResult<FunctionView<'a>> {
     let function_handle = module.function_handle_at(function_definition.function);
 

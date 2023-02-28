@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::file_format::*;
-use move_bytecode_verifier::{
-    limits::LimitsVerifier, verify_module_with_config_for_test, VerifierConfig,
-};
+use move_bytecode_verifier::{limits::LimitsVerifier, verify_module_with_config, VerifierConfig};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
@@ -245,8 +243,8 @@ fn big_vec_unpacks() {
     module.serialize(&mut mvbytes).unwrap();
     let module = CompiledModule::deserialize(&mvbytes).unwrap();
 
-    let res = verify_module_with_config_for_test(
-        "big_vec_unpacks",
+    // run with mainnet aptos config
+    let res = verify_module_with_config(
         &VerifierConfig {
             max_loop_depth: Some(5),
             max_generic_instantiation_length: Some(32),
