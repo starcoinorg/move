@@ -39,6 +39,8 @@ where
         let command_text = jpst::format_str!(&self.command_text, ctx);
         let command_split = command_text.split_ascii_whitespace().collect::<Vec<_>>();
 
+        println!("YSG command_split {}", command_split);
+
         let command = match Command::try_parse_from(command_split) {
             Ok(command) => command,
             Err(e) => {
