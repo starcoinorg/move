@@ -752,6 +752,7 @@ fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
         .expect("write to string should not fail");
     }
     if let Some(cmd_var_ctx) = cmd_var_ctx {
+        println!("YSG task_name {} cmd_var_ctx {}", task_name, cmd_var_ctx);
         ctx.entry(task_name).append(cmd_var_ctx);
     }
 }

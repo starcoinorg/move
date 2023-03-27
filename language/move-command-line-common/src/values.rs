@@ -92,6 +92,7 @@ impl ParsableValue for () {
     }
 
     fn concrete_vector(elems: Vec<Self::ConcreteValue>) -> anyhow::Result<Self::ConcreteValue> {
+        println!("YSG ParsableValue {:?}", elems);
         Ok(MoveValue::Vector(elems))
     }
 
