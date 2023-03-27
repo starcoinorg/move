@@ -709,6 +709,7 @@ where
 
     for task in tasks {
         let task = task.parse(&ctx)?;
+        println!("YSG task {:?}", task);
         handle_known_task(&mut output, &mut adapter, &mut ctx, task);
     }
     handle_expected_output(path, output)?;
