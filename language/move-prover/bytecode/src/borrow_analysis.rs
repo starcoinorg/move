@@ -323,8 +323,8 @@ impl BorrowInfo {
             } else {
                 assert!(
                     !callee_env.get_return_type(ret_idx).is_mutable_reference(),
-                    "inconsistent borrow information: undefined output: {} {:?}",
-                    callee_env.get_full_name_str(), callee_summary
+                    "inconsistent borrow information: undefined output: {} {:?} {} {:?}",
+                    callee_env.get_full_name_str(), callee_summary, ret_idx, outs
                 )
             }
         }
