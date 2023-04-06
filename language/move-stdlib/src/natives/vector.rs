@@ -18,6 +18,7 @@ use move_vm_types::{
     views::ValueView,
 };
 use std::{collections::VecDeque, sync::Arc};
+use move_vm_types::values::IntegerValue;
 
 /***************************************************************************************************
  * native fun empty
@@ -217,12 +218,14 @@ pub fn native_spawn_from(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 3);
 
+    let len = pop_arg!(args, u64) as usize;
+    let offset = pop_arg!(args, u64) as usize;
+    let r = pop_arg!(args, VectorRef);
+
     let mut memory_cost = 0.into();
     let mut cost = gas_params.base;
-    let r = pop_arg!(args, VectorRef);
-    let offset = pop_arg!(args, u64);
-    let length = pop_arg!(args, u64);
-    let res = r.spawn_from(&mut memory_cost, offset as usize, length as usize, &ty_args[0]);
+
+    let res = r.spawn_from(&mut memory_cost, offset as usize, len as usize, &ty_args[0]);
     if gas_params.legacy_per_abstract_memory_unit != 0.into() {
         cost += gas_params.legacy_per_abstract_memory_unit * std::cmp::max(memory_cost, 1.into());
     }
