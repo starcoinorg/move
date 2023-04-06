@@ -215,13 +215,13 @@ pub fn native_spawn_from(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 2);
+    debug_assert!(args.len() == 3);
 
-    let offset: u64 = args.pop_back().unwrap().value_as()?;
-    let length: u64 = args.pop_back().unwrap().value_as()?;
     let mut memory_cost = 0.into();
     let mut cost = gas_params.base;
     let r = pop_arg!(args, VectorRef);
+    let offset = pop_arg!(args, u64);
+    let length = pop_arg!(args, u64);
     let res = r.spawn_from(&mut memory_cost, offset as usize, length as usize, &ty_args[0]);
     if gas_params.legacy_per_abstract_memory_unit != 0.into() {
         cost += gas_params.legacy_per_abstract_memory_unit * std::cmp::max(memory_cost, 1.into());
