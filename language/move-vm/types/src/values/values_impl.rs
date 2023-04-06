@@ -2245,6 +2245,42 @@ impl VectorRef {
 
         Ok(())
     }
+
+    pub fn spawn_from(
+        &self,
+        memory_cost: &mut AbstractMemorySize,
+        offset: usize,
+        length: usize,
+        type_param: &Type,
+    ) -> PartialVMResult<Value> {
+        let c = self.0.container();
+        check_elem_layout(type_param, &c)?;
+        let container = match c {
+            Container::VecU8(r) => {
+                Value::vector_u8(r.borrow().get(offset..offset + length).unwrap().to_vec())
+            },
+            Container::VecU32(r) => {
+                Value::vector_u32(r.borrow().get(offset..offset + length).unwrap().to_vec())
+            },
+            Container::VecU64(r) => {
+                Value::vector_u64(r.borrow().get(offset..offset + length).unwrap().to_vec())
+            },
+            Container::VecU128(r) => {
+                Value::vector_u128(r.borrow().get(offset..offset + length).unwrap().to_vec())
+            },
+            Container::VecU256(r) => {
+                Value::vector_u256(r.borrow().get(offset..offset + length).unwrap().to_vec())
+            },
+            Container::VecAddress(r) => {
+                Value::vector_address(r.borrow().get(offset..offset + length).unwrap().to_vec())
+            },
+            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+            _ => unreachable!(),
+        };
+
+        *memory_cost = c.legacy_size();
+        Ok(container)
+    }
 }
 
 impl Vector {
