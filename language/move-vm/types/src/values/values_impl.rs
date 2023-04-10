@@ -2246,6 +2246,19 @@ impl VectorRef {
         Ok(())
     }
 
+    fn get_vector_value<T: Copy + 'static>(
+        &self,
+        r: &RefCell<Vec<T>>,
+        offset: usize,
+        length: usize,
+    ) -> Result<Vec<T>, PartialVMError> {
+        match r.borrow().get(offset..offset + length) {
+            Some(v) => Ok(v.to_vec()),
+            None => Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
+                .with_sub_status(VEC_UNPACK_PARITY_MISMATCH))
+        }
+    }
+
     pub fn spawn_from(
         &self,
         memory_cost: &mut AbstractMemorySize,
@@ -2256,24 +2269,12 @@ impl VectorRef {
         let c = self.0.container();
         check_elem_layout(type_param, &c)?;
         let container = match c {
-            Container::VecU8(r) => {
-                Value::vector_u8(r.borrow().get(offset..offset + length).unwrap().to_vec())
-            },
-            Container::VecU32(r) => {
-                Value::vector_u32(r.borrow().get(offset..offset + length).unwrap().to_vec())
-            },
-            Container::VecU64(r) => {
-                Value::vector_u64(r.borrow().get(offset..offset + length).unwrap().to_vec())
-            },
-            Container::VecU128(r) => {
-                Value::vector_u128(r.borrow().get(offset..offset + length).unwrap().to_vec())
-            },
-            Container::VecU256(r) => {
-                Value::vector_u256(r.borrow().get(offset..offset + length).unwrap().to_vec())
-            },
-            Container::VecAddress(r) => {
-                Value::vector_address(r.borrow().get(offset..offset + length).unwrap().to_vec())
-            },
+            Container::VecU8(r) => Value::vector_u8(self.get_vector_value(r, offset, length)?),
+            Container::VecU32(r) => Value::vector_u32(self.get_vector_value(r, offset, length)?),
+            Container::VecU64(r) => Value::vector_u64(self.get_vector_value(r, offset, length)?),
+            Container::VecU128(r) => Value::vector_u128(self.get_vector_value(r, offset, length)?),
+            Container::VecU256(r) => Value::vector_u256(self.get_vector_value(r, offset, length)?),
+            Container::VecAddress(r) => Value::vector_address(self.get_vector_value(r, offset, length)?),
             Container::Locals(_) | Container::Struct(_) => unreachable!(),
             _ => unreachable!(),
         };
