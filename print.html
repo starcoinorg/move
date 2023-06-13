@@ -152,7 +152,6 @@
 <p>Move takes its cue from <a href="https://www.rust-lang.org/">Rust</a> by using resource types with move (hence the name) semantics as an explicit representation of digital assets, such as currency.</p>
 <h2 id="who-is-move-for"><a class="header" href="#who-is-move-for">Who is Move for?</a></h2>
 <p>Move was designed and created as a secure, verified, yet flexible programming language. The first use of Move is for the implementation of the Diem blockchain. That said, the language is still evolving. Move has the potential to be a language for other blockchains, and even non-blockchain use cases as well.</p>
-<p>Given custom Move modules will not be supported at the <a href="https://diem.com/white-paper/#whats-next">launch</a> of the Diem Payment Network (DPN), we are targeting an early Move Developer persona.</p>
 <p>The early Move Developer is one with some programming experience, who wants to begin understanding the core programming language and see examples of its usage.</p>
 <h3 id="hobbyists"><a class="header" href="#hobbyists">Hobbyists</a></h3>
 <p>Understanding that the capability to create custom modules on the Diem Payment Network will not be available at launch, the hobbyist Move Developer is interested in learning the intricacies of the language. She will understand the basic syntax, the standard libraries available, and write example code that can be executed using the Move CLI. The Move Developer may even want to dig into understanding how the Move Virtual Machine executes the code she writes.</p>
@@ -261,7 +260,7 @@ The <a href="./constants.html"><code>const</code></a> keyword defines private co
 <div style="break-before: page; page-break-before: always;"></div><h1 id="move-tutorial"><a class="header" href="#move-tutorial">Move Tutorial</a></h1>
 <p>Please refer to the <a href="https://github.com/move-language/move/tree/main/language/documentation/tutorial">Move Tutorial</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="integers"><a class="header" href="#integers">Integers</a></h1>
-<p>Move supports three unsigned integer types: <code>u8</code>, <code>u64</code>, and <code>u128</code>. Values of these types range from 0 to a maximum that depends on the size of the type.</p>
+<p>Move supports six unsigned integer types: <code>u8</code>, <code>u16</code>, <code>u32</code>, <code>u64</code>, <code>u128</code>, and <code>u256</code>. Values of these types range from 0 to a maximum that depends on the size of the type.</p>
 <table><thead><tr><th>Type</th><th>Value Range</th></tr></thead><tbody>
 <tr><td>Unsigned 8-bit integer, <code>u8</code></td><td>0 to 2<sup>8</sup> - 1</td></tr>
 <tr><td>Unsigned 16-bit integer, <code>u16</code></td><td>0 to 2<sup>16</sup> - 1</td></tr>
@@ -272,7 +271,7 @@ The <a href="./constants.html"><code>const</code></a> keyword defines private co
 </tbody></table>
 <h2 id="literals"><a class="header" href="#literals">Literals</a></h2>
 <p>Literal values for these types are specified either as a sequence of digits (e.g.,<code>112</code>) or as hex literals, e.g., <code>0xFF</code>. The type of the literal can optionally be added as a suffix, e.g., <code>112u8</code>. If the type is not specified, the compiler will try to infer the type from the context where the literal is used. If the type cannot be inferred, it is assumed to be <code>u64</code>.</p>
-<p>Decimal literals can be separated by underscores for grouping and readability. (e.g.,<code>1_234_5678</code>, <code>1_000u128</code>). However, hexadecimal literals cannot.</p>
+<p>Number literals can be separated by underscores for grouping and readability. (e.g.,<code>1_234_5678</code>, <code>1_000u128</code>, <code>0xAB_CD_12_35</code>).</p>
 <p>If a literal is too large for its specified (or inferred) size range, an error is reported.</p>
 <h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
 <pre><code class="language-move">// literals with explicit annotations;
@@ -312,7 +311,7 @@ let hex_u16: u16 = 0x1BAE;
 let hex_u32: u32 = 0xDEAD80;
 let hex_u64: u64 = 0xCAFE;
 let hex_u128: u128 = 0xDEADBEEF;
-let hex_u256: u256 = 0x1123456ABCDEF;
+let hex_u256: u256 = 0x1123_456A_BCDE_F;
 </code></pre>
 <h2 id="operations"><a class="header" href="#operations">Operations</a></h2>
 <h3 id="arithmetic"><a class="header" href="#arithmetic">Arithmetic</a></h3>
@@ -330,7 +329,7 @@ let hex_u256: u256 = 0x1123456ABCDEF;
 <p>Bitwise operations do not abort.</p>
 <table><thead><tr><th>Syntax</th><th>Operation</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>&amp;</code></td><td>bitwise and</td><td>Performs a boolean and for each bit pairwise</td></tr>
-<tr><td><code>\|</code></td><td>bitwise or</td><td>Performs a boolean or for each bit pairwise</td></tr>
+<tr><td><code>|</code></td><td>bitwise or</td><td>Performs a boolean or for each bit pairwise</td></tr>
 <tr><td><code>^</code></td><td>bitwise xor</td><td>Performs a boolean exclusive or for each bit pairwise</td></tr>
 </tbody></table>
 <h3 id="bit-shifts"><a class="header" href="#bit-shifts">Bit Shifts</a></h3>
@@ -2852,38 +2851,38 @@ struct Bar&lt;T1, T2&gt; has copy, drop {
     y: vector&lt;T2&gt;,
 }
 </code></pre>
-<p><a href="generics.html#unused-type-parameters">Note that type parameters do not have to be used</a></p>
+<p>Note that <a href="generics.html#unused-type-parameters">type parameters do not have to be used</a></p>
 <h2 id="type-arguments"><a class="header" href="#type-arguments">Type Arguments</a></h2>
 <h3 id="calling-generic-functions"><a class="header" href="#calling-generic-functions">Calling Generic Functions</a></h3>
 <p>When calling a generic function, one can specify the type arguments for the function's type parameters in a list enclosed by a pair of angle brackets.</p>
-<pre><code class="language-move=">fun foo() {
+<pre><code class="language-move">fun foo() {
     let x = id&lt;bool&gt;(true);
 }
 </code></pre>
 <p>If you do not specify the type arguments, Move's <a href="generics.html#type-inference">type inference</a> will supply them for you.</p>
 <h3 id="using-generic-structs"><a class="header" href="#using-generic-structs">Using Generic Structs</a></h3>
 <p>Similarly, one can attach a list of type arguments for the struct's type parameters when constructing or destructing values of generic types.</p>
-<pre><code class="language-move=">fun foo() {
+<pre><code class="language-move">fun foo() {
     let foo = Foo&lt;bool&gt; { x: true };
     let Foo&lt;bool&gt; { x } = foo;
 }
 </code></pre>
 <p>If you do not specify the type arguments, Move's <a href="generics.html#type-inference">type inference</a> will supply them for you.</p>
 <h3 id="type-argument-mismatch"><a class="header" href="#type-argument-mismatch">Type Argument Mismatch</a></h3>
-<p>If you specify the type arguments and they conflict with the actual values supplied, an error will be given</p>
-<pre><code class="language-move=">fun foo() {
+<p>If you specify the type arguments and they conflict with the actual values supplied, an error will be given:</p>
+<pre><code class="language-move">fun foo() {
     let x = id&lt;u64&gt;(true); // error! true is not a u64
 }
 </code></pre>
-<p>and similarly</p>
-<pre><code class="language-move=">fun foo() {
+<p>and similarly:</p>
+<pre><code class="language-move">fun foo() {
     let foo = Foo&lt;bool&gt; { x: 0 }; // error! 0 is not a bool
     let Foo&lt;address&gt; { x } = foo; // error! bool is incompatible with address
 }
 </code></pre>
 <h2 id="type-inference"><a class="header" href="#type-inference">Type Inference</a></h2>
-<p>In most cases, the Move compiler will be able to infer the type arguments so you don't have to write them down explicitly. Here's what the examples above would look like if we omit the type arguments.</p>
-<pre><code class="language-move=">fun foo() {
+<p>In most cases, the Move compiler will be able to infer the type arguments so you don't have to write them down explicitly. Here's what the examples above would look like if we omit the type arguments:</p>
+<pre><code class="language-move">fun foo() {
     let x = id(true);
     //        ^ &lt;bool&gt; is inferred
 
@@ -2895,7 +2894,7 @@ struct Bar&lt;T1, T2&gt; has copy, drop {
 }
 </code></pre>
 <p>Note: when the compiler is unable to infer the types, you'll need annotate them manually. A common scenario is to call a function with type parameters appearing only at return positions.</p>
-<pre><code class="language-move=">address 0x2 {
+<pre><code class="language-move">address 0x2 {
 module m {
     using std::vector;
 
@@ -2909,8 +2908,8 @@ module m {
 }
 }
 </code></pre>
-<p>However, the compiler will be able to infer the type if that return value is used later in that function</p>
-<pre><code class="language-move=">address 0x2 {
+<p>However, the compiler will be able to infer the type if that return value is used later in that function:</p>
+<pre><code class="language-move">address 0x2 {
 module m {
     using std::vector;
 
@@ -2928,12 +2927,12 @@ an unused type parameter is one that
 does not appear in any field defined in the struct,
 but is checked statically at compile time.
 Move allows unused type parameters so the following struct definition is valid:</p>
-<pre><code class="language-move=">struct Foo&lt;T&gt; {
+<pre><code class="language-move">struct Foo&lt;T&gt; {
     foo: u64
 }
 </code></pre>
 <p>This can be convenient when modeling certain concepts. Here is an example:</p>
-<pre><code class="language-move=">address 0x2 {
+<pre><code class="language-move">address 0x2 {
 module m {
     // Currency Specifiers
     struct Currency1 {}
@@ -2992,9 +2991,9 @@ In this way,
 arguments to phantom type parameters are not considered when deriving the abilities for generic types,
 thus avoiding the need for spurious ability annotations.
 For this relaxed rule to be sound,
-Move's type system guarantees that a parameter declared as phantom is either
+Move's type system guarantees that a parameter declared as <code>phantom</code> is either
 not used at all in the struct definition, or
-it is only used as an argument to type parameters also declared as phantom.</p>
+it is only used as an argument to type parameters also declared as <code>phantom</code>.</p>
 <h4 id="declaration-2"><a class="header" href="#declaration-2">Declaration</a></h4>
 <p>In a struct definition
 a type parameter can be declared as phantom by adding the <code>phantom</code> keyword before its declaration.
@@ -3012,7 +3011,7 @@ the rule for the correct use of phantom parameters can be specified as follows:
 In the first one,
 the parameter <code>T1</code> is not used at all inside the struct definition.
 In the second one, the parameter <code>T1</code> is only used as an argument to a phantom type parameter.</p>
-<pre><code class="language-move=">struct S1&lt;phantom T1, T2&gt; { f: u64 }
+<pre><code class="language-move">struct S1&lt;phantom T1, T2&gt; { f: u64 }
                   ^^
                   Ok: T1 does not appear inside the struct definition
 
@@ -3022,7 +3021,7 @@ struct S2&lt;phantom T1, T2&gt; { f: S1&lt;T1, T2&gt; }
                                   Ok: T1 appears in phantom position
 </code></pre>
 <p>The following code shows examples of violations of the rule:</p>
-<pre><code class="language-move=">struct S1&lt;phantom T&gt; { f: T }
+<pre><code class="language-move">struct S1&lt;phantom T&gt; { f: T }
                           ^
                           Error: Not a phantom position
 
@@ -3036,13 +3035,13 @@ struct S3&lt;phantom T&gt; { f: S2&lt;T&gt; }
 <p>When instantiating a struct,
 the arguments to phantom parameters are excluded when deriving the struct abilities.
 For example, consider the following code:</p>
-<pre><code class="language-move=">struct S&lt;T1, phantom T2&gt; has copy { f: T1 }
+<pre><code class="language-move">struct S&lt;T1, phantom T2&gt; has copy { f: T1 }
 struct NoCopy {}
 struct HasCopy has copy {}
 </code></pre>
 <p>Consider now the type <code>S&lt;HasCopy, NoCopy&gt;</code>.
-Since <code>S</code> is defined with <code>copy</code> and all non-phantom arguments have copy
-then <code>S&lt;HasCopy, NoCopy&gt;</code> also has copy.</p>
+Since <code>S</code> is defined with <code>copy</code> and all non-phantom arguments have <code>copy</code>
+then <code>S&lt;HasCopy, NoCopy&gt;</code> also has <code>copy</code>.</p>
 <h4 id="phantom-type-parameters-with-ability-constraints"><a class="header" href="#phantom-type-parameters-with-ability-constraints">Phantom Type Parameters with Ability Constraints</a></h4>
 <p>Ability constraints and phantom type parameters are orthogonal features in the sense that
 phantom parameters can be declared with ability constraints.
@@ -3050,7 +3049,7 @@ When instantiating a phantom type parameter with an ability constraint,
 the type argument has to satisfy that constraint,
 even though the parameter is phantom.
 For example, the following definition is perfectly valid:</p>
-<pre><code class="language-move=">struct S&lt;phantom T: copy&gt; {}
+<pre><code class="language-move">struct S&lt;phantom T: copy&gt; {}
 </code></pre>
 <p>The usual restrictions apply and <code>T</code> can only be instantiated with arguments having <code>copy</code>.</p>
 <h2 id="constraints"><a class="header" href="#constraints">Constraints</a></h2>
@@ -3058,17 +3057,17 @@ For example, the following definition is perfectly valid:</p>
 <p>This is where constraints come into play: they offer a way to specify what properties these unknown types have so the type system can allow operations that would otherwise be unsafe.</p>
 <h3 id="declaring-constraints"><a class="header" href="#declaring-constraints">Declaring Constraints</a></h3>
 <p>Constraints can be imposed on type parameters using the following syntax.</p>
-<pre><code class="language-move=">// T is the name of the type parameter
+<pre><code class="language-move">// T is the name of the type parameter
 T: &lt;ability&gt; (+ &lt;ability&gt;)*
 </code></pre>
-<p>The <code>&lt;ability&gt;</code> can be any of the four <a href="./abilities.html">abilities</a>, and a type parameter can be constrained with multiple <a href="./abilities.html">abilities</a> at once. So all of the following would be valid type parameter declarations</p>
+<p>The <code>&lt;ability&gt;</code> can be any of the four <a href="./abilities.html">abilities</a>, and a type parameter can be constrained with multiple abilities at once. So all of the following would be valid type parameter declarations:</p>
 <pre><code class="language-move">T: copy
 T: copy + drop
 T: copy + drop + store + key
 </code></pre>
 <h3 id="verifying-constraints"><a class="header" href="#verifying-constraints">Verifying Constraints</a></h3>
 <p>Constraints are checked at call sites so the following code won't compile.</p>
-<pre><code class="language-move=">struct Foo&lt;T: key&gt; { x: T }
+<pre><code class="language-move">struct Foo&lt;T: key&gt; { x: T }
 
 struct Bar { x: Foo&lt;u8&gt; }
 //                  ^ error! u8 does not have 'key'
@@ -3076,7 +3075,7 @@ struct Bar { x: Foo&lt;u8&gt; }
 struct Baz&lt;T&gt; { x: Foo&lt;T&gt; }
 //                     ^ error! T does not have 'key'
 </code></pre>
-<pre><code class="language-move=">struct R {}
+<pre><code class="language-move">struct R {}
 
 fun unsafe_consume&lt;T&gt;(x: T) {
     // error! x does not have 'drop'
@@ -3093,7 +3092,7 @@ fun foo() {
     //      ^ error! R does not have 'drop'
 }
 </code></pre>
-<pre><code class="language-move=">struct R {}
+<pre><code class="language-move">struct R {}
 
 fun unsafe_double&lt;T&gt;(x: T) {
     (copy x, x)
@@ -3107,14 +3106,14 @@ fun double&lt;T: copy&gt;(x: T) {
 fun foo(): (R, R) {
     let r = R {};
     double&lt;R&gt;(r)
-    //     ^ error! R does not have copy
+    //     ^ error! R does not have 'copy'
 }
 </code></pre>
-<p>For more information, see the abilities section on <a href="./abilities.html#conditional-abilities-and-generic-types">conditional abilities and generic types</a></p>
+<p>For more information, see the abilities section on <a href="./abilities.html#conditional-abilities-and-generic-types">conditional abilities and generic types</a>.</p>
 <h2 id="limitations-on-recursions"><a class="header" href="#limitations-on-recursions">Limitations on Recursions</a></h2>
 <h3 id="recursive-structs"><a class="header" href="#recursive-structs">Recursive Structs</a></h3>
 <p>Generic structs can not contain fields of the same type, either directly or indirectly, even with different type arguments. All of the following struct definitions are invalid:</p>
-<pre><code class="language-move=">struct Foo&lt;T&gt; {
+<pre><code class="language-move">struct Foo&lt;T&gt; {
     x: Foo&lt;u64&gt; // error! 'Foo' containing 'Foo'
 }
 
@@ -3135,7 +3134,7 @@ struct B&lt;T1, T2&gt; {
 <h3 id="advanced-topic-type-level-recursions"><a class="header" href="#advanced-topic-type-level-recursions">Advanced Topic: Type-level Recursions</a></h3>
 <p>Move allows generic functions to be called recursively. However, when used in combination with generic structs, this could create an infinite number of types in certain cases, and allowing this means adding unnecessary complexity to the compiler, vm and other language components. Therefore, such recursions are forbidden.</p>
 <p>Allowed:</p>
-<pre><code class="language-move=">address 0x2 {
+<pre><code class="language-move">address 0x2 {
 module m {
     struct A&lt;T&gt; {}
 
@@ -3154,7 +3153,7 @@ module m {
 }
 </code></pre>
 <p>Not allowed:</p>
-<pre><code class="language-move=">address 0x2 {
+<pre><code class="language-move">address 0x2 {
 module m {
     struct A&lt;T&gt; {}
 
@@ -3167,7 +3166,7 @@ module m {
 }
 }
 </code></pre>
-<pre><code class="language-move=">address 0x2 {
+<pre><code class="language-move">address 0x2 {
 module n {
     struct A&lt;T&gt; {}
 
@@ -3188,7 +3187,7 @@ module n {
 }
 </code></pre>
 <p>Note, the check for type level recursions is based on a conservative analysis on the call sites and does NOT take control flow or runtime values into account.</p>
-<pre><code class="language-move=">address 0x2 {
+<pre><code class="language-move">address 0x2 {
 module m {
     struct A&lt;T&gt; {}
 
@@ -4853,8 +4852,9 @@ The reason should be a unique number relative to the module which raised the err
 <li><strong>Module names</strong>: should be lower snake case, e.g., <code>fixed_point32</code>, <code>vector</code>.</li>
 <li><strong>Type names</strong>: should be camel case if they are not a native type, e.g., <code>Coin</code>, <code>RoleId</code>.</li>
 <li><strong>Function names</strong>: should be lower snake case, e.g., <code>destroy_empty</code>.</li>
-<li><strong>Constant names</strong>: should be upper snake case, e.g., <code>REQUIRES_CAPABILITY</code>.</li>
-<li>Generic types should be descriptive, or anti-descriptive where appropriate, e.g., <code>T</code> or <code>Element</code> for the Vector generic type parameter. Most of the time the &quot;main&quot; type in a module should be the same name as the module e.g., <code>option::Option</code>, <code>fixed_point32::FixedPoint32</code>.</li>
+<li><strong>Constant names</strong>: should be upper camel case and begin with an <code>E</code> if they represent error codes (e.g., <code>EIndexOutOfBounds</code>) and upper snake case if they represent a non-error value (e.g., <code>MIN_STAKE</code>).</li>
+<li></li>
+<li><strong>Generic type names</strong>: should be descriptive, or anti-descriptive where appropriate, e.g., <code>T</code> or <code>Element</code> for the Vector generic type parameter. Most of the time the &quot;main&quot; type in a module should be the same name as the module e.g., <code>option::Option</code>, <code>fixed_point32::FixedPoint32</code>.</li>
 <li><strong>Module file names</strong>: should be the same as the module name e.g., <code>Option.move</code>.</li>
 <li><strong>Script file names</strong>: should be lower snake case and should match the name of the “main” function in the script.</li>
 <li><strong>Mixed file names</strong>: If the file contains multiple modules and/or scripts, the file name should be lower snake case, where the name does not match any particular module/script inside.</li>
