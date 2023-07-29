@@ -15,6 +15,9 @@ pub struct VMConfig {
     pub paranoid_type_checks: bool,
     /// Maximum value nest depth for structs
     pub max_value_nest_depth: Option<u64>,
+    pub type_max_cost: u64,
+    pub type_base_cost: u64,
+    pub type_byte_cost: u64,
 }
 
 impl Default for VMConfig {
@@ -24,6 +27,9 @@ impl Default for VMConfig {
             max_binary_format_version: VERSION_MAX,
             paranoid_type_checks: false,
             max_value_nest_depth: Some(DEFAULT_MAX_VALUE_NEST_DEPTH),
+            type_max_cost: 500,
+            type_base_cost: 100,
+            type_byte_cost: 1,
         }
     }
 }
