@@ -27,7 +27,7 @@ impl Default for VMConfig {
             max_binary_format_version: VERSION_MAX,
             paranoid_type_checks: false,
             max_value_nest_depth: Some(DEFAULT_MAX_VALUE_NEST_DEPTH),
-            type_max_cost: 600,
+            type_max_cost: 700,
             type_base_cost: 100,
             type_byte_cost: 1,
         }
