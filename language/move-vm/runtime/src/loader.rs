@@ -15,7 +15,7 @@ use move_binary_format::{
     file_format::{
         AbilitySet, Bytecode, CompiledModule, CompiledScript, Constant, ConstantPoolIndex,
         FieldHandleIndex, FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, FunctionInstantiationIndex, Signature, SignatureIndex, SignatureToken,
+        FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex, SignatureToken,
         StructDefInstantiationIndex, StructDefinition, StructDefinitionIndex,
         StructFieldInformation, TableIndex, TypeParameterIndex, Visibility,
     },
@@ -178,8 +178,9 @@ impl ModuleCache {
 
         // we need this operation to be transactional, if an error occurs we must
         // leave a clean state
-        self.add_module(natives, &module)?;
-        match Module::new(module, self) {
+
+        let sig_cache = self.add_module(natives, &module)?;
+        match Module::new(&sig_cache, module, self) {
             Ok(module) => Ok(Arc::clone(self.modules.insert(id, module))),
             Err((err, module)) => {
                 // remove all structs and functions that have been pushed
@@ -193,7 +194,11 @@ impl ModuleCache {
         }
     }
 
-    fn add_module(&mut self, natives: &NativeFunctions, module: &CompiledModule) -> VMResult<()> {
+    fn add_module(
+        &mut self,
+        natives: &NativeFunctions,
+        module: &CompiledModule,
+    ) -> VMResult<Vec<Vec<Type>>> {
         let starting_idx = self.structs.len();
         for (idx, struct_def) in module.struct_defs().iter().enumerate() {
             let st = self.make_struct_type(module, struct_def, StructDefinitionIndex(idx as u16));
@@ -228,33 +233,35 @@ impl ModuleCache {
             }
         }
 
+        let mut sig_cache = vec![];
+        for sig in &module.signatures {
+            let mut tys = vec![];
+            for tok in &sig.0 {
+                tys.push(
+                    self.make_type_while_loading(module, tok)
+                        .map_err(|err: PartialVMError| err.finish(Location::Undefined))?,
+                );
+            }
+            sig_cache.push(tys);
+        }
+
         for (idx, func) in module.function_defs().iter().enumerate() {
             let findex = FunctionDefinitionIndex(idx as TableIndex);
             let mut function = Function::new(natives, findex, func, module);
-            function.return_types = function
-                .return_
-                .0
-                .iter()
-                .map(|tok| self.make_type_while_loading(module, tok))
-                .collect::<PartialVMResult<Vec<_>>>()
-                .map_err(|err| err.finish(Location::Undefined))?;
-            function.local_types = function
-                .locals
-                .0
-                .iter()
-                .map(|tok| self.make_type_while_loading(module, tok))
-                .collect::<PartialVMResult<Vec<_>>>()
-                .map_err(|err| err.finish(Location::Undefined))?;
-            function.parameter_types = function
-                .parameters
-                .0
-                .iter()
-                .map(|tok| self.make_type_while_loading(module, tok))
-                .collect::<PartialVMResult<Vec<_>>>()
-                .map_err(|err| err.finish(Location::Undefined))?;
+
+            function.return_types = sig_cache[function.return_idx.0 as usize].clone();
+
+            function.parameter_types = sig_cache[function.parameters_idx.0 as usize].clone();
+
+            if let Some(locals_idx) = function.locals_idx {
+                function.local_types = function.parameter_types.clone();
+                function
+                    .local_types
+                    .extend(sig_cache[locals_idx.0 as usize].clone());
+            }
             self.functions.push(Arc::new(function));
         }
-        Ok(())
+        Ok(sig_cache)
     }
 
     fn make_struct_type(
@@ -397,7 +404,7 @@ impl ModuleCache {
             SignatureToken::TypeParameter(idx) => Type::TyParam(*idx),
             SignatureToken::Vector(inner_tok) => {
                 let inner_type = Self::make_type_internal(module, inner_tok, resolver)?;
-                Type::Vector(Box::new(inner_type))
+                Type::Vector(Arc::new(inner_type))
             }
             SignatureToken::Reference(inner_tok) => {
                 let inner_type = Self::make_type_internal(module, inner_tok, resolver)?;
@@ -431,7 +438,7 @@ impl ModuleCache {
                     module.identifier_at(module_handle.name).to_owned(),
                 );
                 let def_idx = resolver(struct_name, &module_id)?;
-                Type::StructInstantiation(def_idx, type_parameters)
+                Type::StructInstantiation(def_idx, Arc::new(type_parameters))
             }
         };
         Ok(res)
@@ -532,7 +539,12 @@ impl ModuleCache {
             | Type::U16
             | Type::U32
             | Type::U256 => DepthFormula::constant(1),
-            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
+            Type::Vector(ty) => {
+                let mut inner = self.calculate_depth_of_type(ty, depth_cache)?;
+                inner.scale(1);
+                inner
+            }
+            Type::Reference(ty) | Type::MutableReference(ty) => {
                 let mut inner = self.calculate_depth_of_type(ty, depth_cache)?;
                 inner.scale(1);
                 inner
@@ -822,29 +834,8 @@ impl Loader {
             .map_err(|err| err.finish(Location::Undefined))?;
         let func = self.module_cache.read().function_at(idx);
 
-        let parameters = func
-            .parameters
-            .0
-            .iter()
-            .map(|tok| {
-                self.module_cache
-                    .read()
-                    .make_type(BinaryIndexedView::Module(module.module()), tok)
-            })
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
-
-        let return_ = func
-            .return_
-            .0
-            .iter()
-            .map(|tok| {
-                self.module_cache
-                    .read()
-                    .make_type(BinaryIndexedView::Module(module.module()), tok)
-            })
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
+        let parameters = func.parameter_types.clone();
+        let return_ = func.return_types.clone();
 
         // verify type arguments
         let type_arguments = ty_args
@@ -1048,7 +1039,7 @@ impl Loader {
             TypeTag::U256 => Type::U256,
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
-            TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt, data_store)?)),
+            TypeTag::Vector(tt) => Type::Vector(Arc::new(self.load_type(tt, data_store)?)),
             TypeTag::Struct(struct_tag) => {
                 let module_id = ModuleId::new(struct_tag.address, struct_tag.module.clone());
                 self.load_module(&module_id, data_store)?;
@@ -1067,7 +1058,7 @@ impl Loader {
                     }
                     self.verify_ty_args(struct_type.type_param_constraints(), &type_params)
                         .map_err(|e| e.finish(Location::Undefined))?;
-                    Type::StructInstantiation(idx, type_params)
+                    Type::StructInstantiation(idx, Arc::new(type_params))
                 }
             }
         })
@@ -1594,12 +1585,12 @@ impl<'a> Resolver<'a> {
 
         Ok(Type::StructInstantiation(
             struct_inst.def,
-            struct_inst
+            Arc::new(struct_inst
                 .instantiation
                 .iter()
                 .map(|ty| ty.subst(ty_args))
                 .collect::<PartialVMResult<_>>()?,
-        ))
+        )))
     }
 
     pub(crate) fn get_field_type(&self, idx: FieldHandleIndex) -> PartialVMResult<Type> {
@@ -1753,12 +1744,12 @@ impl<'a> Resolver<'a> {
         match &self.binary {
             BinaryType::Module(module) => Ok(Type::StructInstantiation(
                 module.field_instantiations[idx.0 as usize].owner,
-                module.field_instantiations[idx.0 as usize]
+                Arc::new(module.field_instantiations[idx.0 as usize]
                     .instantiation
                     .iter()
                     .map(|ty| ty.subst(args))
                     .collect::<PartialVMResult<Vec<_>>>()?,
-            )),
+            ))),
             BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
         }
     }
@@ -1835,6 +1826,7 @@ pub(crate) struct Module {
 
 impl Module {
     fn new(
+        sig_cache: &[Vec<Type>],
         module: CompiledModule,
         cache: &ModuleCache,
     ) -> Result<Self, (PartialVMError, CompiledModule)> {
@@ -1893,10 +1885,7 @@ impl Module {
                 let def = struct_inst.def.0 as usize;
                 let struct_def = &structs[def];
                 let field_count = struct_def.field_count;
-                let mut instantiation = vec![];
-                for ty in &module.signature_at(struct_inst.type_parameters).0 {
-                    instantiation.push(cache.make_type_while_loading(&module, ty)?);
-                }
+                let instantiation = sig_cache[struct_inst.type_parameters.0 as usize].clone();
                 struct_instantiations.push(StructInstantiation {
                     field_count,
                     def: struct_def.idx,
@@ -1946,23 +1935,21 @@ impl Module {
                             | Bytecode::VecPopBack(si)
                             | Bytecode::VecUnpack(si, _)
                             | Bytecode::VecSwap(si) => {
-                                if !single_signature_token_map.contains_key(si) {
-                                    let ty = match module.signature_at(*si).0.get(0) {
-                                        None => {
-                                            return Err(PartialVMError::new(
-                                                StatusCode::VERIFIER_INVARIANT_VIOLATION,
-                                            )
+                                // TODO: unify the single token signature map with the more general cache.
+                                let ty = match sig_cache[si.0 as usize].get(0) {
+                                    None => {
+                                        return Err(PartialVMError::new(
+                                            StatusCode::VERIFIER_INVARIANT_VIOLATION,
+                                        )
                                             .with_message(
                                                 "the type argument for vector-related bytecode \
-                                                expects one and only one signature token"
+                                            expects one and only one signature token"
                                                     .to_owned(),
                                             ));
-                                        }
-                                        Some(sig_token) => sig_token,
-                                    };
-                                    single_signature_token_map
-                                        .insert(*si, cache.make_type_while_loading(&module, ty)?);
-                                }
+                                    },
+                                    Some(ty) => ty.clone(),
+                                };
+                                single_signature_token_map.insert(*si, ty);
                             }
                             _ => {}
                         }
@@ -1972,10 +1959,7 @@ impl Module {
 
             for func_inst in module.function_instantiations() {
                 let handle = function_refs[func_inst.handle.0 as usize];
-                let mut instantiation = vec![];
-                for ty in &module.signature_at(func_inst.type_parameters).0 {
-                    instantiation.push(cache.make_type_while_loading(&module, ty)?);
-                }
+                let instantiation = sig_cache[func_inst.type_parameters.0 as usize].clone();
                 function_instantiations.push(FunctionInstantiation {
                     handle,
                     instantiation,
@@ -1993,10 +1977,7 @@ impl Module {
                 let fh_idx = f_inst.handle;
                 let owner = field_handles[fh_idx.0 as usize].owner;
                 let offset = field_handles[fh_idx.0 as usize].offset;
-                let mut instantiation = vec![];
-                for ty in &module.signature_at(f_inst.type_parameters).0 {
-                    instantiation.push(cache.make_type_while_loading(&module, ty)?);
-                }
+                let instantiation = sig_cache[f_inst.type_parameters.0 as usize].clone();
                 field_instantiations.push(FieldInstantiation {
                     offset,
                     owner,
@@ -2159,35 +2140,23 @@ impl Script {
         let scope = Scope::Script(*script_hash);
 
         let code: Vec<Bytecode> = script.code.code.clone();
-        let parameters = script.signature_at(script.parameters).clone();
+        let mut sig_cache = vec![];
+        for sig in &script.signatures {
+            let mut tys = vec![];
+            for tok in &sig.0 {
+                tys.push(
+                    cache
+                        .make_type(BinaryIndexedView::Script(&script), tok)
+                        .map_err(|err| err.finish(Location::Undefined))?,
+                );
+            }
+            sig_cache.push(tys);
+        }
 
-        let parameter_tys = parameters
-            .0
-            .iter()
-            .map(|tok| cache.make_type(BinaryIndexedView::Script(&script), tok))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
-        let locals = Signature(
-            parameters
-                .0
-                .iter()
-                .chain(script.signature_at(script.code.locals).0.iter())
-                .cloned()
-                .collect(),
-        );
-        let local_tys = locals
-            .0
-            .iter()
-            .map(|tok| cache.make_type(BinaryIndexedView::Script(&script), tok))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
-        let return_ = Signature(vec![]);
-        let return_tys = return_
-            .0
-            .iter()
-            .map(|tok| cache.make_type(BinaryIndexedView::Script(&script), tok))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
+        let parameter_tys = sig_cache[script.parameters.0 as usize].clone();
+
+        let mut local_tys = parameter_tys.clone();
+        local_tys.extend(sig_cache[script.code.locals.0 as usize].clone());
         let type_parameters = script.type_parameters.clone();
         // TODO: main does not have a name. Revisit.
         let name = Identifier::new("main").unwrap();
@@ -2196,16 +2165,16 @@ impl Script {
             file_format_version: script.version(),
             index: FunctionDefinitionIndex(0),
             code,
-            parameters,
-            return_,
-            locals,
+            parameters_idx: script.parameters,
+            return_idx: SignatureIndex(0),
+            locals_idx: Some(script.code.locals),
             type_parameters,
             native,
             def_is_native,
             def_is_friend_or_private: false,
             scope,
             name,
-            return_types: return_tys.clone(),
+            return_types: vec![],
             local_types: local_tys,
             parameter_types: parameter_tys.clone(),
         });
@@ -2222,7 +2191,7 @@ impl Script {
                 | Bytecode::VecUnpack(si, _)
                 | Bytecode::VecSwap(si) => {
                     if !single_signature_token_map.contains_key(si) {
-                        let ty = match script.signature_at(*si).0.get(0) {
+                        let ty = match sig_cache[si.0 as usize].get(0){
                             None => {
                                 return Err(PartialVMError::new(
                                     StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -2234,13 +2203,11 @@ impl Script {
                                 )
                                 .finish(Location::Script));
                             }
-                            Some(sig_token) => sig_token,
+                            Some(ty) => ty.clone(),
                         };
                         single_signature_token_map.insert(
                             *si,
-                            cache
-                                .make_type(BinaryIndexedView::Script(&script), ty)
-                                .map_err(|e| e.finish(Location::Script))?,
+                            ty,
                         );
                     }
                 }
@@ -2255,7 +2222,7 @@ impl Script {
             function_instantiations,
             main,
             parameter_tys,
-            return_tys,
+            return_tys: vec![],
             single_signature_token_map,
         })
     }
@@ -2292,9 +2259,9 @@ pub(crate) struct Function {
     file_format_version: u32,
     index: FunctionDefinitionIndex,
     code: Vec<Bytecode>,
-    parameters: Signature,
-    return_: Signature,
-    locals: Signature,
+    parameters_idx: SignatureIndex,
+    return_idx: SignatureIndex,
+    locals_idx: Option<SignatureIndex>,
     type_parameters: Vec<AbilitySet>,
     native: Option<NativeFunction>,
     def_is_native: bool,
@@ -2333,31 +2300,19 @@ impl Function {
             (None, false)
         };
         let scope = Scope::Module(module_id);
-        let parameters = module.signature_at(handle.parameters).clone();
         // Native functions do not have a code unit
-        let (code, locals) = match &def.code {
-            Some(code) => (
-                code.code.clone(),
-                Signature(
-                    parameters
-                        .0
-                        .iter()
-                        .chain(module.signature_at(code.locals).0.iter())
-                        .cloned()
-                        .collect(),
-                ),
-            ),
-            None => (vec![], Signature(vec![])),
+        let (code, locals_idx) = match &def.code {
+            Some(code) => (code.code.clone(), Some(code.locals)),
+            None => (vec![],None),
         };
-        let return_ = module.signature_at(handle.return_).clone();
         let type_parameters = handle.type_parameters.clone();
         Self {
             file_format_version: module.version(),
             index,
             code,
-            parameters,
-            return_,
-            locals,
+            parameters_idx: handle.parameters,
+            return_idx: handle.return_,
+            locals_idx,
             type_parameters,
             native,
             def_is_native,
@@ -2400,15 +2355,15 @@ impl Function {
     }
 
     pub(crate) fn local_count(&self) -> usize {
-        self.locals.len()
+        self.local_types.len()
     }
 
     pub(crate) fn arg_count(&self) -> usize {
-        self.parameters.len()
+        self.parameter_types.len()
     }
 
     pub(crate) fn return_type_count(&self) -> usize {
-        self.return_.len()
+        self.return_types.len()
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -2421,10 +2376,6 @@ impl Function {
 
     pub(crate) fn type_parameters(&self) -> &[AbilitySet] {
         &self.type_parameters
-    }
-
-    pub(crate) fn parameters(&self) -> &Signature {
-        &self.parameters
     }
 
     pub(crate) fn local_types(&self) -> &[Type] {
@@ -2681,7 +2632,11 @@ impl Loader {
         let mut result = 0;
         while let Some(ty) = todo.pop() {
             match ty {
-                Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
+                Type::Vector(ty) => {
+                    result += 1;
+                    todo.push(ty);
+                }
+                Type::Reference(ty) | Type::MutableReference(ty) => {
                     result += 1;
                     todo.push(ty);
                 }
