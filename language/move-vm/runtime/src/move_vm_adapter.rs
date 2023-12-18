@@ -150,10 +150,9 @@ impl<'r, 'l, R: MoveResolver> SessionAdapter<'r, 'l, R> {
         sender: AccountAddress,
     ) -> VMResult<Vec<Vec<u8>>> {
         let has_signer = func
-            .parameters()
-            .0
+            .parameter_types()
             .iter()
-            .position(|i| i.is_signer())
+            .position(|i| matches!(i, &Type::Signer))
             .map(|pos| {
                 if pos != 0 {
                     Err(
