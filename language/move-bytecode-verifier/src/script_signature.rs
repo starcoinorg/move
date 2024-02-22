@@ -37,9 +37,11 @@ pub fn verify_script(
     script: &CompiledScript,
     check_signature: FnCheckScriptSignature,
 ) -> VMResult<()> {
+    /*
     if script.version >= VERSION_5 {
         return Ok(());
     }
+     */
 
     let resolver = &BinaryIndexedView::Script(script);
     let parameters = script.parameters;
