@@ -37,9 +37,11 @@ pub fn verify_script(
     script: &CompiledScript,
     check_signature: FnCheckScriptSignature,
 ) -> VMResult<()> {
+    /*
     if script.version >= VERSION_5 {
         return Ok(());
     }
+     */
 
     let resolver = &BinaryIndexedView::Script(script);
     let parameters = script.parameters;
@@ -127,7 +129,8 @@ fn verify_main_signature_impl(
     return_idx: Option<SignatureIndex>,
     check_signature: FnCheckScriptSignature,
 ) -> PartialVMResult<()> {
-    let deprecated_logic = resolver.version() < VERSION_5 && is_entry;
+    //let deprecated_logic = resolver.version() < VERSION_5 && is_entry;
+    let deprecated_logic = is_entry;
 
     if deprecated_logic {
         legacy_script_signature_checks(resolver, is_entry, parameters_idx, return_idx)?;
