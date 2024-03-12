@@ -25,6 +25,7 @@ use move_compiler::{
     parser::ast as PA,
     shared::{unique_map::UniqueMap, Name},
 };
+use move_compiler::shared::Identifier;
 use move_ir_types::{ast::ConstantName, location::Spanned};
 
 use crate::{
@@ -427,8 +428,10 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             EA::Visibility::Internal => FunctionVisibility::Private,
         };
         let loc = et.to_loc(&def.loc);
+        let id_loc = et.to_loc(&name.loc());
         et.parent.parent.define_fun(
             loc.clone(),
+            id_loc,
             attrs,
             qsym.clone(),
             et.parent.module_id,
@@ -3191,6 +3194,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                         def_idx,
                         name,
                         entry.loc.clone(),
+                        entry.id_loc.clone(),
                         entry.attributes.clone(),
                         arg_names,
                         type_arg_names,

@@ -1169,6 +1169,7 @@ impl GlobalEnv {
         def_idx: FunctionDefinitionIndex,
         name: Symbol,
         loc: Loc,
+        id_loc: Loc,
         attributes: Vec<Attribute>,
         arg_names: Vec<Symbol>,
         type_arg_names: Vec<Symbol>,
@@ -1178,6 +1179,7 @@ impl GlobalEnv {
         FunctionData {
             name,
             loc,
+            id_loc,
             attributes,
             def_idx,
             handle_idx,
@@ -2925,6 +2927,9 @@ pub struct FunctionData {
     /// Location of this function.
     loc: Loc,
 
+    /// Location of the function identifier, suitable for error messages alluding to the function.
+    id_loc: Loc,
+
     /// The definition index of this function in its module.
     def_idx: FunctionDefinitionIndex,
 
@@ -2963,6 +2968,7 @@ impl FunctionData {
         FunctionData {
             name,
             loc: Loc::default(),
+            id_loc: Loc::default(),
             attributes: Vec::default(),
             def_idx,
             handle_idx,
@@ -3035,6 +3041,11 @@ impl<'env> FunctionEnv<'env> {
     /// Returns the location of this function.
     pub fn get_loc(&self) -> Loc {
         self.data.loc.clone()
+    }
+
+    /// Returns the location of this function identifier.
+    pub fn get_id_loc(&self) -> Loc {
+        self.data.id_loc.clone()
     }
 
     /// Returns the attributes of this function.

@@ -119,6 +119,7 @@ pub(crate) struct StructEntry {
 #[derive(Debug, Clone)]
 pub(crate) struct FunEntry {
     pub loc: Loc,
+    pub id_loc: Loc,
     pub module_id: ModuleId,
     pub fun_id: FunId,
     pub visibility: FunctionVisibility,
@@ -269,6 +270,7 @@ impl<'env> ModelBuilder<'env> {
     pub fn define_fun(
         &mut self,
         loc: Loc,
+        id_loc: Loc,
         attributes: Vec<Attribute>,
         name: QualifiedSymbol,
         module_id: ModuleId,
@@ -281,6 +283,7 @@ impl<'env> ModelBuilder<'env> {
     ) {
         let entry = FunEntry {
             loc,
+            id_loc,
             attributes,
             module_id,
             fun_id,
