@@ -712,7 +712,7 @@ impl Loader {
     // Entry point for script execution (`MoveVM::execute_script`).
     // Verifies the script if it is not in the cache of scripts loaded.
     // Type parameters are checked as well after every type is loaded.
-    pub(crate) fn load_script(
+    pub fn load_script(
         &self,
         script_blob: &[u8],
         ty_args: &[TypeTag],
@@ -1585,12 +1585,14 @@ impl<'a> Resolver<'a> {
 
         Ok(Type::StructInstantiation(
             struct_inst.def,
-            Arc::new(struct_inst
-                .instantiation
-                .iter()
-                .map(|ty| ty.subst(ty_args))
-                .collect::<PartialVMResult<_>>()?,
-        )))
+            Arc::new(
+                struct_inst
+                    .instantiation
+                    .iter()
+                    .map(|ty| ty.subst(ty_args))
+                    .collect::<PartialVMResult<_>>()?,
+            ),
+        ))
     }
 
     pub(crate) fn get_field_type(&self, idx: FieldHandleIndex) -> PartialVMResult<Type> {
@@ -1744,12 +1746,14 @@ impl<'a> Resolver<'a> {
         match &self.binary {
             BinaryType::Module(module) => Ok(Type::StructInstantiation(
                 module.field_instantiations[idx.0 as usize].owner,
-                Arc::new(module.field_instantiations[idx.0 as usize]
-                    .instantiation
-                    .iter()
-                    .map(|ty| ty.subst(args))
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ))),
+                Arc::new(
+                    module.field_instantiations[idx.0 as usize]
+                        .instantiation
+                        .iter()
+                        .map(|ty| ty.subst(args))
+                        .collect::<PartialVMResult<Vec<_>>>()?,
+                ),
+            )),
             BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
         }
     }
@@ -1776,7 +1780,7 @@ impl<'a> Resolver<'a> {
 // When code executes indexes in instructions are resolved against those runtime structure
 // so that any data needed for execution is immediately available
 #[derive(Debug)]
-pub(crate) struct Module {
+pub struct Module {
     #[allow(dead_code)]
     id: ModuleId,
     // primitive pools
@@ -1941,12 +1945,12 @@ impl Module {
                                         return Err(PartialVMError::new(
                                             StatusCode::VERIFIER_INVARIANT_VIOLATION,
                                         )
-                                            .with_message(
-                                                "the type argument for vector-related bytecode \
+                                        .with_message(
+                                            "the type argument for vector-related bytecode \
                                             expects one and only one signature token"
-                                                    .to_owned(),
-                                            ));
-                                    },
+                                                .to_owned(),
+                                        ));
+                                    }
                                     Some(ty) => ty.clone(),
                                 };
                                 single_signature_token_map.insert(*si, ty);
@@ -2031,11 +2035,11 @@ impl Module {
         self.struct_instantiations[idx as usize].field_count
     }
 
-    pub(crate) fn module(&self) -> &CompiledModule {
+    pub fn module(&self) -> &CompiledModule {
         &self.module
     }
 
-    pub(crate) fn arc_module(&self) -> Arc<CompiledModule> {
+    pub fn arc_module(&self) -> Arc<CompiledModule> {
         self.module.clone()
     }
 
@@ -2191,7 +2195,7 @@ impl Script {
                 | Bytecode::VecUnpack(si, _)
                 | Bytecode::VecSwap(si) => {
                     if !single_signature_token_map.contains_key(si) {
-                        let ty = match sig_cache[si.0 as usize].get(0){
+                        let ty = match sig_cache[si.0 as usize].get(0) {
                             None => {
                                 return Err(PartialVMError::new(
                                     StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -2205,10 +2209,7 @@ impl Script {
                             }
                             Some(ty) => ty.clone(),
                         };
-                        single_signature_token_map.insert(
-                            *si,
-                            ty,
-                        );
+                        single_signature_token_map.insert(*si, ty);
                     }
                 }
                 _ => {}
@@ -2254,7 +2255,7 @@ enum Scope {
 // A runtime function
 // #[derive(Debug)]
 // https://github.com/rust-lang/rust/issues/70263
-pub(crate) struct Function {
+pub struct Function {
     #[allow(unused)]
     file_format_version: u32,
     index: FunctionDefinitionIndex,
@@ -2303,7 +2304,7 @@ impl Function {
         // Native functions do not have a code unit
         let (code, locals_idx) = match &def.code {
             Some(code) => (code.code.clone(), Some(code.locals)),
-            None => (vec![],None),
+            None => (vec![], None),
         };
         let type_parameters = handle.type_parameters.clone();
         Self {
@@ -2386,7 +2387,7 @@ impl Function {
         &self.return_types
     }
 
-    pub(crate) fn parameter_types(&self) -> &[Type] {
+    pub fn parameter_types(&self) -> &[Type] {
         &self.parameter_types
     }
 

@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::loader::{Function, Module};
 use crate::{
     data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
     runtime::VMRuntime,
@@ -10,6 +11,7 @@ use move_binary_format::{
     compatibility::Compatibility,
     errors::*,
     file_format::{AbilitySet, LocalIndex},
+    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -19,6 +21,7 @@ use move_core_types::{
     resolver::MoveResolver,
     value::MoveTypeLayout,
 };
+use move_vm_types::values::{Locals, Value};
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -229,6 +232,16 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         )
     }
 
+    /// Verify the compiled module for publishing
+    pub fn verify_module_bundle_for_publication(
+        &mut self,
+        compiled_modules: &[CompiledModule],
+    ) -> VMResult<()> {
+        self.runtime
+            .loader
+            .verify_module_bundle_for_publication(compiled_modules, &mut self.data_cache)
+    }
+
     pub fn num_mutated_accounts(&self, sender: &AccountAddress) -> u64 {
         self.data_cache.num_mutated_accounts(sender)
     }
@@ -259,17 +272,20 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         Ok((change_set, events, native_extensions))
     }
 
+    /// Load a module, and all of its types into cache
+    pub fn load_module(&self, id: &ModuleId) -> VMResult<Arc<Module>> {
+        self.runtime.loader.load_module(id, &self.data_cache)
+    }
+
     /// Load a script and all of its types into cache
     pub fn load_script(
         &self,
         script: impl Borrow<[u8]>,
         ty_args: Vec<TypeTag>,
-    ) -> VMResult<LoadedFunctionInstantiation> {
-        let (_, instantiation) =
-            self.runtime
-                .loader()
-                .load_script(script.borrow(), &ty_args, &self.data_cache)?;
-        Ok(instantiation)
+    ) -> VMResult<(Arc<Function>, LoadedFunctionInstantiation)> {
+        self.runtime
+            .loader()
+            .load_script(script.borrow(), &ty_args, &self.data_cache)
     }
 
     /// Load a module, a function, and all of its types into cache
@@ -278,14 +294,13 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         module_id: &ModuleId,
         function_name: &IdentStr,
         type_arguments: &[TypeTag],
-    ) -> VMResult<LoadedFunctionInstantiation> {
-        let (_, _, instantiation) = self.runtime.loader().load_function(
+    ) -> VMResult<(Arc<Module>, Arc<Function>, LoadedFunctionInstantiation)> {
+        self.runtime.loader().load_function(
             module_id,
             function_name,
             type_arguments,
             &self.data_cache,
-        )?;
-        Ok(instantiation)
+        )
     }
 
     pub fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
@@ -333,6 +348,43 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     /// Gets the underlying native extensions.
     pub fn get_native_extensions(&mut self) -> &mut NativeContextExtensions<'r> {
         &mut self.native_extensions
+    }
+
+    /// Mark the loader cache as invalidated.
+    pub fn mark_loader_cache_as_invaliddated(&self) {
+        self.runtime.loader.mark_as_invalid()
+    }
+
+    /// Flush the loader cache if it's invalidated.
+    pub fn flush_loader_cache_if_invalidated(&self) {
+        self.runtime.loader.flush_if_invalidated()
+    }
+
+    /// Check if the module exists in data_cache
+    pub fn exists_module(&self, id: &ModuleId) -> VMResult<bool> {
+        self.data_cache.exists_module(id)
+    }
+
+    /// Publish a module to data cache
+    pub fn publish_module_to_data_cache(
+        &mut self,
+        module_id: &ModuleId,
+        blob: Vec<u8>,
+        is_republishing: bool,
+    ) -> VMResult<()> {
+        self.data_cache
+            .publish_module(module_id, blob, is_republishing)
+    }
+
+    /// Deserialize arguments with types
+    pub fn deserialize_args(
+        &self,
+        arg_tys: Vec<Type>,
+        serialized_args: Vec<impl Borrow<[u8]>>,
+    ) -> VMResult<(Locals, Vec<Value>)> {
+        self.runtime
+            .deserialize_args(arg_tys, serialized_args)
+            .map_err(|err| err.finish(Location::Undefined))
     }
 }
 
