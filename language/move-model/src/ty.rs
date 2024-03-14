@@ -29,7 +29,7 @@ pub enum Type {
     TypeParameter(u16),
 
     // Types only appearing in programs.
-    Reference(bool, Box<Type>),
+    Reference(ReferenceKind, Box<Type>),
 
     // Types only appearing in specifications
     Fun(Vec<Type>, Box<Type>),
@@ -39,6 +39,23 @@ pub enum Type {
     // Temporary types used during type checking
     Error,
     Var(u16),
+}
+
+/// Represents a reference kind.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum ReferenceKind {
+    Immutable,
+    Mutable,
+}
+
+impl ReferenceKind {
+    pub fn from_is_mut(is_mut: bool) -> ReferenceKind {
+        if is_mut {
+            ReferenceKind::Mutable
+        } else {
+            ReferenceKind::Immutable
+        }
+    }
 }
 
 pub const BOOL_TYPE: Type = Type::Primitive(PrimitiveType::Bool);
@@ -120,12 +137,12 @@ impl Type {
 
     /// Determines whether this is a mutable reference.
     pub fn is_mutable_reference(&self) -> bool {
-        matches!(self, Type::Reference(true, _))
+        matches!(self, Type::Reference(ReferenceKind::Mutable, _))
     }
 
     /// Determines whether this is an immutable reference.
     pub fn is_immutable_reference(&self) -> bool {
-        matches!(self, Type::Reference(false, _))
+        matches!(self, Type::Reference(ReferenceKind::Immutable, _))
     }
 
     /// Determines whether this type is a struct.
@@ -334,9 +351,7 @@ impl Type {
                     self.clone()
                 }
             }
-            Type::Reference(is_mut, bt) => {
-                Type::Reference(*is_mut, Box::new(bt.replace(params, subs)))
-            }
+            Type::Reference(kind, bt) => Type::Reference(*kind, Box::new(bt.replace(params, subs))),
             Type::Struct(mid, sid, args) => Type::Struct(*mid, *sid, replace_vec(args)),
             Type::Fun(args, result) => {
                 Type::Fun(replace_vec(args), Box::new(result.replace(params, subs)))
@@ -434,11 +449,14 @@ impl Type {
                     .expect("Invariant violation: vector type argument contains incomplete, tuple, or spec type"))
             )),
             Reference(r, t) =>
-                if r {
-                    Some(MType::MutableReference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
-                } else {
-                    Some(MType::Reference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
-                }
+                match r {
+                    ReferenceKind::Mutable => {
+                        Some(MType::MutableReference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
+                    }
+                    ReferenceKind::Immutable => {
+                        Some(MType::Reference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
+                    }
+                },
             TypeParameter(idx) => Some(MType::TypeParameter(idx as u16)),
             Tuple(..) | Error | Fun(..) | TypeDomain(..) | ResourceDomain(..) | Var(..) =>
                 None
@@ -607,7 +625,7 @@ impl Substitution {
         };
         // If any of the arguments is a reference, drop it for unification, but ensure
         // it is put back since we need to maintain this information for later phases.
-        if let Type::Reference(is_mut, bt1) = t1 {
+        if let Type::Reference(kind, bt1) = t1 {
             // Avoid creating nested references.
             let t2 = if let Type::Reference(_, bt2) = t2 {
                 bt2.as_ref()
@@ -615,13 +633,13 @@ impl Substitution {
                 t2
             };
             return Ok(Type::Reference(
-                *is_mut,
+                *kind,
                 Box::new(self.unify(sub_variance, bt1.as_ref(), t2)?),
             ));
         }
-        if let Type::Reference(is_mut, bt2) = t2 {
+        if let Type::Reference(kind, bt2) = t2 {
             return Ok(Type::Reference(
-                *is_mut,
+                *kind,
                 Box::new(self.unify(sub_variance, t1, bt2.as_ref())?),
             ));
         }
@@ -1239,11 +1257,13 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 }
                 Ok(())
             }
-            Reference(is_mut, t) => {
+            Reference(kind, t) => {
                 f.write_str("&")?;
-                if *is_mut {
-                    f.write_str("mut ")?;
-                }
+                let modifier = match kind {
+                    ReferenceKind::Immutable => "",
+                    ReferenceKind::Mutable => "mut ",
+                };
+                f.write_str(modifier)?;
                 write!(f, "{}", t.display(self.context))
             }
             TypeParameter(idx) => {

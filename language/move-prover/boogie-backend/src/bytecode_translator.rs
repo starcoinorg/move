@@ -1660,7 +1660,7 @@ impl<'env> FunctionTranslator<'env> {
                             srcs[0]
                         );
                     }
-                    Destroy => {}
+                    Drop => {}
                     TraceLocal(idx) => {
                         self.track_local(*idx, srcs[0]);
                     }

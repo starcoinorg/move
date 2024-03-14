@@ -48,6 +48,9 @@ pub mod verification_analysis;
 pub mod verification_analysis_v2;
 pub mod well_formed_instrumentation;
 
+pub mod demove_peephole_analysis;
+pub mod demove_livevar_analysis;
+
 /// Print function targets for testing and debugging.
 pub fn print_targets_for_test(
     env: &GlobalEnv,

@@ -140,7 +140,8 @@ pub enum Operation {
 
     // Builtins
     Uninit,
-    Destroy,
+    /// Indicates that the value is dropped.
+    Drop,
     ReadRef,
     WriteRef,
     FreezeRef,
@@ -214,7 +215,7 @@ impl Operation {
             Operation::GetField(_, _, _, _) => false,
             Operation::GetGlobal(_, _, _) => true,
             Operation::Uninit => false,
-            Operation::Destroy => false,
+            Operation::Drop => false,
             Operation::ReadRef => false,
             Operation::WriteRef => false,
             Operation::FreezeRef => false,
@@ -1000,8 +1001,8 @@ impl<'env> fmt::Display for OperationDisplay<'env> {
             Uninit => {
                 write!(f, "uninit")?;
             }
-            Destroy => {
-                write!(f, "destroy")?;
+            Drop => {
+                write!(f, "drop")?;
             }
             ReadRef => {
                 write!(f, "read_ref")?;

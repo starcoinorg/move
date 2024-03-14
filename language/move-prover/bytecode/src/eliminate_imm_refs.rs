@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_model::ty::ReferenceKind;
 use move_model::{ast::TempIndex, model::FunctionEnv, ty::Type};
 
 use crate::{
@@ -61,7 +62,7 @@ impl<'a> EliminateImmRefs<'a> {
     }
 
     fn transform_type(&self, ty: Type) -> Type {
-        if let Type::Reference(false, y) = ty {
+        if let Type::Reference(ReferenceKind::Immutable, y) = ty {
             *y
         } else {
             ty
@@ -107,7 +108,7 @@ impl<'a> EliminateImmRefs<'a> {
                         aa,
                     ));
                 }
-                Destroy if self.is_imm_ref(srcs[0]) => {
+                Drop if self.is_imm_ref(srcs[0]) => {
                     // skip the destroy on an immutable ref
                 }
                 _ => self.builder.emit(Call(attr_id, dests, op, srcs, aa)),

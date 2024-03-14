@@ -22,6 +22,7 @@ use move_core_types::{
     language_storage::{self, CORE_CODE_ADDRESS},
     value::MoveValue,
 };
+use move_model::ty::ReferenceKind;
 use move_model::{
     ast::{ConditionKind, TempIndex},
     model::{FunId, FunctionEnv, Loc, ModuleId, StructId},
@@ -229,7 +230,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
             MoveBytecode::Pop => {
                 let temp_index = self.temp_stack.pop().unwrap();
                 self.code
-                    .push(mk_call(Operation::Destroy, vec![], vec![temp_index]));
+                    .push(mk_call(Operation::Drop, vec![], vec![temp_index]));
             }
             MoveBytecode::BrTrue(target) => {
                 let temp_index = self.temp_stack.pop().unwrap();
@@ -307,11 +308,12 @@ impl<'a> StacklessBytecodeGenerator<'a> {
             MoveBytecode::FreezeRef => {
                 let mutable_ref_index = self.temp_stack.pop().unwrap();
                 let mutable_ref_sig = self.local_types[mutable_ref_index].clone();
-                if let Type::Reference(is_mut, signature) = mutable_ref_sig {
-                    if is_mut {
+                if let Type::Reference(kind, signature) = mutable_ref_sig {
+                    if kind == ReferenceKind::Mutable {
                         let immutable_ref_index = self.temp_count;
                         self.temp_stack.push(immutable_ref_index);
-                        self.local_types.push(Type::Reference(false, signature));
+                        self.local_types
+                            .push(Type::Reference(ReferenceKind::Immutable, signature));
                         self.code.push(mk_call(
                             Operation::FreezeRef,
                             vec![immutable_ref_index],
@@ -342,8 +344,10 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
                 self.temp_count += 1;
                 let is_mut = matches!(bytecode, MoveBytecode::MutBorrowField(..));
-                self.local_types
-                    .push(Type::Reference(is_mut, Box::new(field_type)));
+                self.local_types.push(Type::Reference(
+                    ReferenceKind::from_is_mut(is_mut),
+                    Box::new(field_type),
+                ));
             }
 
             MoveBytecode::ImmBorrowFieldGeneric(field_inst_index)
@@ -369,8 +373,10 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
                 self.temp_count += 1;
                 let is_mut = matches!(bytecode, MoveBytecode::MutBorrowFieldGeneric(..));
-                self.local_types
-                    .push(Type::Reference(is_mut, Box::new(field_type)));
+                self.local_types.push(Type::Reference(
+                    ReferenceKind::from_is_mut(is_mut),
+                    Box::new(field_type),
+                ));
             }
 
             MoveBytecode::LdU8(number) => {
@@ -555,7 +561,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
                 self.local_types
-                    .push(Type::Reference(true, Box::new(signature)));
+                    .push(Type::Reference(ReferenceKind::Mutable, Box::new(signature)));
                 self.code.push(mk_unary(
                     Operation::BorrowLoc,
                     temp_index,
@@ -568,8 +574,10 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let signature = self.func_env.get_local_type(*idx as usize);
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
-                self.local_types
-                    .push(Type::Reference(false, Box::new(signature)));
+                self.local_types.push(Type::Reference(
+                    ReferenceKind::Immutable,
+                    Box::new(signature),
+                ));
                 self.code.push(mk_unary(
                     Operation::BorrowLoc,
                     temp_index,
@@ -1023,7 +1031,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let operand_index = self.temp_stack.pop().unwrap();
                 let temp_index = self.temp_count;
                 self.local_types.push(Type::Reference(
-                    is_mut,
+                    ReferenceKind::from_is_mut(is_mut),
                     Box::new(Type::Struct(
                         struct_env.module_env.get_id(),
                         struct_env.get_id(),
@@ -1056,7 +1064,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 let actuals = self.get_type_params(struct_instantiation.type_parameters);
                 self.local_types.push(Type::Reference(
-                    is_mut,
+                    ReferenceKind::from_is_mut(is_mut),
                     Box::new(Type::Struct(
                         struct_env.module_env.get_id(),
                         struct_env.get_id(),
@@ -1189,8 +1197,10 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let operand2_index = self.temp_stack.pop().unwrap();
                 let operand1_index = self.temp_stack.pop().unwrap();
                 let temp_index = self.temp_count;
-                self.local_types
-                    .push(Type::Reference(is_mut, Box::new(ty.clone())));
+                self.local_types.push(Type::Reference(
+                    ReferenceKind::from_is_mut(is_mut),
+                    Box::new(ty.clone()),
+                ));
                 self.temp_count += 1;
                 self.temp_stack.push(temp_index);
                 let vec_fun = if is_mut { "borrow_mut" } else { "borrow" };
@@ -1261,7 +1271,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 if !operands.is_empty() {
                     let mut_ref_index = self.temp_count;
                     self.local_types.push(Type::Reference(
-                        true,
+                        ReferenceKind::Mutable,
                         Box::new(Type::Vector(Box::new(ty.clone()))),
                     ));
                     self.temp_count += 1;
@@ -1292,7 +1302,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 if !temps.is_empty() {
                     let mut_ref_index = self.temp_count;
                     self.local_types.push(Type::Reference(
-                        true,
+                        ReferenceKind::Mutable,
                         Box::new(Type::Vector(Box::new(ty.clone()))),
                     ));
                     self.temp_count += 1;

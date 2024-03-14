@@ -74,6 +74,7 @@ use crate::{
     symbol::{Symbol, SymbolPool},
     ty::{PrimitiveType, Type, TypeDisplayContext, TypeUnificationAdapter, Variance},
 };
+use crate::ty::ReferenceKind;
 
 // =================================================================================================
 /// # Constants
@@ -1720,7 +1721,7 @@ pub struct ModuleData {
     pub id: ModuleId,
 
     /// Attributes attached to this module.
-    attributes: Vec<Attribute>,
+    pub(crate) attributes: Vec<Attribute>,
 
     /// Module byte code.
     pub module: CompiledModule,
@@ -2200,10 +2201,10 @@ impl<'env> ModuleEnv<'env> {
             SignatureToken::Address => Type::Primitive(PrimitiveType::Address),
             SignatureToken::Signer => Type::Primitive(PrimitiveType::Signer),
             SignatureToken::Reference(t) => {
-                Type::Reference(false, Box::new(self.globalize_signature(t)))
+                Type::Reference(ReferenceKind::Immutable, Box::new(self.globalize_signature(t)))
             }
             SignatureToken::MutableReference(t) => {
-                Type::Reference(true, Box::new(self.globalize_signature(t)))
+                Type::Reference(ReferenceKind::Mutable, Box::new(self.globalize_signature(t)))
             }
             SignatureToken::TypeParameter(index) => Type::TypeParameter(*index),
             SignatureToken::Vector(bt) => Type::Vector(Box::new(self.globalize_signature(bt))),

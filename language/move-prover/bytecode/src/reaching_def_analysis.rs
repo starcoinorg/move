@@ -30,14 +30,17 @@ pub enum Def {
     Alias(TempIndex),
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Default)]
+pub struct ReachingDefState {
+    pub map: BTreeMap<TempIndex, BTreeSet<Def>>,
+}
+
 /// The annotation for reaching definitions. For each code position, we have a map of local
 /// indices to the set of definitions reaching the code position.
 #[derive(Default)]
-pub struct ReachingDefAnnotation(BTreeMap<CodeOffset, BTreeMap<TempIndex, BTreeSet<Def>>>);
+pub struct ReachingDefAnnotation(pub BTreeMap<CodeOffset, ReachingDefState>);
 
 pub struct ReachingDefProcessor {}
-
-type DefMap = BTreeMap<TempIndex, BTreeSet<Def>>;
 
 impl ReachingDefProcessor {
     pub fn new() -> Box<Self> {
@@ -54,25 +57,25 @@ impl ReachingDefProcessor {
     }
 
     /// Gets the propagated local resolving aliases using the reaching definitions.
-    fn get_propagated_local(temp: TempIndex, reaching_defs: &DefMap) -> TempIndex {
+    fn get_propagated_local(temp: TempIndex, state: &ReachingDefState) -> TempIndex {
         // For being robust, we protect this function against cycles in alias definitions. If
         // a cycle is detected, alias resolution stops.
         fn get(
             temp: TempIndex,
-            reaching_defs: &DefMap,
+            state: &ReachingDefState,
             visited: &mut BTreeSet<TempIndex>,
         ) -> TempIndex {
-            if let Some(defs) = reaching_defs.get(&temp) {
+            if let Some(defs) = state.map.get(&temp) {
                 if let Some((_, def_temp)) = ReachingDefProcessor::get_unique_def(temp, defs) {
                     if visited.insert(def_temp) {
-                        return get(def_temp, reaching_defs, visited);
+                        return get(def_temp, state, visited);
                     }
                 }
             }
             temp
         }
         let mut visited = BTreeSet::new();
-        get(temp, reaching_defs, &mut visited)
+        get(temp, state, &mut visited)
     }
 
     /// Perform copy propagation based on reaching definitions analysis results.
@@ -83,9 +86,9 @@ impl ReachingDefProcessor {
     ) -> Vec<Bytecode> {
         let mut res = vec![];
         for (pc, bytecode) in code.into_iter().enumerate() {
-            let no_defs = BTreeMap::new();
-            let reaching_defs = defs.0.get(&(pc as CodeOffset)).unwrap_or(&no_defs);
-            let mut propagate = |local| Self::get_propagated_local(local, reaching_defs);
+            let default_state = ReachingDefState::default();
+            let state = defs.0.get(&(pc as CodeOffset)).unwrap_or(&default_state);
+            let mut propagate = |local| Self::get_propagated_local(local, state);
             res.push(bytecode.remap_src_vars(target, &mut propagate));
         }
         res
@@ -131,7 +134,7 @@ impl FunctionTargetProcessor for ReachingDefProcessor {
             );
             let defs =
                 analyzer.state_per_instruction(block_state_map, &data.code, &cfg, |before, _| {
-                    before.map.clone()
+                    before.clone()
                 });
 
             // Run copy propagation transformation.
@@ -157,11 +160,6 @@ impl FunctionTargetProcessor for ReachingDefProcessor {
 struct ReachingDefAnalysis<'a> {
     _target: FunctionTarget<'a>,
     borrowed_locals: BTreeSet<TempIndex>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
-struct ReachingDefState {
-    map: BTreeMap<TempIndex, BTreeSet<Def>>,
 }
 
 impl<'a> ReachingDefAnalysis<'a> {}
@@ -235,6 +233,10 @@ impl ReachingDefState {
     fn kill(&mut self, dest: TempIndex) {
         self.map.remove(&dest);
     }
+
+    pub fn is_alias(&self, idx: TempIndex) -> bool {
+        self.map.contains_key(&idx)
+    }
 }
 
 // =================================================================================================
@@ -249,7 +251,7 @@ pub fn format_reaching_def_annotation(
         target.get_annotations().get::<ReachingDefAnnotation>()
     {
         if let Some(map_at) = map.get(&code_offset) {
-            let mut res = map_at
+            let mut res = map_at.map
                 .iter()
                 .map(|(idx, defs)| {
                     let name = target.get_local_name(*idx);

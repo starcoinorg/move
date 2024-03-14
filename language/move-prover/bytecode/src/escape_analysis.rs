@@ -301,7 +301,7 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
                 Uninit => {
                     // this operation is just a marker and does not assign any locals
                 }
-                Destroy => {
+                Drop => {
                     state.remove(&args[0]);
                 }
                 oper => panic!("unsupported oper {:?}", oper),

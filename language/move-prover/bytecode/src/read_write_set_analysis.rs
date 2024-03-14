@@ -526,7 +526,7 @@ impl<'a> TransferFunctions for ReadWriteSetAnalysis<'a> {
                 Uninit => {
                     // do nothing, this marks a reference (args[0]) but the ref is only defined later
                 }
-                Destroy => state.locals.remove_local(args[0], func_env),
+                Drop => state.locals.remove_local(args[0], func_env),
                 Eq | Neq => {
                     // These operations read reference types passed to them. Add Access::Read's for both operands
                     if state.locals.local_exists(args[0], func_env) {

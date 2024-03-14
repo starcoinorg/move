@@ -11,6 +11,7 @@ use std::{
 
 use itertools::Itertools;
 
+use move_model::ty::ReferenceKind;
 use move_model::{
     ast,
     ast::{Exp, ExpData, TempIndex, Value},
@@ -750,9 +751,10 @@ impl<'a> Instrumenter<'a> {
 
             // Update memory. We create a mut ref for the location then write the value back to it.
             let (addr_temp, _) = self.builder.emit_let(addr);
-            let mem_ref = self
-                .builder
-                .new_temp(Type::Reference(true, Box::new(ghost_mem_ty)));
+            let mem_ref = self.builder.new_temp(Type::Reference(
+                ReferenceKind::Mutable,
+                Box::new(ghost_mem_ty),
+            ));
             // mem_ref = borrow_global_mut<ghost_mem>(addr)
             self.builder.emit_with(|id| {
                 Bytecode::Call(
