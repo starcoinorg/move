@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::data_cache::TransactionDataCache;
 use crate::{
     config::VMConfig,
     logging::expect_no_verification_errors,
@@ -23,6 +24,7 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::account_address::AccountAddress;
+use move_core_types::resolver::MoveResolver;
 use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
@@ -36,6 +38,7 @@ use move_vm_types::{
 };
 use parking_lot::RwLock;
 use sha3::{Digest, Sha3_256};
+use std::collections::btree_map;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Debug,
@@ -477,13 +480,14 @@ impl ModuleCache {
         &self,
         func_name: &IdentStr,
         module_id: &ModuleId,
-    ) -> PartialVMResult<usize> {
+    ) -> PartialVMResult<(usize, Arc<Function>)> {
         match self
             .modules
             .get(module_id)
             .and_then(|module| module.function_map.get(func_name))
+            .and_then(|&idx| self.functions.get(idx).map(|func| (idx, Arc::clone(func))))
         {
-            Some(func_idx) => Ok(*func_idx),
+            Some(func) => Ok(func),
             None => Err(
                 PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(format!(
                     "Cannot find {:?}::{:?} in cache",
@@ -831,7 +835,8 @@ impl Loader {
             .module_cache
             .read()
             .resolve_function_by_name(function_name, module_id)
-            .map_err(|err| err.finish(Location::Undefined))?;
+            .map_err(|err| err.finish(Location::Undefined))?
+            .0;
         let func = self.module_cache.read().function_at(idx);
 
         let parameters = func.parameter_types.clone();
@@ -849,6 +854,154 @@ impl Loader {
             type_arguments,
             parameters,
             return_,
+        };
+        Ok((module, func, loaded))
+    }
+
+    // Loading verifies the module if it was never loaded.
+    fn load_function_without_type_args<S: MoveResolver>(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        data_store: &TransactionDataCache<S>,
+    ) -> VMResult<(Arc<Module>, Arc<Function>, Vec<Type>, Vec<Type>)> {
+        let module = self.load_module(module_id, data_store)?;
+        let func = self
+            .module_cache
+            .read()
+            .resolve_function_by_name(function_name, module_id)
+            .map_err(|err| err.finish(Location::Undefined))?
+            .1;
+
+        let parameters = func.parameter_types().to_vec();
+
+        let return_ = func.return_types().to_vec();
+
+        Ok((module, func, parameters, return_))
+    }
+
+    // Matches the actual returned type to the expected type, binding any type args to the
+    // necessary type as stored in the map. The expected type must be a concrete type (no TyParam).
+    // Returns true if a successful match is made.
+    fn match_return_type<'a>(
+        returned: &Type,
+        expected: &'a Type,
+        map: &mut BTreeMap<u16, &'a Type>,
+    ) -> bool {
+        match (returned, expected) {
+            // The important case, deduce the type params
+            (Type::TyParam(idx), _) => match map.entry(*idx) {
+                btree_map::Entry::Vacant(vacant_entry) => {
+                    vacant_entry.insert(expected);
+                    true
+                }
+                btree_map::Entry::Occupied(occupied_entry) => *occupied_entry.get() == expected,
+            },
+            // Recursive types we need to recurse the matching types
+            (Type::Reference(ret_inner), Type::Reference(expected_inner))
+            | (Type::MutableReference(ret_inner), Type::MutableReference(expected_inner)) => {
+                Self::match_return_type(ret_inner, expected_inner, map)
+            }
+            (Type::Vector(ret_inner), Type::Vector(expected_inner)) => {
+                Self::match_return_type(ret_inner, expected_inner, map)
+            }
+            // Abilities should not contribute to the equality check as they just serve for caching computations.
+            // For structs the both need to be the same struct.
+            (Type::Struct(ret_idx), Type::Struct(expected_idx)) => *ret_idx == *expected_idx,
+            // For struct instantiations we need to additionally match all type arguments
+            (
+                Type::StructInstantiation(ret_idx, ret_fields),
+                Type::StructInstantiation(expected_idx, expected_fields),
+            ) => {
+                *ret_idx == *expected_idx
+                    && ret_fields.len() == expected_fields.len()
+                    && ret_fields
+                        .iter()
+                        .zip(expected_fields.iter())
+                        .all(|types| Self::match_return_type(types.0, types.1, map))
+            }
+            // For primitive types we need to assure the types match
+            (Type::U8, Type::U8)
+            | (Type::U16, Type::U16)
+            | (Type::U32, Type::U32)
+            | (Type::U64, Type::U64)
+            | (Type::U128, Type::U128)
+            | (Type::U256, Type::U256)
+            | (Type::Bool, Type::Bool)
+            | (Type::Address, Type::Address)
+            | (Type::Signer, Type::Signer) => true,
+            // Otherwise the types do not match and we can't match return type to the expected type.
+            // Note we don't use the _ pattern but spell out all cases, so that the compiler will
+            // bark when a case is missed upon future updates to the types.
+            (Type::U8, _)
+            | (Type::U16, _)
+            | (Type::U32, _)
+            | (Type::U64, _)
+            | (Type::U128, _)
+            | (Type::U256, _)
+            | (Type::Bool, _)
+            | (Type::Address, _)
+            | (Type::Signer, _)
+            | (Type::Struct { .. }, _)
+            | (Type::StructInstantiation { .. }, _)
+            | (Type::Vector(_), _)
+            | (Type::MutableReference(_), _)
+            | (Type::Reference(_), _) => false,
+        }
+    }
+    // Loading verifies the module if it was never loaded.
+    // Type parameters are inferred from the expected return type. Returns an error if it's not
+    // possible to infer the type parameters or return type cannot be matched.
+    // The type parameters are verified with capabilities.
+    pub(crate) fn load_function_with_type_arg_inference<S: MoveResolver>(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        expected_return_type: &Type,
+        data_store: &TransactionDataCache<S>,
+    ) -> VMResult<(Arc<Module>, Arc<Function>, LoadedFunctionInstantiation)> {
+        let (module, func, parameters, return_vec) =
+            self.load_function_without_type_args(module_id, function_name, data_store)?;
+
+        if return_vec.len() != 1 {
+            // For functions that are marked constructor this should not happen.
+            return Err(PartialVMError::new(StatusCode::ABORTED).finish(Location::Undefined));
+        }
+        let return_type = &return_vec[0];
+
+        let mut map = BTreeMap::new();
+        if !Self::match_return_type(return_type, expected_return_type, &mut map) {
+            // For functions that are marked constructor this should not happen.
+            return Err(
+                PartialVMError::new(StatusCode::INVALID_MAIN_FUNCTION_SIGNATURE)
+                    .finish(Location::Undefined),
+            );
+        }
+
+        // Construct the type arguments from the match
+        let mut type_arguments = vec![];
+        let type_param_len = func.type_parameters().len();
+        for i in 0..type_param_len {
+            if let Option::Some(t) = map.get(&(i as u16)) {
+                type_arguments.push((*t).clone());
+            } else {
+                // Unknown type argument we are not able to infer the type arguments.
+                // For functions that are marked constructor this should not happen.
+                return Err(
+                    PartialVMError::new(StatusCode::INVALID_MAIN_FUNCTION_SIGNATURE)
+                        .finish(Location::Undefined),
+                );
+            }
+        }
+
+        // verify type arguments for capability constraints
+        self.verify_ty_args(func.type_parameters(), &type_arguments)
+            .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
+
+        let loaded = LoadedFunctionInstantiation {
+            type_arguments,
+            parameters,
+            return_: return_vec,
         };
         Ok((module, func, loaded))
     }
@@ -1919,7 +2072,7 @@ impl Module {
                         }
                     }
                 } else {
-                    function_refs.push(cache.resolve_function_by_name(func_name, &module_id)?);
+                    function_refs.push(cache.resolve_function_by_name(func_name, &module_id)?.0);
                 }
             }
 
@@ -2120,7 +2273,8 @@ impl Script {
             );
             let ref_idx = cache
                 .resolve_function_by_name(func_name, &module_id)
-                .map_err(|err| err.finish(Location::Undefined))?;
+                .map_err(|err| err.finish(Location::Undefined))?
+                .0;
             function_refs.push(ref_idx);
         }
 

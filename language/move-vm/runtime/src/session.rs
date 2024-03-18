@@ -303,6 +303,21 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         )
     }
 
+    /// Load a module, a function, and all of its types into cache
+    pub fn load_function_with_type_arg_inference(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        expected_return_type: &Type,
+    ) -> VMResult<(Arc<Module>, Arc<Function>, LoadedFunctionInstantiation)> {
+        self.runtime.loader().load_function_with_type_arg_inference(
+            module_id,
+            function_name,
+            expected_return_type,
+            &self.data_cache,
+        )
+    }
+
     pub fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
         self.runtime.loader().load_type(type_tag, &self.data_cache)
     }
