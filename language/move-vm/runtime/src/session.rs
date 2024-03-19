@@ -115,6 +115,26 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         )
     }
 
+    pub fn execute_instantiated_function(
+        &mut self,
+        module: Arc<Module>,
+        func: Arc<Function>,
+        instantiation: LoadedFunctionInstantiation,
+        args: Vec<impl Borrow<[u8]>>,
+        gas_meter: &mut impl GasMeter,
+    ) -> VMResult<SerializedReturnValues> {
+        self.runtime.execute_function_instantiation(
+            module,
+            func,
+            instantiation,
+            args,
+            &mut self.data_cache,
+            gas_meter,
+            &mut self.native_extensions,
+            true,
+        )
+    }
+
     /// Execute a transaction script.
     ///
     /// The Move VM MUST return a user error (in other words, an error that's not an invariant

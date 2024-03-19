@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::loader::Module;
 use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
@@ -393,6 +394,34 @@ impl VMRuntime {
         extensions: &mut NativeContextExtensions,
         bypass_declared_entry_check: bool,
     ) -> VMResult<SerializedReturnValues> {
+        // load the function
+        let (module, func, loaded_func) =
+            self.loader
+                .load_function(module, function_name, &ty_args, data_store)?;
+
+        self.execute_function_instantiation(
+            module,
+            func,
+            loaded_func,
+            serialized_args,
+            data_store,
+            gas_meter,
+            extensions,
+            bypass_declared_entry_check,
+        )
+    }
+
+    pub(crate) fn execute_function_instantiation(
+        &self,
+        module: Arc<Module>,
+        func: Arc<Function>,
+        loaded_func: LoadedFunctionInstantiation,
+        serialized_args: Vec<impl Borrow<[u8]>>,
+        data_store: &mut impl DataStore,
+        gas_meter: &mut impl GasMeter,
+        extensions: &mut NativeContextExtensions,
+        bypass_declared_entry_check: bool,
+    ) -> VMResult<SerializedReturnValues> {
         use move_binary_format::{binary_views::BinaryIndexedView, file_format::SignatureIndex};
         fn check_is_entry(
             _resolver: &BinaryIndexedView,
@@ -414,24 +443,18 @@ impl VMRuntime {
         } else {
             check_is_entry
         };
-        // load the function
-        let (
-            module,
-            func,
-            LoadedFunctionInstantiation {
-                type_arguments,
-                parameters,
-                return_,
-            },
-        ) = self
-            .loader
-            .load_function(module, function_name, &ty_args, data_store)?;
 
         script_signature::verify_module_function_signature_by_name(
             module.module(),
-            function_name,
+            IdentStr::new(func.name()).expect(""),
             additional_signature_checks,
         )?;
+
+        let LoadedFunctionInstantiation {
+            type_arguments,
+            parameters,
+            return_,
+        } = loaded_func;
 
         // execute the function
         self.execute_function_impl(
