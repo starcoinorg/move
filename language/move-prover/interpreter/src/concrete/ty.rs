@@ -24,6 +24,7 @@ use move_core_types::{
 use move_model::{
     model::{GlobalEnv, ModuleId, StructId},
     ty as MT,
+    ty::ReferenceKind,
 };
 use move_stackless_bytecode::stackless_bytecode::Constant;
 
@@ -795,8 +796,12 @@ pub fn convert_model_local_type(env: &GlobalEnv, ty: &MT::Type, subst: &[BaseTyp
         | MT::Type::Vector(..)
         | MT::Type::Struct(..)
         | MT::Type::TypeParameter(..) => Type::Base(convert_model_base_type(env, ty, subst)),
-        MT::Type::Reference(is_mut, base_ty) => {
-            convert_model_base_type(env, base_ty, subst).into_ref_type(*is_mut)
+        MT::Type::Reference(kind, base_ty) => {
+            let is_mut = match kind {
+                &ReferenceKind::Immutable => false,
+                &ReferenceKind::Mutable => true,
+            };
+            convert_model_base_type(env, base_ty, subst).into_ref_type(is_mut)
         }
         _ => unreachable!(),
     }

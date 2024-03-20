@@ -72,9 +72,14 @@ use crate::{
         INTRINSIC_PRAGMA, OPAQUE_PRAGMA, VERIFY_PRAGMA,
     },
     symbol::{Symbol, SymbolPool},
-    ty::{PrimitiveType, Type, TypeDisplayContext, TypeUnificationAdapter, Variance},
+    ty::{
+        PrimitiveType, ReferenceKind, Type, TypeDisplayContext, TypeUnificationAdapter, Variance,
+    },
 };
-use crate::ty::ReferenceKind;
+
+/// An error message used for cases where a compiled module is expected to be attached
+pub const COMPILED_MODULE_AVAILABLE: &str = "compiled module missing";
+pub const SOURCE_MAP_AVAILABLE: &str = "source map missing";
 
 // =================================================================================================
 /// # Constants
@@ -471,7 +476,7 @@ pub struct GlobalEnv {
     doc_comments: BTreeMap<FileId, BTreeMap<ByteIndex, String>>,
     /// A mapping from file hash to file name and associated FileId. Though this information is
     /// already in `source_files`, we can't get it out of there so need to book keep here.
-    file_hash_map: BTreeMap<FileHash, (String, FileId)>,
+    pub(crate) file_hash_map: BTreeMap<FileHash, (String, FileId)>,
     /// A mapping from file id to associated alias map.
     file_alias_map: BTreeMap<FileId, Rc<BTreeMap<Symbol, NumericalAddress>>>,
     /// Bijective mapping between FileId and a plain int. FileId's are themselves wrappers around
@@ -1128,7 +1133,7 @@ impl GlobalEnv {
         self.module_data.push(ModuleData {
             name,
             id: ModuleId(idx as RawIndex),
-            module,
+            compiled_module: Some(module),
             named_constants,
             struct_data,
             struct_idx_to_id,
@@ -1137,7 +1142,7 @@ impl GlobalEnv {
             spec_vars,
             spec_funs,
             module_spec,
-            source_map,
+            source_map: Some(source_map),
             loc,
             attributes,
             spec_block_infos,
@@ -1413,9 +1418,12 @@ impl GlobalEnv {
 
     /// Returns an iterator for all bytecode modules in the environment.
     pub fn get_bytecode_modules(&self) -> impl Iterator<Item = &CompiledModule> {
-        self.module_data
-            .iter()
-            .map(|module_data| &module_data.module)
+        self.module_data.iter().map(|module_data| {
+            module_data
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE)
+        })
     }
 
     /// Returns all structs in all modules which carry invariants.
@@ -1591,7 +1599,12 @@ impl GlobalEnv {
     pub fn get_declared_function_count(&self) -> usize {
         let mut total = 0;
         for m in &self.module_data {
-            total += m.module.function_defs().len();
+            total += m
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE)
+                .function_defs()
+                .len();
         }
         total
     }
@@ -1600,7 +1613,12 @@ impl GlobalEnv {
     pub fn get_declared_struct_count(&self) -> usize {
         let mut total = 0;
         for m in &self.module_data {
-            total += m.module.struct_defs().len();
+            total += m
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE)
+                .struct_defs()
+                .len();
         }
         total
     }
@@ -1723,8 +1741,8 @@ pub struct ModuleData {
     /// Attributes attached to this module.
     pub(crate) attributes: Vec<Attribute>,
 
-    /// Module byte code.
-    pub module: CompiledModule,
+    /// Module byte code, if available.
+    pub compiled_module: Option<CompiledModule>,
 
     /// Named constant data
     pub named_constants: BTreeMap<NamedConstantId, NamedConstantData>,
@@ -1750,8 +1768,8 @@ pub struct ModuleData {
     /// Module level specification.
     pub module_spec: Spec,
 
-    /// Module source location information.
-    pub source_map: SourceMap,
+    /// Module source location information for bytecode, if a bytecode module is attached.
+    pub source_map: Option<SourceMap>,
 
     /// The location of this module.
     pub loc: Loc,
@@ -1760,10 +1778,10 @@ pub struct ModuleData {
     pub spec_block_infos: Vec<SpecBlockInfo>,
 
     /// A cache for the modules used by this one.
-    used_modules: RefCell<BTreeMap<bool, BTreeSet<ModuleId>>>,
+    pub(crate) used_modules: RefCell<BTreeMap<bool, BTreeSet<ModuleId>>>,
 
     /// A cache for the modules declared as friends by this one.
-    friend_modules: RefCell<Option<BTreeSet<ModuleId>>>,
+    pub(crate) friend_modules: RefCell<Option<BTreeSet<ModuleId>>>,
 }
 
 impl ModuleData {
@@ -1771,7 +1789,7 @@ impl ModuleData {
         ModuleData {
             name,
             id,
-            module,
+            compiled_module: Some(module),
             named_constants: BTreeMap::new(),
             struct_data: BTreeMap::new(),
             struct_idx_to_id: BTreeMap::new(),
@@ -1781,7 +1799,10 @@ impl ModuleData {
             spec_vars: BTreeMap::new(),
             spec_funs: BTreeMap::new(),
             module_spec: Spec::default(),
-            source_map: SourceMap::new(MoveIrLoc::new(FileHash::empty(), 0, 0), None),
+            source_map: Some(SourceMap::new(
+                MoveIrLoc::new(FileHash::empty(), 0, 0),
+                None,
+            )),
             loc: Loc::default(),
             attributes: Default::default(),
             spec_block_infos: vec![],
@@ -1835,7 +1856,12 @@ impl<'env> ModuleEnv<'env> {
 
     /// Returns the VM identifier for this module
     pub fn get_identifier(&'env self) -> Identifier {
-        self.data.module.name().to_owned()
+        self.data
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE)
+            .name()
+            .to_owned()
     }
 
     /// Returns true if this is a module representing a script.
@@ -1859,7 +1885,11 @@ impl<'env> ModuleEnv<'env> {
     /// Return the set of language storage ModuleId's that this module's bytecode depends on
     /// (including itself), friend modules are excluded from the return result.
     pub fn get_dependencies(&self) -> Vec<language_storage::ModuleId> {
-        let compiled_module = &self.data.module;
+        let compiled_module = &self
+            .data
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE);
         let mut deps = compiled_module.immediate_dependencies();
         deps.push(compiled_module.self_id());
         deps
@@ -1867,7 +1897,11 @@ impl<'env> ModuleEnv<'env> {
 
     /// Return the set of language storage ModuleId's that this module declares as friends
     pub fn get_friends(&self) -> Vec<language_storage::ModuleId> {
-        self.data.module.immediate_friends()
+        self.data
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE)
+            .immediate_friends()
     }
 
     /// Returns the set of modules that use this one.
@@ -1987,7 +2021,10 @@ impl<'env> ModuleEnv<'env> {
 
     /// Gets the underlying bytecode module.
     pub fn get_verified_module(&'env self) -> &'env CompiledModule {
-        &self.data.module
+        self.data
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE)
     }
 
     /// Gets a `NamedConstantEnv` in this module by name
@@ -2088,8 +2125,17 @@ impl<'env> ModuleEnv<'env> {
     /// Gets FunctionEnv for a function used in this module, via the FunctionHandleIndex. The
     /// returned function might be from this or another module.
     pub fn get_used_function(&self, idx: FunctionHandleIndex) -> FunctionEnv<'_> {
-        let view =
-            FunctionHandleView::new(&self.data.module, self.data.module.function_handle_at(idx));
+        let view = FunctionHandleView::new(
+            self.data
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE),
+            self.data
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE)
+                .function_handle_at(idx),
+        );
         let module_name = self.env.to_module_name(&view.module_id());
         let module_env = self
             .env
@@ -2200,18 +2246,27 @@ impl<'env> ModuleEnv<'env> {
             SignatureToken::U256 => Type::Primitive(PrimitiveType::U256),
             SignatureToken::Address => Type::Primitive(PrimitiveType::Address),
             SignatureToken::Signer => Type::Primitive(PrimitiveType::Signer),
-            SignatureToken::Reference(t) => {
-                Type::Reference(ReferenceKind::Immutable, Box::new(self.globalize_signature(t)))
-            }
-            SignatureToken::MutableReference(t) => {
-                Type::Reference(ReferenceKind::Mutable, Box::new(self.globalize_signature(t)))
-            }
+            SignatureToken::Reference(t) => Type::Reference(
+                ReferenceKind::Immutable,
+                Box::new(self.globalize_signature(t)),
+            ),
+            SignatureToken::MutableReference(t) => Type::Reference(
+                ReferenceKind::Mutable,
+                Box::new(self.globalize_signature(t)),
+            ),
             SignatureToken::TypeParameter(index) => Type::TypeParameter(*index),
             SignatureToken::Vector(bt) => Type::Vector(Box::new(self.globalize_signature(bt))),
             SignatureToken::Struct(handle_idx) => {
                 let struct_view = StructHandleView::new(
-                    &self.data.module,
-                    self.data.module.struct_handle_at(*handle_idx),
+                    self.data
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE),
+                    self.data
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE)
+                        .struct_handle_at(*handle_idx),
                 );
                 let declaring_module_env = self
                     .env
@@ -2224,8 +2279,15 @@ impl<'env> ModuleEnv<'env> {
             }
             SignatureToken::StructInstantiation(handle_idx, args) => {
                 let struct_view = StructHandleView::new(
-                    &self.data.module,
-                    self.data.module.struct_handle_at(*handle_idx),
+                    self.data
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE),
+                    self.data
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE)
+                        .struct_handle_at(*handle_idx),
                 );
                 let declaring_module_env = self
                     .env
@@ -2254,7 +2316,13 @@ impl<'env> ModuleEnv<'env> {
     pub fn get_type_actuals(&self, idx: Option<SignatureIndex>) -> Vec<Type> {
         match idx {
             Some(idx) => {
-                let actuals = &self.data.module.signature_at(idx).0;
+                let actuals = &self
+                    .data
+                    .compiled_module
+                    .as_ref()
+                    .expect(COMPILED_MODULE_AVAILABLE)
+                    .signature_at(idx)
+                    .0;
                 self.globalize_signatures(actuals)
             }
             None => vec![],
@@ -2263,7 +2331,12 @@ impl<'env> ModuleEnv<'env> {
 
     /// Retrieve a constant from the pool
     pub fn get_constant(&self, idx: ConstantPoolIndex) -> &VMConstant {
-        &self.data.module.constant_pool()[idx.0 as usize]
+        &self
+            .data
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE)
+            .constant_pool()[idx.0 as usize]
     }
 
     /// Converts a constant to the specified type. The type must correspond to the expected
@@ -2274,12 +2347,21 @@ impl<'env> ModuleEnv<'env> {
 
     /// Return the `AccountAdress` of this module
     pub fn self_address(&self) -> &AccountAddress {
-        self.data.module.address()
+        self.data
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE)
+            .address()
     }
 
     /// Retrieve an address identifier from the pool
     pub fn get_address_identifier(&self, idx: AddressIdentifierIndex) -> BigUint {
-        let addr = &self.data.module.address_identifiers()[idx.0 as usize];
+        let addr = &self
+            .data
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE)
+            .address_identifiers()[idx.0 as usize];
         crate::addr_to_big_uint(addr)
     }
 
@@ -2339,7 +2421,10 @@ impl<'env> ModuleEnv<'env> {
     pub fn disassemble(&self) -> String {
         let disas = Disassembler::new(
             SourceMapping::new(
-                self.data.source_map.clone(),
+                self.data
+                    .source_map
+                    .clone()
+                    .expect(COMPILED_MODULE_AVAILABLE),
                 BinaryIndexedView::Module(self.get_verified_module()),
             ),
             DisassemblerOptions {
@@ -2387,27 +2472,27 @@ impl<'env> ModuleEnv<'env> {
 #[derive(Debug)]
 pub struct StructData {
     /// The name of this struct.
-    name: Symbol,
+    pub(crate) name: Symbol,
 
     /// The location of this struct.
-    loc: Loc,
+    pub(crate) loc: Loc,
 
     /// Attributes attached to this structure.
-    attributes: Vec<Attribute>,
+    pub(crate) attributes: Vec<Attribute>,
 
     /// List of function argument names. Not in bytecode but obtained from AST.
     /// Information about this struct.
-    info: StructInfo,
+    pub(crate) info: StructInfo,
 
     /// Field definitions.
-    field_data: BTreeMap<FieldId, FieldData>,
+    pub(crate) field_data: BTreeMap<FieldId, FieldData>,
 
     // Associated specification.
-    spec: Spec,
+    pub(crate) spec: Spec,
 }
 
 #[derive(Debug)]
-enum StructInfo {
+pub enum StructInfo {
     /// Struct is declared in Move and info found in VM format.
     Declared {
         /// The definition index of this struct in its module.
@@ -2457,11 +2542,19 @@ impl<'env> StructEnv<'env> {
     pub fn get_identifier(&self) -> Option<Identifier> {
         match &self.data.info {
             StructInfo::Declared { handle_idx, .. } => {
-                let handle = self.module_env.data.module.struct_handle_at(*handle_idx);
+                let handle = self
+                    .module_env
+                    .data
+                    .compiled_module
+                    .as_ref()
+                    .expect(COMPILED_MODULE_AVAILABLE)
+                    .struct_handle_at(*handle_idx);
                 Some(
                     self.module_env
                         .data
-                        .module
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE)
                         .identifier_at(handle.name)
                         .to_owned(),
                 )
@@ -2509,7 +2602,13 @@ impl<'env> StructEnv<'env> {
     pub fn is_native(&self) -> bool {
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
-                let def = self.module_env.data.module.struct_def_at(*def_idx);
+                let def = self
+                    .module_env
+                    .data
+                    .compiled_module
+                    .as_ref()
+                    .expect(COMPILED_MODULE_AVAILABLE)
+                    .struct_def_at(*def_idx);
                 def.field_information == StructFieldInformation::Native
             }
             StructInfo::Generated { .. } => false,
@@ -2557,11 +2656,19 @@ impl<'env> StructEnv<'env> {
     pub fn get_abilities(&self) -> AbilitySet {
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
-                let def = self.module_env.data.module.struct_def_at(*def_idx);
+                let def = self
+                    .module_env
+                    .data
+                    .compiled_module
+                    .as_ref()
+                    .expect(COMPILED_MODULE_AVAILABLE)
+                    .struct_def_at(*def_idx);
                 let handle = self
                     .module_env
                     .data
-                    .module
+                    .compiled_module
+                    .as_ref()
+                    .expect(COMPILED_MODULE_AVAILABLE)
                     .struct_handle_at(def.struct_handle);
                 handle.abilities
             }
@@ -2626,10 +2733,18 @@ impl<'env> StructEnv<'env> {
     pub fn is_phantom_parameter(&self, idx: usize) -> bool {
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
-                let def = self.module_env.data.module.struct_def_at(*def_idx);
+                let def = self
+                    .module_env
+                    .data
+                    .compiled_module
+                    .as_ref()
+                    .expect(COMPILED_MODULE_AVAILABLE)
+                    .struct_def_at(*def_idx);
                 self.module_env
                     .data
-                    .module
+                    .compiled_module
+                    .as_ref()
+                    .expect(COMPILED_MODULE_AVAILABLE)
                     .struct_handle_at(def.struct_handle)
                     .type_parameters[idx]
                     .is_phantom
@@ -2645,8 +2760,17 @@ impl<'env> StructEnv<'env> {
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
                 let view = StructDefinitionView::new(
-                    &self.module_env.data.module,
-                    self.module_env.data.module.struct_def_at(*def_idx),
+                    self.module_env
+                        .data
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE),
+                    self.module_env
+                        .data
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE)
+                        .struct_def_at(*def_idx),
                 );
                 view.type_parameters()
                     .iter()
@@ -2675,8 +2799,17 @@ impl<'env> StructEnv<'env> {
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
                 let view = StructDefinitionView::new(
-                    &self.module_env.data.module,
-                    self.module_env.data.module.struct_def_at(*def_idx),
+                    self.module_env
+                        .data
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE),
+                    self.module_env
+                        .data
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE)
+                        .struct_def_at(*def_idx),
                 );
                 view.type_parameters()
                     .iter()
@@ -2686,6 +2819,8 @@ impl<'env> StructEnv<'env> {
                             .module_env
                             .data
                             .source_map
+                            .as_ref()
+                            .expect(SOURCE_MAP_AVAILABLE)
                             .get_struct_source_map(*def_idx)
                             .ok()
                             .and_then(|smap| smap.type_parameters.get(i))
@@ -2781,7 +2916,13 @@ impl<'env> FieldEnv<'env> {
     /// Returns the VM identifier for this field
     pub fn get_identifier(&'env self) -> Option<Identifier> {
         if let FieldInfo::Declared { def_idx } = &self.data.info {
-            let m = &self.struct_env.module_env.data.module;
+            let m = self
+                .struct_env
+                .module_env
+                .data
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE);
             let def = m.struct_def_at(*def_idx);
             let offset = self.data.offset;
             Some(
@@ -2802,6 +2943,8 @@ impl<'env> FieldEnv<'env> {
                 .module_env
                 .data
                 .source_map
+                .as_ref()
+                .expect(SOURCE_MAP_AVAILABLE)
                 .get_struct_source_map(*def_idx)
             {
                 let loc = self
@@ -2826,7 +2969,9 @@ impl<'env> FieldEnv<'env> {
                     .struct_env
                     .module_env
                     .data
-                    .module
+                    .compiled_module
+                    .as_ref()
+                    .expect(COMPILED_MODULE_AVAILABLE)
                     .struct_def_at(*def_idx);
                 let field = match &struct_def.field_information {
                     StructFieldInformation::Declared(fields) => &fields[self.data.offset],
@@ -2921,38 +3066,38 @@ pub struct Parameter(pub Symbol, pub Type);
 #[derive(Debug)]
 pub struct FunctionData {
     /// Name of this function.
-    name: Symbol,
+    pub(crate) name: Symbol,
 
     /// Location of this function.
-    loc: Loc,
+    pub(crate) loc: Loc,
 
     /// The definition index of this function in its module.
-    def_idx: FunctionDefinitionIndex,
+    pub(crate) def_idx: FunctionDefinitionIndex,
 
     /// The handle index of this function in its module.
-    handle_idx: FunctionHandleIndex,
+    pub(crate) handle_idx: FunctionHandleIndex,
 
     /// Attributes attached to this function.
-    attributes: Vec<Attribute>,
+    pub(crate) attributes: Vec<Attribute>,
 
     /// List of function argument names. Not in bytecode but obtained from AST.
-    arg_names: Vec<Symbol>,
+    pub(crate) arg_names: Vec<Symbol>,
 
     /// List of type argument names. Not in bytecode but obtained from AST.
     #[allow(unused)]
-    type_arg_names: Vec<Symbol>,
+    pub(crate) type_arg_names: Vec<Symbol>,
 
     /// Specification associated with this function.
-    spec: Spec,
+    pub(crate) spec: Spec,
 
     /// A cache for the called functions.
-    called_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
+    pub(crate) called_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
 
     /// A cache for the calling functions.
-    calling_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
+    pub(crate) calling_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
 
     /// A cache for the transitive closure of the called functions.
-    transitive_closure_of_called_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
+    pub(crate) transitive_closure_of_called_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
 }
 
 impl FunctionData {
@@ -3003,7 +3148,12 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the VM identifier for this function
     pub fn get_identifier(&'env self) -> Identifier {
-        let m = &self.module_env.data.module;
+        let m = &self
+            .module_env
+            .data
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE);
         m.identifier_at(m.function_handle_at(self.data.handle_idx).name)
             .to_owned()
     }
@@ -3059,6 +3209,8 @@ impl<'env> FunctionEnv<'env> {
             .module_env
             .data
             .source_map
+            .as_ref()
+            .expect(SOURCE_MAP_AVAILABLE)
             .get_function_source_map(self.data.def_idx)
         {
             if let Some(loc) = fmap.get_code_location(offset) {
@@ -3073,10 +3225,18 @@ impl<'env> FunctionEnv<'env> {
         let function_definition = self
             .module_env
             .data
-            .module
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE)
             .function_def_at(self.get_def_idx());
-        let function_definition_view =
-            FunctionDefinitionView::new(&self.module_env.data.module, function_definition);
+        let function_definition_view = FunctionDefinitionView::new(
+            self.module_env
+                .data
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE),
+            function_definition,
+        );
         match function_definition_view.code() {
             Some(code) => &code.code,
             None => &[],
@@ -3338,6 +3498,8 @@ impl<'env> FunctionEnv<'env> {
                     .module_env
                     .data
                     .source_map
+                    .as_ref()
+                    .expect(SOURCE_MAP_AVAILABLE)
                     .get_function_source_map(self.data.def_idx)
                     .ok()
                     .and_then(|fmap| fmap.type_parameters.get(i))
@@ -3428,6 +3590,8 @@ impl<'env> FunctionEnv<'env> {
             .module_env
             .data
             .source_map
+            .as_ref()
+            .expect(SOURCE_MAP_AVAILABLE)
             .get_function_source_map(self.data.def_idx)
         {
             if let Some((ident, _)) = fmap.get_parameter_or_local_name(idx as u64) {
@@ -3493,7 +3657,9 @@ impl<'env> FunctionEnv<'env> {
         let function_definition = self
             .module_env
             .data
-            .module
+            .compiled_module
+            .as_ref()
+            .expect(COMPILED_MODULE_AVAILABLE)
             .function_def_at(self.get_def_idx());
         function_definition
             .acquires_global_resources
@@ -3595,7 +3761,9 @@ impl<'env> FunctionEnv<'env> {
                     let handle_idx = self
                         .module_env
                         .data
-                        .module
+                        .compiled_module
+                        .as_ref()
+                        .expect(COMPILED_MODULE_AVAILABLE)
                         .function_instantiation_at(*i)
                         .handle;
                     Some(
@@ -3664,10 +3832,17 @@ impl<'env> FunctionEnv<'env> {
 
     fn definition_view(&'env self) -> FunctionDefinitionView<'env, CompiledModule> {
         FunctionDefinitionView::new(
-            &self.module_env.data.module,
+            &self
+                .module_env
+                .data
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE),
             self.module_env
                 .data
-                .module
+                .compiled_module
+                .as_ref()
+                .expect(COMPILED_MODULE_AVAILABLE)
                 .function_def_at(self.data.def_idx),
         )
     }

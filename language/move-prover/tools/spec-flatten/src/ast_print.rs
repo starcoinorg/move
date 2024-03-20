@@ -12,6 +12,7 @@ use move_model::{
     symbol::Symbol,
     ty::{PrimitiveType, Type},
 };
+use move_model::ty::ReferenceKind;
 
 /// A type alias for the way how we use crate `pretty`'s document type.
 ///
@@ -87,10 +88,10 @@ impl SpecPrinter<'_> {
                 }
             }
             Type::TypeParameter(idx) => self.print_sym(ty_params.get(*idx as usize).unwrap().0),
-            Type::Reference(false, ty) => {
+            Type::Reference(ReferenceKind::Immutable, ty) => {
                 Self::concat([Self::doc("&"), self.print_type(ty, ty_params)])
             }
-            Type::Reference(true, ty) => {
+            Type::Reference(ReferenceKind::Mutable, ty) => {
                 Self::concat([Self::doc("&mut"), self.print_type(ty, ty_params)])
             }
             Type::Fun(arg_tys, ret_ty) => {

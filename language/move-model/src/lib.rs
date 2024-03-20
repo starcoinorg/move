@@ -62,6 +62,7 @@ pub mod spec_translator;
 pub mod symbol;
 pub mod ty;
 pub mod well_known;
+mod demove_helper;
 
 // =================================================================================================
 // Entry Point
@@ -645,4 +646,38 @@ pub(crate) fn project_1st<T: Clone, R>(v: &[(T, R)]) -> Vec<T> {
 /// Helper to project the 2nd element from a vector of pairs.
 pub(crate) fn project_2nd<T, R: Clone>(v: &[(T, R)]) -> Vec<R> {
     v.iter().map(|(_, x)| x.clone()).collect()
+}
+
+
+fn expansion_script_to_module(script: E::Script) -> ModuleDefinition {
+    let E::Script {
+        package_name,
+        attributes,
+        loc,
+        immediate_neighbors,
+        used_addresses,
+        function_name,
+        constants,
+        function,
+        specs,
+    } = script;
+
+    // Construct a pseudo module definition.
+    let mut functions = UniqueMap::new();
+    functions.add(function_name, function).unwrap();
+
+    E::ModuleDefinition {
+        package_name,
+        attributes,
+        loc,
+        dependency_order: usize::MAX,
+        immediate_neighbors,
+        used_addresses,
+        is_source_module: true,
+        friends: UniqueMap::new(),
+        structs: UniqueMap::new(),
+        constants,
+        functions,
+        specs,
+    }
 }

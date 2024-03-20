@@ -22,6 +22,7 @@ use move_model::{
     ast::{Exp, MemoryLabel, TempIndex},
     model::{FunId, FunctionEnv, ModuleId, StructId},
     ty as MT,
+    ty::ReferenceKind,
 };
 use move_stackless_bytecode::{
     function_target::FunctionTarget,
@@ -498,7 +499,7 @@ impl<'env> FunctionContext<'env> {
                 self.handle_uninit(srcs[0], local_state);
                 return Ok(());
             }
-            Operation::Destroy => {
+            Operation::Drop => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
@@ -918,7 +919,7 @@ impl<'env> FunctionContext<'env> {
             // already handled
             Operation::Stop
             | Operation::Uninit
-            | Operation::Destroy
+            | Operation::Drop
             | Operation::Havoc(..)
             | Operation::TraceLocal(..)
             | Operation::TraceReturn(..)
@@ -2426,7 +2427,7 @@ impl<'env> FunctionContext<'env> {
                 if local_ty != param_decl_ty {
                     assert!(matches!(
                             param_decl_ty,
-                            MT::Type::Reference(false, base_ty)
+                            MT::Type::Reference(ReferenceKind::Immutable, base_ty)
                             if local_ty == base_ty.as_ref()));
                 }
                 let ty = convert_model_local_type(env, local_ty, &self.ty_args);

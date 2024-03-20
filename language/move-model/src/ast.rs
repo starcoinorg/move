@@ -20,7 +20,7 @@ use crate::{
     model::{
         EnvDisplay, FieldId, FunId, FunctionVisibility, GlobalEnv, GlobalId, Loc, ModuleId, NodeId,
         QualifiedId, QualifiedInstId, SchemaId, SpecFunId, StructId, TypeParameter,
-        GHOST_MEMORY_PREFIX,
+        GHOST_MEMORY_PREFIX, SCRIPT_MODULE_NAME,
     },
     symbol::{Symbol, SymbolPool},
     ty::{Type, TypeDisplayContext},
@@ -31,6 +31,10 @@ use once_cell::sync::Lazy;
 use std::{
     borrow::Borrow, cell::RefCell, collections::HashSet, fmt::Debug, hash::Hash, ops::Deref,
 };
+
+static MAX_ADDR: Lazy<BigUint> = Lazy::new(|| {
+    BigUint::from_str_radix("ffffffffffffffffffffffffffffffff", 16).expect("valid hex")
+});
 
 // =================================================================================================
 /// # Declarations
@@ -1085,10 +1089,14 @@ impl ModuleName {
     /// Determine whether this is a script. The move-compiler infrastructure uses MAX_ADDR
     /// for pseudo modules created from scripts, so use this address to check.
     pub fn is_script(&self) -> bool {
-        static MAX_ADDR: Lazy<BigUint> = Lazy::new(|| {
-            BigUint::from_str_radix("ffffffffffffffffffffffffffffffff", 16).expect("valid hex")
-        });
         self.0 == *MAX_ADDR
+    }
+
+    /// Return the pseudo module name used for scripts, incorporating the `index`.
+    /// Our compiler infrastructure uses `MAX_ADDRESS` for pseudo modules created from scripts.
+    pub fn pseudo_script_name(pool: &SymbolPool, index: usize) -> ModuleName {
+        let name = pool.make(format!("{}_{}", SCRIPT_MODULE_NAME, index).as_str());
+        ModuleName(MAX_ADDR.clone(), name)
     }
 }
 
