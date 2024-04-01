@@ -1,0 +1,37 @@
+[package]
+name = "move-decompiler"
+version = "0.1.0"
+authors = ["Verichains"]
+description = "Decompile Move bytecode files (.mv files)"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.52"
+
+move-core-types = { path = "../../move-core/types" }
+move-ir-types = { path = "../../move-ir/types" }
+move-binary-format = { path = "../../move-binary-format" }
+move-bytecode-source-map = { path = "../../move-ir-compiler/move-bytecode-source-map" }
+move-command-line-common = { path = "../../move-command-line-common" }
+move-compiler = { path = "../../move-compiler" }
+move-model = { path = "../../move-model" }
+move-stackless-bytecode = { path = "../../move-prover/bytecode" }
+move-symbol-pool = { path = "../../move-symbol-pool" }
+move-prover = { path = "../../move-prover" }
+
+clap = { version = "3.1.8", features = ["derive"] }
+
+[dev-dependencies]
+datatest-stable = "0.1.1"
+#aptos-framework = { workspace = true }
+uuid = { version = "1.4.1", features = ["v4"] }
+
+[features]
+default = []
+testing = []
+
+[[test]]
+name = "decompiler"
+harness = false

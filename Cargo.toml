@@ -72,7 +72,7 @@ members = [
     "language/tools/read-write-set",
     "language/tools/read-write-set/dynamic",
     "language/tools/read-write-set/types",
-   # "language/tools/move-decompiler",
+    "language/tools/move-decompiler",
 ]
 
 # NOTE: default-members is the complete list of binaries that form the "production Diem codebase". These members should
@@ -96,7 +96,7 @@ default-members = [
     "language/tools/move-cli",
     "language/tools/move-coverage",
     "language/tools/move-unit-test",
-    #"language/tools/move-decompiler",
+    "language/tools/move-decompiler",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace

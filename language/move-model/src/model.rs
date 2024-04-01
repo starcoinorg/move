@@ -61,21 +61,15 @@ use move_core_types::{
 };
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 
-use crate::{
-    ast::{
-        Attribute, ConditionKind, Exp, ExpData, GlobalInvariant, ModuleName, PropertyBag,
-        PropertyValue, Spec, SpecBlockInfo, SpecFunDecl, SpecVarDecl, Value,
-    },
-    intrinsics::IntrinsicsAnnotation,
-    pragmas::{
-        DELEGATE_INVARIANTS_TO_CALLER_PRAGMA, DISABLE_INVARIANTS_IN_BODY_PRAGMA, FRIEND_PRAGMA,
-        INTRINSIC_PRAGMA, OPAQUE_PRAGMA, VERIFY_PRAGMA,
-    },
-    symbol::{Symbol, SymbolPool},
-    ty::{
-        PrimitiveType, ReferenceKind, Type, TypeDisplayContext, TypeUnificationAdapter, Variance,
-    },
-};
+use crate::{ast::{
+    Attribute, ConditionKind, Exp, ExpData, GlobalInvariant, ModuleName, PropertyBag,
+    PropertyValue, Spec, SpecBlockInfo, SpecFunDecl, SpecVarDecl, Value,
+}, intrinsics::IntrinsicsAnnotation, pragmas::{
+    DELEGATE_INVARIANTS_TO_CALLER_PRAGMA, DISABLE_INVARIANTS_IN_BODY_PRAGMA, FRIEND_PRAGMA,
+    INTRINSIC_PRAGMA, OPAQUE_PRAGMA, VERIFY_PRAGMA,
+}, project_1st, symbol::{Symbol, SymbolPool}, ty::{
+    PrimitiveType, ReferenceKind, Type, TypeDisplayContext, TypeUnificationAdapter, Variance,
+}};
 
 /// An error message used for cases where a compiled module is expected to be attached
 pub const COMPILED_MODULE_AVAILABLE: &str = "compiled module missing";
@@ -188,7 +182,7 @@ pub type RawIndex = u16;
 
 /// Identifier for a module.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub struct ModuleId(RawIndex);
+pub struct ModuleId(pub(crate) RawIndex);
 
 /// Identifier for a named constant, relative to module.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -1074,9 +1068,8 @@ impl GlobalEnv {
     pub fn add(
         &mut self,
         loc: Loc,
+        name: ModuleName,
         attributes: Vec<Attribute>,
-        module: CompiledModule,
-        source_map: SourceMap,
         named_constants: BTreeMap<NamedConstantId, NamedConstantData>,
         mut struct_data: BTreeMap<StructId, StructData>,
         function_data: BTreeMap<FunId, FunctionData>,
@@ -1084,20 +1077,8 @@ impl GlobalEnv {
         spec_funs: Vec<SpecFunDecl>,
         module_spec: Spec,
         spec_block_infos: Vec<SpecBlockInfo>,
-    ) {
+    ) -> ModuleId {
         let idx = self.module_data.len();
-        let effective_name = if module.self_id().name().as_str() == SCRIPT_MODULE_NAME {
-            // Use the name of the first function in this module.
-            function_data
-                .iter()
-                .next()
-                .expect("functions in script")
-                .1
-                .name
-        } else {
-            self.symbol_pool.make(module.self_id().name().as_str())
-        };
-        let name = ModuleName::from_str(&module.self_id().address().to_string(), effective_name);
         let struct_idx_to_id: BTreeMap<StructDefinitionIndex, StructId> = struct_data
             .iter()
             .filter_map(|(id, data)| match &data.info {
@@ -1130,10 +1111,11 @@ impl GlobalEnv {
             .map(|(i, v)| (SpecFunId::new(i), v))
             .collect();
 
+        let id = ModuleId(self.module_data.len() as RawIndex);
         self.module_data.push(ModuleData {
             name,
-            id: ModuleId(idx as RawIndex),
-            compiled_module: Some(module),
+            id,
+            compiled_module: None,
             named_constants,
             struct_data,
             struct_idx_to_id,
@@ -1142,13 +1124,122 @@ impl GlobalEnv {
             spec_vars,
             spec_funs,
             module_spec,
-            source_map: Some(source_map),
+            source_map: None,
             loc,
             attributes,
             spec_block_infos,
             used_modules: Default::default(),
             friend_modules: Default::default(),
         });
+        id
+    }
+
+    /// Attaches a bytecode module to the module in the environment. This functions expects
+    /// the `self.module_data[module_id]` to be already initialized using the `self.add`
+    /// function.
+    pub fn attach_compiled_module(
+        &mut self,
+        module_id: ModuleId,
+        module: CompiledModule,
+        source_map: SourceMap,
+    ) {
+        println!("YSG {:?}",module);
+        {
+            let mod_data = &mut self.module_data[module_id.0 as usize];
+            mod_data.struct_idx_to_id.clear();
+            mod_data.function_idx_to_id.clear();
+        }
+
+
+        // Attach indices pointing into the compiled module to function and struct data
+        let struct_data: BTreeMap<StructId, StructData> = (0..module.struct_defs().len())
+            .filter_map(|idx| {
+                let def_idx = StructDefinitionIndex(idx as u16);
+                let handle_idx = module.struct_def_at(def_idx).struct_handle;
+                let handle = module.struct_handle_at(handle_idx);
+                let view = StructHandleView::new(&module, handle);
+                let name = self.symbol_pool().make(view.name().as_str());
+                if let Some(entry) = self
+                    .parent
+                    .struct_table
+                    .get(&self.qualified_by_module(name))
+                {
+                    let struct_spec = self
+                        .struct_specs
+                        .remove(&name)
+                        .unwrap_or_default();
+                    Some((
+                        StructId::new(name),
+                        self.create_move_struct_data(
+                            &module,
+                            def_idx,
+                            name,
+                            entry.loc.clone(),
+                            entry.attributes.clone(),
+                            struct_spec,
+                        ),
+                    ))
+                } else {
+                    self.parent.error(
+                        &self.internal_loc(),
+                        &format!("[internal] bytecode does not match AST: `{}` in bytecode but not in AST", name.display(self.symbol_pool())));
+                    None
+                }
+            })
+            .collect();
+        let function_data: BTreeMap<FunId, FunctionData> = (0..module.function_defs().len())
+            .filter_map(|idx| {
+                let def_idx = FunctionDefinitionIndex(idx as u16);
+                let handle_idx = module.function_def_at(def_idx).function;
+                let handle = module.function_handle_at(handle_idx);
+                let view = FunctionHandleView::new(&module, handle);
+                let name_str = view.name().as_str();
+                let name = if name_str == SCRIPT_BYTECODE_FUN_NAME {
+                    // This is a pseudo script module, which has exactly one function. Determine
+                    // the name of this function.
+                    self.parent.fun_table.iter().filter_map(|(k, _)| {
+                        if k.module_name == self.module_name
+                        { Some(k.symbol) } else { None }
+                    }).next().expect("unexpected script with multiple or no functions")
+                } else {
+                    self.symbol_pool().make(name_str)
+                };
+                let fun_spec = self.fun_specs.remove(&name).unwrap_or_default();
+                if let Some(entry) = self.parent.fun_table.get(&self.qualified_by_module(name)) {
+                    let arg_names = project_1st(&entry.params);
+                    let type_arg_names = project_1st(&entry.type_params);
+                    Some((FunId::new(name), self.parent.env.create_function_data(
+                        &module,
+                        def_idx,
+                        name,
+                        entry.loc.clone(),
+                        entry.attributes.clone(),
+                        arg_names,
+                        type_arg_names,
+                        fun_spec,
+                    )))
+                } else {
+                    let funs = self.parent.fun_table.iter().map(|(k, _)| {
+                        format!("{}", k.display_full(self.symbol_pool()))
+                    }).join(", ");
+                    self.parent.error(
+                        &self.parent.env.internal_loc(),
+                        &format!("[internal] bytecode does not match AST: `{}` in bytecode but not in AST (available in AST: {})", name.display(self.symbol_pool()), funs));
+                    None
+                }
+            })
+            .collect();
+
+        //  let used_modules = self.get_used_modules_from_bytecode(&module);
+        //    let friend_modules = self.get_friend_modules_from_bytecode(&module);
+        let mod_data = &mut self.module_data[module_id.0 as usize];
+        // XXX FIXME YSG
+        mod_data.struct_data = struct_data;
+        mod_data.function_data = function_data;
+        //  mod_data.used_modules = used_modules;
+        //  mod_data.friend_modules = friend_modules;
+        mod_data.compiled_module = Some(module);
+        mod_data.source_map = Some(source_map);
     }
 
     /// Creates data for a named constant.
@@ -2873,13 +2964,13 @@ impl<'env> StructEnv<'env> {
 #[derive(Debug)]
 pub struct FieldData {
     /// The name of this field.
-    name: Symbol,
+    pub name: Symbol,
 
     /// The offset of this field.
-    offset: usize,
+    pub offset: usize,
 
     /// More information about this field
-    info: FieldInfo,
+    pub info: FieldInfo,
 }
 
 #[derive(Debug)]
@@ -3144,6 +3235,10 @@ impl<'env> FunctionEnv<'env> {
             self.module_env.get_name().display(self.symbol_pool()),
             self.get_name().display(self.symbol_pool())
         )
+    }
+
+    pub fn get_name_str(&self) -> String {
+        self.get_name().display(self.symbol_pool()).to_string()
     }
 
     /// Returns the VM identifier for this function
@@ -3653,7 +3748,7 @@ impl<'env> FunctionEnv<'env> {
     }
 
     /// Returns the acquired global resource types.
-    pub fn get_acquires_global_resources(&'env self) -> Vec<StructId> {
+    pub fn get_acquires_global_resources(&'env self) -> Option<Vec<StructId>> {
         let function_definition = self
             .module_env
             .data
@@ -3661,11 +3756,11 @@ impl<'env> FunctionEnv<'env> {
             .as_ref()
             .expect(COMPILED_MODULE_AVAILABLE)
             .function_def_at(self.get_def_idx());
-        function_definition
+        Some(function_definition
             .acquires_global_resources
             .iter()
             .map(|x| self.module_env.get_struct_id(*x))
-            .collect()
+            .collect())
     }
 
     /// Computes the modified targets of the spec clause, as a map from resource type names to

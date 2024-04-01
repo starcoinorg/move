@@ -101,7 +101,8 @@ pub fn run_stackless_compiler(env: &mut GlobalEnv, program: Program) {
         );
         let module_id = ModuleId::new(module_count);
         let mut module_translator = ModuleBuilder::new(&mut builder, module_id, module_name);
-        // module_translator.translate(loc, module_def, None);
+        // XXX FIXME YSG
+        module_translator.translate(loc, module_def, None);
     }
     for (i, (_, script_def)) in program.scripts.into_iter().enumerate() {
         let loc = builder.to_loc(&script_def.loc);
@@ -111,7 +112,7 @@ pub fn run_stackless_compiler(env: &mut GlobalEnv, program: Program) {
         let mut module_translator = ModuleBuilder::new(&mut builder, module_id, module_name);
         let module_def = expansion_script_to_module(script_def);
         // XXX FIXME YSG
-        // module_translator.translate(loc, module_def, None);
+        module_translator.translate(loc, module_def, None);
     }
 
     /*

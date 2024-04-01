@@ -40,6 +40,7 @@ use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_ir_types::location::sp;
 use move_symbol_pool::Symbol as MoveSymbol;
 
+use crate::builder::module_builder::BytecodeModule;
 use crate::{
     ast::{ModuleName, Spec},
     builder::model_builder::ModelBuilder,
@@ -51,6 +52,7 @@ use crate::{
 pub mod ast;
 mod builder;
 pub mod code_writer;
+pub mod demove_helper;
 pub mod exp_generator;
 pub mod exp_rewriter;
 pub mod intrinsics;
@@ -62,7 +64,6 @@ pub mod spec_translator;
 pub mod symbol;
 pub mod ty;
 pub mod well_known;
-mod demove_helper;
 
 // =================================================================================================
 // Entry Point
@@ -582,13 +583,12 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
         );
         let module_id = ModuleId::new(module_count);
         let mut module_translator = ModuleBuilder::new(&mut builder, module_id, module_name);
-        module_translator.translate(
-            loc,
-            expanded_module,
+        let compiled_module = BytecodeModule {
             compiled_module,
             source_map,
             function_infos,
-        );
+        };
+        module_translator.translate(loc, expanded_module, Some(compiled_module));
     }
 
     // Populate GlobalEnv with model-level information
@@ -647,7 +647,6 @@ pub(crate) fn project_1st<T: Clone, R>(v: &[(T, R)]) -> Vec<T> {
 pub(crate) fn project_2nd<T, R: Clone>(v: &[(T, R)]) -> Vec<R> {
     v.iter().map(|(_, x)| x.clone()).collect()
 }
-
 
 fn expansion_script_to_module(script: E::Script) -> ModuleDefinition {
     let E::Script {

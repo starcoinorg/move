@@ -23,7 +23,7 @@ use move_compiler::{
     compiled_unit::{FunctionInfo, SpecInfo},
     expansion::ast as EA,
     parser::ast as PA,
-    shared::{unique_map::UniqueMap, Name},
+    shared::{unique_map::UniqueMap, Identifier, Name},
 };
 use move_ir_types::{ast::ConstantName, location::Spanned};
 
@@ -55,6 +55,7 @@ use crate::{
     symbol::{Symbol, SymbolPool},
     ty::{PrimitiveType, Type, BOOL_TYPE},
 };
+use crate::model::{FieldData, StructInfo};
 
 #[derive(Debug)]
 pub(crate) struct ModuleBuilder<'env, 'translator> {
@@ -81,6 +82,15 @@ pub(crate) struct ModuleBuilder<'env, 'translator> {
     /// Let bindings for the current spec block, characterized by a boolean indicating whether
     /// post state is active and the node id of the original expression of the let.
     pub spec_block_lets: BTreeMap<Symbol, (bool, NodeId)>,
+}
+
+/// Represents information about a module already compiled into bytecode by the legacy
+/// Move compiler.
+#[derive(Debug)]
+pub(crate) struct BytecodeModule {
+    pub compiled_module: CompiledModule,
+    pub source_map: SourceMap,
+    pub function_infos: UniqueMap<PA::FunctionName, FunctionInfo>,
 }
 
 /// A value which we pass in to spec block analyzers, describing the resolved target of the spec
@@ -152,15 +162,13 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         &mut self,
         loc: Loc,
         module_def: EA::ModuleDefinition,
-        compiled_module: CompiledModule,
-        source_map: SourceMap,
-        function_infos: UniqueMap<PA::FunctionName, FunctionInfo>,
+        compiled_module: Option<BytecodeModule>,
     ) {
-        self.decl_ana(&module_def, &compiled_module, &source_map);
-        self.def_ana(&module_def, function_infos);
+        self.decl_ana(&module_def, &compiled_module);
+        self.def_ana(&module_def, &compiled_module);
         self.collect_spec_block_infos(&module_def);
         let attrs = self.translate_attributes(&module_def.attributes);
-        self.populate_env_from_result(loc, attrs, compiled_module, source_map);
+        self.populate_and_finalize_env(loc,attrs, compiled_module);
     }
 }
 
@@ -340,8 +348,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
     fn decl_ana(
         &mut self,
         module_def: &EA::ModuleDefinition,
-        compiled_module: &CompiledModule,
-        source_map: &SourceMap,
+        compiled_module: &Option<BytecodeModule>,
     ) {
         for (name, struct_def) in module_def.structs.key_cloned_iter() {
             self.decl_ana_struct(&name, struct_def);
@@ -350,7 +357,8 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             self.decl_ana_fun(&name, fun_def);
         }
         for (name, const_def) in module_def.constants.key_cloned_iter() {
-            self.decl_ana_const(&name, const_def, compiled_module, source_map);
+            // XXX FIXME YSG
+            self.decl_ana_const(&name, const_def, compiled_module);
         }
         for spec in &module_def.specs {
             self.decl_ana_spec_block(spec);
@@ -361,30 +369,58 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         &mut self,
         name: &PA::ConstantName,
         def: &EA::Constant,
-        compiled_module: &CompiledModule,
-        source_map: &SourceMap,
+        compiled_module: &Option<BytecodeModule>,
     ) {
         let qsym = self.qualified_by_module_from_name(&name.0);
-        let name = qsym.symbol;
-        let const_name = ConstantName(self.symbol_pool().string(name).to_string().into());
-        let const_idx = source_map
-            .constant_map
-            .get(&const_name)
-            .expect("constant not in source map");
-        let move_value =
-            Constant::deserialize_constant(&compiled_module.constant_pool()[*const_idx as usize])
-                .unwrap();
-        let mut et = ExpTranslator::new(self);
-        let loc = et.to_loc(&def.loc);
-        let ty = et.translate_type(&def.signature);
-        let value = et.translate_from_move_value(&loc, &ty, &move_value);
-        et.parent
-            .parent
-            .define_const(qsym, ConstEntry { loc, ty, value });
+        if self.parent.const_table.contains_key(&qsym) {
+            self.parent.env.error(
+                &self.parent.to_loc(&name.loc()),
+                &format!("duplicate declaration of const `{}`", &name.value()),
+            )
+        }
+
+        if let Some(compiled_module) = compiled_module {
+            let name = qsym.symbol;
+            let const_name = ConstantName(self.symbol_pool().string(name).to_string().into());
+            let const_idx = compiled_module
+                .source_map
+                .constant_map
+                .get(&const_name)
+                .expect("constant not in source map");
+            let move_value = Constant::deserialize_constant(
+                &compiled_module.compiled_module.constant_pool()[*const_idx as usize],
+            )
+            .unwrap();
+            let mut et = ExpTranslator::new(self);
+            let loc = et.to_loc(&def.loc);
+            let ty = et.translate_type(&def.signature);
+            let value = et.translate_from_move_value(&loc, &ty, &move_value);
+            et.parent
+                .parent
+                .define_const(qsym, ConstEntry { loc, ty, value });
+        } else {
+            let mut et = ExpTranslator::new(self);
+            let loc = et.to_loc(&def.loc);
+            let ty = et.translate_type(&def.signature);
+            et.parent.parent.define_const(
+                qsym,
+                ConstEntry {
+                    loc,
+                    ty,
+                    value: Value::Bool(false),
+                },
+            );
+        }
     }
 
     fn decl_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
+        if self.parent.struct_table.contains_key(&qsym) {
+            self.parent.env.error(
+                &self.parent.to_loc(&name.loc()),
+                &format!("duplicate declaration of `{}`", &name.value()),
+            )
+        }
         let struct_id = StructId::new(qsym.symbol);
         let attrs = self.translate_attributes(&def.attributes);
         let is_resource =
@@ -410,6 +446,12 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 
     fn decl_ana_fun(&mut self, name: &PA::FunctionName, def: &EA::Function) {
         let qsym = self.qualified_by_module_from_name(&name.0);
+        if self.parent.fun_table.contains_key(&qsym) {
+            self.parent.env.error(
+                &self.parent.to_loc(&name.loc()),
+                &format!("duplicate declaration of `{}`", &name.value()),
+            )
+        }
         let fun_id = FunId::new(qsym.symbol);
         let attrs = self.translate_attributes(&def.attributes);
         let mut et = ExpTranslator::new(self);
@@ -660,12 +702,17 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
     fn def_ana(
         &mut self,
         module_def: &EA::ModuleDefinition,
-        function_infos: UniqueMap<PA::FunctionName, FunctionInfo>,
+        compiled_module: &Option<BytecodeModule>,
     ) {
         // Analyze all structs.
         for (name, def) in module_def.structs.key_cloned_iter() {
             self.def_ana_struct(&name, def);
         }
+
+        // Analyze all constants. XXX FIXME YSG
+        /* for (name, def) in module_def.constants.key_cloned_iter() {
+            self.def_ana_constant(&name, def, compiled_module);
+        } */
 
         // Analyze all functions.
         for (idx, (name, fun_def)) in module_def.functions.key_cloned_iter().enumerate() {
@@ -741,9 +788,32 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             }
         }
 
+        // XXX FIXME YSG
+        // If we compile from bytecode, analyze in-function spec blocks.
+        if let Some(compiled_module) = compiled_module {
+            self.def_ana_code_specs(module_def, compiled_module);
+        }
+
+        // Perform post analyzes of state usage in spec functions.
+        self.compute_state_usage();
+
+        // Perform post reduction of module invariants.
+        self.process_module_invariants();
+
+        // Apply tweaks after all specs are analyzed
+        self.apply_tweaks(module_def);
+    }
+
+    /// Analyze specifications embedded in code, for the case we do not compile the code ourselves,
+    /// but have it provided from bytecode.
+    fn def_ana_code_specs(
+        &mut self,
+        module_def: &EA::ModuleDefinition,
+        compiled_module: &BytecodeModule,
+    ) {
         // Analyze in-function spec blocks.
         for (name, fun_def) in module_def.functions.key_cloned_iter() {
-            let fun_spec_info = &function_infos.get(&name).unwrap().spec_info;
+            let fun_spec_info = &compiled_module.function_infos.get(&name).unwrap().spec_info;
             let qsym = self.qualified_by_module_from_name(&name.0);
             for (spec_id, spec_block) in fun_def.specs.iter() {
                 for member in &spec_block.value.members {
@@ -787,15 +857,6 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 }
             }
         }
-
-        // Perform post analyzes of state usage in spec functions.
-        self.compute_state_usage();
-
-        // Perform post reduction of module invariants.
-        self.process_module_invariants();
-
-        // Apply tweaks after all specs are analyzed
-        self.apply_tweaks(module_def);
     }
 
     /// Validates whether a function signature provided with a spec block target matches the
@@ -3123,90 +3184,14 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 /// # Environment Population
 
 impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
-    fn populate_env_from_result(
+    fn populate_and_finalize_env(
         &mut self,
         loc: Loc,
         attributes: Vec<Attribute>,
-        module: CompiledModule,
-        source_map: SourceMap,
+        compiled_module: Option<BytecodeModule>,
     ) {
-        let struct_data: BTreeMap<StructId, StructData> = (0..module.struct_defs().len())
-            .filter_map(|idx| {
-                let def_idx = StructDefinitionIndex(idx as u16);
-                let handle_idx = module.struct_def_at(def_idx).struct_handle;
-                let handle = module.struct_handle_at(handle_idx);
-                let view = StructHandleView::new(&module, handle);
-                let name = self.symbol_pool().make(view.name().as_str());
-                if let Some(entry) = self
-                    .parent
-                    .struct_table
-                    .get(&self.qualified_by_module(name))
-                {
-                    let struct_spec = self
-                        .struct_specs
-                        .remove(&name)
-                        .unwrap_or_default();
-                    Some((
-                        StructId::new(name),
-                        self.parent.env.create_move_struct_data(
-                            &module,
-                            def_idx,
-                            name,
-                            entry.loc.clone(),
-                            entry.attributes.clone(),
-                            struct_spec,
-                        ),
-                    ))
-                } else {
-                    self.parent.error(
-                        &self.parent.env.internal_loc(),
-                        &format!("[internal] bytecode does not match AST: `{}` in bytecode but not in AST", name.display(self.symbol_pool())));
-                    None
-                }
-            })
-            .collect();
-        let function_data: BTreeMap<FunId, FunctionData> = (0..module.function_defs().len())
-            .filter_map(|idx| {
-                let def_idx = FunctionDefinitionIndex(idx as u16);
-                let handle_idx = module.function_def_at(def_idx).function;
-                let handle = module.function_handle_at(handle_idx);
-                let view = FunctionHandleView::new(&module, handle);
-                let name_str = view.name().as_str();
-                let name = if name_str == SCRIPT_BYTECODE_FUN_NAME {
-                    // This is a pseudo script module, which has exactly one function. Determine
-                    // the name of this function.
-                    self.parent.fun_table.iter().filter_map(|(k, _)| {
-                        if k.module_name == self.module_name
-                        { Some(k.symbol) } else { None }
-                    }).next().expect("unexpected script with multiple or no functions")
-                } else {
-                    self.symbol_pool().make(name_str)
-                };
-                let fun_spec = self.fun_specs.remove(&name).unwrap_or_default();
-                if let Some(entry) = self.parent.fun_table.get(&self.qualified_by_module(name)) {
-                    let arg_names = project_1st(&entry.params);
-                    let type_arg_names = project_1st(&entry.type_params);
-                    Some((FunId::new(name), self.parent.env.create_function_data(
-                        &module,
-                        def_idx,
-                        name,
-                        entry.loc.clone(),
-                        entry.attributes.clone(),
-                        arg_names,
-                        type_arg_names,
-                        fun_spec,
-                    )))
-                } else {
-                    let funs = self.parent.fun_table.iter().map(|(k, _)| {
-                        format!("{}", k.display_full(self.symbol_pool()))
-                    }).join(", ");
-                    self.parent.error(
-                        &self.parent.env.internal_loc(),
-                        &format!("[internal] bytecode does not match AST: `{}` in bytecode but not in AST (available in AST: {})", name.display(self.symbol_pool()), funs));
-                    None
-                }
-            })
-            .collect();
+        let mut struct_data: BTreeMap<StructId, StructData> = Default::default();
+        let function_data: BTreeMap<FunId, FunctionData> = Default::default();
         let named_constants: BTreeMap<NamedConstantId, NamedConstantData> = self
             .parent
             .const_table
@@ -3222,11 +3207,10 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 )
             })
             .collect();
-        self.parent.env.add(
+        let module_id = self.parent.env.add(
             loc,
+            self.module_name.clone(),
             attributes,
-            module,
-            source_map,
             named_constants,
             struct_data,
             function_data,
@@ -3235,10 +3219,17 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             std::mem::take(&mut self.module_spec),
             std::mem::take(&mut self.spec_block_infos),
         );
+        if let Some(BytecodeModule {
+            compiled_module,
+            source_map,
+            ..
+                    }) = compiled_module {
+            self.parent.env.attach_compiled_module(module_id,compiled_module, source_map)
+        }
     }
 }
 
-/// Extract all accesses of a schema from a schema expression.
+    /// Extract all accesses of a schema from a schema expression.
 pub(crate) fn extract_schema_access<'a>(exp: &'a EA::Exp, res: &mut Vec<&'a EA::ModuleAccess>) {
     match &exp.value {
         EA::Exp_::Name(maccess, _) => res.push(maccess),

@@ -1,0 +1,218 @@
+    Checking move-decompiler v0.1.0 (/Users/yesonggao/Github/starcoin_move/language/tools/move-decompiler)
+error[E0433]: failed to resolve: could not find `Address` in `ast`
+   --> language/tools/move-decompiler/src/decompiler/evaluator/stackless/mod.rs:215:34
+    |
+215 |                 move_model::ast::Address::Numerical(val) => {
+    |                                  ^^^^^^^ could not find `Address` in `ast`
+
+error[E0433]: failed to resolve: could not find `Address` in `ast`
+   --> language/tools/move-decompiler/src/decompiler/evaluator/stackless/mod.rs:218:34
+    |
+218 |                 move_model::ast::Address::Symbolic(_val) => {
+    |                                  ^^^^^^^ could not find `Address` in `ast`
+
+error[E0433]: failed to resolve: could not find `demove_helper` in `move_model`
+   --> language/tools/move-decompiler/src/decompiler/mod.rs:396:21
+    |
+396 |         move_model::demove_helper::run_stackless_compiler(&mut self.env, program);
+    |                     ^^^^^^^^^^^^^ could not find `demove_helper` in `move_model`
+
+error[E0599]: no method named `to_standard_string` found for reference `&AccountAddress` in the current scope
+  --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:96:22
+   |
+96 |                     .to_standard_string()
+   |                      ^^^^^^^^^^^^^^^^^^ method not found in `&AccountAddress`
+
+error[E0560]: struct `move_compiler::expansion::ast::Function` has no field named `inline`
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:323:9
+    |
+323 |         inline: false,
+    |         ^^^^^^ `move_compiler::expansion::ast::Function` does not have this field
+    |
+    = note: available fields are: `attributes`, `loc`, `visibility`, `entry`, `signature` ... and 3 others
+
+error[E0560]: struct `move_compiler::expansion::ast::Function` has no field named `access_specifiers`
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:334:9
+    |
+334 |         access_specifiers: Default::default()
+    |         ^^^^^^^^^^^^^^^^^ `move_compiler::expansion::ast::Function` does not have this field
+    |
+    = note: available fields are: `attributes`, `loc`, `visibility`, `entry`, `signature` ... and 3 others
+
+error[E0560]: struct `move_binary_format::file_format::FunctionHandle` has no field named `access_specifiers`
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:428:9
+    |
+428 |         access_specifiers: Default::default()
+    |         ^^^^^^^^^^^^^^^^^ `move_binary_format::file_format::FunctionHandle` does not have this field
+    |
+    = note: available fields are: `module`, `name`, `parameters`, `return_`, `type_parameters`
+
+error[E0599]: no method named `to_standard_string` found for reference `&AccountAddress` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:495:22
+    |
+495 |                     .to_standard_string()
+    |                      ^^^^^^^^^^^^^^^^^^ method not found in `&AccountAddress`
+
+error[E0599]: no method named `to_standard_string` found for reference `&AccountAddress` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:516:22
+    |
+516 |                     .to_standard_string()
+    |                      ^^^^^^^^^^^^^^^^^^ method not found in `&AccountAddress`
+
+error[E0560]: struct `move_compiler::expansion::ast::Function` has no field named `inline`
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:614:25
+    |
+614 |                         inline: false,
+    |                         ^^^^^^ `move_compiler::expansion::ast::Function` does not have this field
+    |
+    = note: available fields are: `attributes`, `loc`, `visibility`, `entry`, `signature` ... and 3 others
+
+error[E0560]: struct `move_compiler::expansion::ast::Function` has no field named `access_specifiers`
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:625:25
+    |
+625 |                         access_specifiers: Default::default()
+    |                         ^^^^^^^^^^^^^^^^^ `move_compiler::expansion::ast::Function` does not have this field
+    |
+    = note: available fields are: `attributes`, `loc`, `visibility`, `entry`, `signature` ... and 3 others
+
+error[E0560]: struct `move_compiler::expansion::ast::ModuleDefinition` has no field named `use_decls`
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:681:21
+    |
+681 |                     use_decls: Vec::new(),
+    |                     ^^^^^^^^^ `move_compiler::expansion::ast::ModuleDefinition` does not have this field
+    |
+    = note: available fields are: `package_name`, `attributes`, `loc`, `is_source_module`, `dependency_order` ... and 7 others
+
+error[E0560]: struct `move_compiler::expansion::ast::ModuleDefinition` has no field named `use_decls`
+   --> language/tools/move-decompiler/src/decompiler/bin_to_compiler_translator.rs:758:21
+    |
+758 |                     use_decls: Vec::new(),
+    |                     ^^^^^^^^^ `move_compiler::expansion::ast::ModuleDefinition` does not have this field
+    |
+    = note: available fields are: `package_name`, `attributes`, `loc`, `is_source_module`, `dependency_order` ... and 7 others
+
+error[E0599]: no variant or associated item named `Release` found for enum `move_stackless_bytecode::stackless_bytecode::Operation` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/cfg/stackless.rs:645:54
+    |
+645 |                         Operation::Drop | Operation::Release => {}
+    |                                                      ^^^^^^^ variant or associated item not found in `move_stackless_bytecode::stackless_bytecode::Operation`
+
+error[E0599]: no variant or associated item named `Release` found for enum `move_stackless_bytecode::stackless_bytecode::Operation` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/evaluator/stackless/operations.rs:224:42
+    |
+224 |             Operation::Drop | Operation::Release => Ok(OperationEvaluatorResult {
+    |                                          ^^^^^^^ variant or associated item not found in `move_stackless_bytecode::stackless_bytecode::Operation`
+
+error[E0599]: no variant or associated item named `Vector` found for enum `move_stackless_bytecode::stackless_bytecode::Operation` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/evaluator/stackless/operations.rs:241:24
+    |
+241 |             Operation::Vector => todo!(),
+    |                        ^^^^^^ variant or associated item not found in `move_stackless_bytecode::stackless_bytecode::Operation`
+
+error[E0308]: mismatched types
+  --> language/tools/move-decompiler/src/decompiler/evaluator/stackless/operations.rs:54:28
+   |
+54 |                     if let Some(resources) = func.get_acquires_global_resources() {
+   |                            ^^^^^^^^^^^^^^^   ------------------------------------ this expression has type `Vec<StructId>`
+   |                            |
+   |                            expected struct `Vec`, found enum `Option`
+   |
+   = note: expected struct `Vec<StructId>`
+                found enum `Option<_>`
+
+error[E0599]: no method named `get_name_str` found for struct `FunctionEnv` in the current scope
+  --> language/tools/move-decompiler/src/decompiler/evaluator/stackless/operations.rs:60:57
+   |
+60 |                 let name = shortest_name(ctx, mid, func.get_name_str());
+   |                                                         ^^^^^^^^^^^^ help: there is a method with a similar name: `get_full_name_str`
+
+error[E0599]: no variant or associated item named `Release` found for enum `move_stackless_bytecode::stackless_bytecode::Operation` in the current scope
+    --> language/tools/move-decompiler/src/decompiler/evaluator/stackless/mod.rs:1341:79
+     |
+1341 |                     | move_stackless_bytecode::stackless_bytecode::Operation::Release
+     |                                                                               ^^^^^^^ variant or associated item not found in `move_stackless_bytecode::stackless_bytecode::Operation`
+
+error[E0599]: no variant or associated item named `Inferred` found for enum `AssignKind` in the current scope
+    --> language/tools/move-decompiler/src/decompiler/evaluator/stackless/mod.rs:1452:33
+     |
+1452 |                     AssignKind::Inferred => {}
+     |                                 ^^^^^^^^ variant or associated item not found in `AssignKind`
+
+error[E0599]: no variant or associated item named `Release` found for enum `move_stackless_bytecode::stackless_bytecode::Operation` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/reconstruct/stackless_var_usage.rs:442:58
+    |
+442 |             if matches!(op, Operation::Drop | Operation::Release) {
+    |                                                          ^^^^^^^ variant or associated item not found in `move_stackless_bytecode::stackless_bytecode::Operation`
+
+error[E0609]: no field `abilities` on type `AbilityConstraint`
+   --> language/tools/move-decompiler/src/decompiler/mod.rs:193:69
+    |
+193 | ...                   self.decompile_abilityset(tp_from_env.1.abilities, ": ", " + ")
+    |                                                               ^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `0`
+
+error[E0609]: no field `is_phantom` on type `AbilityConstraint`
+   --> language/tools/move-decompiler/src/decompiler/mod.rs:281:36
+    |
+281 | ...                   if x.1.is_phantom { "phantom " } else { "" },
+    |                              ^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `0`
+
+error[E0609]: no field `abilities` on type `AbilityConstraint`
+   --> language/tools/move-decompiler/src/decompiler/mod.rs:283:59
+    |
+283 | ...                   self.decompile_abilityset(x.1.abilities, ": ", " + ")
+    |                                                     ^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `0`
+
+error[E0599]: no method named `get_result_type` found for reference `&FunctionEnv<'_>` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/mod.rs:318:35
+    |
+318 |                     &function_env.get_result_type(),
+    |                                   ^^^^^^^^^^^^^^^ help: there is a method with a similar name: `get_return_type`
+
+error[E0308]: mismatched types
+   --> language/tools/move-decompiler/src/decompiler/mod.rs:326:16
+    |
+326 |         if let Some(resources) = function_env.get_acquires_global_resources() {
+    |                ^^^^^^^^^^^^^^^   -------------------------------------------- this expression has type `Vec<StructId>`
+    |                |
+    |                expected struct `Vec`, found enum `Option`
+    |
+    = note: expected struct `Vec<StructId>`
+                 found enum `Option<_>`
+
+error[E0599]: no method named `attach_compiled_module` found for struct `GlobalEnv` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/mod.rs:401:65
+    |
+401 |                 BinaryIndexedView::Module(compiled) => self.env.attach_compiled_module(
+    |                                                                 ^^^^^^^^^^^^^^^^^^^^^^ method not found in `GlobalEnv`
+
+error[E0599]: no method named `attach_compiled_module` found for struct `GlobalEnv` in the current scope
+   --> language/tools/move-decompiler/src/decompiler/mod.rs:407:65
+    |
+407 |                 BinaryIndexedView::Script(compiled) => self.env.attach_compiled_module(
+    |                                                                 ^^^^^^^^^^^^^^^^^^^^^^ method not found in `GlobalEnv`
+
+error[E0308]: mismatched types
+    --> language/tools/move-decompiler/src/decompiler/mod.rs:436:52
+     |
+436  |                     module.get_name().display_full(&self.env)
+     |                                       ------------ ^^^^^^^^^ expected struct `SymbolPool`, found struct `GlobalEnv`
+     |                                       |
+     |                                       arguments to this function are incorrect
+     |
+     = note: expected reference `&SymbolPool`
+                found reference `&GlobalEnv`
+note: associated function defined here
+    --> /Users/yesonggao/Github/starcoin_move/language/move-model/src/ast.rs:1108:12
+     |
+1108 |     pub fn display_full<'a>(&'a self, pool: &'a SymbolPool) -> ModuleNameDisplay<'a> {
+     |            ^^^^^^^^^^^^
+
+Some errors have detailed explanations: E0308, E0433, E0560, E0599, E0609.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `move-decompiler` due to 29 previous errors

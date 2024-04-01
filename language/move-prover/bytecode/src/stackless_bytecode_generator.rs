@@ -34,6 +34,7 @@ use std::{
     convert::TryInto,
     matches,
 };
+use move_model::model::COMPILED_MODULE_AVAILABLE;
 
 pub struct StacklessBytecodeGenerator<'a> {
     func_env: &'a FunctionEnv<'a>,
@@ -125,7 +126,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
             local_types,
             func_env.get_return_types(),
             location_table,
-            func_env.get_acquires_global_resources(),
+            func_env.get_acquires_global_resources().expect(COMPILED_MODULE_AVAILABLE),
             loop_invariants,
         )
     }
