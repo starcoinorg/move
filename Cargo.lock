@@ -3890,6 +3890,7 @@ dependencies = [
  "proptest",
  "sha3 0.9.1",
  "tracing",
+ "typed-arena",
 ]
 
 [[package]]

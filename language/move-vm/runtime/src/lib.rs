@@ -27,5 +27,6 @@ pub mod config;
 #[cfg(any(debug_assertions, feature = "debugging"))]
 mod debug;
 
+pub mod module_traversal;
 #[cfg(test)]
 mod unit_tests;

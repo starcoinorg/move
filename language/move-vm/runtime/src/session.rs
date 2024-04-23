@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::loader::{Function, Module};
+use crate::module_traversal::TraversalContext;
 use crate::{
     data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
     runtime::VMRuntime,
@@ -420,6 +421,59 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         self.runtime
             .deserialize_args(arg_tys, serialized_args)
             .map_err(|err| err.finish(Location::Undefined))
+    }
+    pub fn check_dependencies_and_charge_gas<'a, I>(
+        &mut self,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext<'a>,
+        ids: I,
+    ) -> VMResult<()>
+    where
+        I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
+        I::IntoIter: DoubleEndedIterator,
+    {
+        self.runtime.loader().check_dependencies_and_charge_gas(
+            &mut self.data_cache,
+            gas_meter,
+            &mut traversal_context.visited,
+            traversal_context.referenced_modules,
+            ids,
+        )
+    }
+
+    pub fn check_dependencies_and_charge_gas_non_recursive_optional<'a, I>(
+        &mut self,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext<'a>,
+        ids: I,
+    ) -> VMResult<()>
+    where
+        I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
+    {
+        self.runtime
+            .loader()
+            .check_dependencies_and_charge_gas_non_recursive_optional(
+                &mut self.data_cache,
+                gas_meter,
+                &mut traversal_context.visited,
+                ids,
+            )
+    }
+
+    pub fn check_script_dependencies_and_check_gas(
+        &mut self,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+        script: impl Borrow<[u8]>,
+    ) -> VMResult<()> {
+        self.runtime
+            .loader()
+            .check_script_dependencies_and_check_gas(
+                &mut self.data_cache,
+                gas_meter,
+                traversal_context,
+                script.borrow(),
+            )
     }
 }
 

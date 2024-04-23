@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::data_cache::TransactionDataCache;
+use crate::module_traversal::TraversalContext;
 use crate::{
     config::VMConfig,
     logging::expect_no_verification_errors,
@@ -24,6 +25,7 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::account_address::AccountAddress;
+use move_core_types::gas_algebra::NumBytes;
 use move_core_types::resolver::MoveResolver;
 use move_core_types::{
     identifier::{IdentStr, Identifier},
@@ -32,6 +34,7 @@ use move_core_types::{
     value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     vm_status::StatusCode,
 };
+use move_vm_types::gas::GasMeter;
 use move_vm_types::{
     data_store::DataStore,
     loaded_data::runtime_types::{CachedStructIndex, DepthFormula, StructType, Type},
@@ -46,6 +49,7 @@ use std::{
     sync::Arc,
 };
 use tracing::error;
+use typed_arena::Arena;
 
 type ScriptHash = [u8; 32];
 
@@ -173,6 +177,7 @@ impl ModuleCache {
         &mut self,
         natives: &NativeFunctions,
         id: ModuleId,
+        module_size: usize,
         module: CompiledModule,
     ) -> VMResult<Arc<Module>> {
         if let Some(cached) = self.module_at(&id) {
@@ -183,7 +188,7 @@ impl ModuleCache {
         // leave a clean state
 
         let sig_cache = self.add_module(natives, &module)?;
-        match Module::new(&sig_cache, module, self) {
+        match Module::new(&sig_cache, module_size, module, self) {
             Ok(module) => Ok(Arc::clone(self.modules.insert(id, module))),
             Err((err, module)) => {
                 // remove all structs and functions that have been pushed
@@ -1268,7 +1273,7 @@ impl Loader {
         id: &ModuleId,
         data_store: &impl DataStore,
         allow_loading_failure: bool,
-    ) -> VMResult<CompiledModule> {
+    ) -> VMResult<(CompiledModule, usize)> {
         // bytes fetching, allow loading to fail if the flag is set
         let bytes = match data_store.load_module(id) {
             Ok(bytes) => bytes,
@@ -1308,7 +1313,7 @@ impl Loader {
             .map_err(expect_no_verification_errors)?;
         self.check_natives(&module)
             .map_err(expect_no_verification_errors)?;
-        Ok(module)
+        Ok((module, bytes.len()))
     }
 
     // Everything in `load_and_verify_module` and also recursively load and verify all the
@@ -1330,7 +1335,8 @@ impl Loader {
         }
 
         // module self-check
-        let module = self.load_and_verify_module(id, data_store, allow_module_loading_failure)?;
+        let (module, module_size) =
+            self.load_and_verify_module(id, data_store, allow_module_loading_failure)?;
         visited.insert(id.clone());
         friends_discovered.extend(module.immediate_friends());
 
@@ -1348,7 +1354,7 @@ impl Loader {
 
         // if linking goes well, insert the module to the code cache
         let mut locked_cache = self.module_cache.write();
-        let module_ref = locked_cache.insert(&self.natives, id.clone(), module)?;
+        let module_ref = locked_cache.insert(&self.natives, id.clone(), module_size, module)?;
         drop(locked_cache); // explicit unlock
 
         Ok(module_ref)
@@ -1611,6 +1617,123 @@ impl Loader {
                 )
             }
         }
+    }
+
+    //
+    // Script verification and loading
+    //
+
+    pub(crate) fn check_script_dependencies_and_check_gas<S>(
+        &self,
+        data_store: &mut TransactionDataCache<S>,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+        script_blob: &[u8],
+    ) -> VMResult<()> {
+        let mut sha3_256 = Sha3_256::new();
+        sha3_256.update(script_blob);
+        let hash_value: [u8; 32] = sha3_256.finalize().into();
+
+        let script = data_store.load_compiled_script_to_cache(script_blob, hash_value)?;
+        let script = traversal_context.referenced_scripts.alloc(script);
+
+        // TODO(Gas): Should we charge dependency gas for the script itself?
+        self.check_dependencies_and_charge_gas(
+            data_store,
+            gas_meter,
+            &mut traversal_context.visited,
+            traversal_context.referenced_modules,
+            script.immediate_dependencies_iter(),
+        )?;
+
+        Ok(())
+    }
+
+    /// Traverses the whole transitive closure of dependencies, starting from the specified
+    /// modules and performs gas metering.
+    ///
+    /// The traversal follows a depth-first order, with the module itself being visited first,
+    /// followed by its dependencies, and finally its friends.
+    /// DO NOT CHANGE THE ORDER unless you have a good reason, or otherwise this could introduce
+    /// a breaking change to the gas semantics.
+    ///
+    /// This will result in the shallow-loading of the modules -- they will be read from the
+    /// storage as bytes and then deserialized, but NOT converted into the runtime representation.
+    ///
+    /// It should also be noted that this is implemented in a way that avoids the cloning of
+    /// `ModuleId`, a.k.a. heap allocations, as much as possible, which is critical for
+    /// performance.
+    ///
+    /// TODO: Revisit the order of traversal. Consider switching to alphabetical order.
+    pub(crate) fn check_dependencies_and_charge_gas<'a, S, I>(
+        &self,
+        data_store: &mut TransactionDataCache<S>,
+        gas_meter: &mut impl GasMeter,
+        visited: &mut BTreeMap<(&'a AccountAddress, &'a IdentStr), ()>,
+        referenced_modules: &'a Arena<Arc<CompiledModule>>,
+        ids: I,
+    ) -> VMResult<()>
+    where
+        I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
+        I::IntoIter: DoubleEndedIterator,
+    {
+        // Initialize the work list (stack) and the map of visited modules.
+        //
+        // TODO: Determine the reserved capacity based on the max number of dependencies allowed.
+        let mut stack = Vec::with_capacity(512);
+
+        for (addr, name) in ids.into_iter().rev() {
+            // TODO: Allow the check of special addresses to be customized.
+            if !addr.is_special() && visited.insert((addr, name), ()).is_none() {
+                stack.push((addr, name, true));
+            }
+        }
+
+        while let Some((addr, name, allow_loading_failure)) = stack.pop() {
+            // Load and deserialize the module only if it has not been cached by the loader.
+            // Otherwise this will cause a significant regression in performance.
+            let (module, size) = match self
+                .module_cache
+                .read()
+                .module_at(&ModuleId::new(addr.clone(), name.into()))
+            {
+                Some(module) => (module.module.clone(), module.size),
+                None => {
+                    let (module, size, _) = data_store.load_compiled_module_to_cache(
+                        ModuleId::new(*addr, name.to_owned()),
+                        allow_loading_failure,
+                    )?;
+                    (module, size)
+                }
+            };
+
+            // Extend the lifetime of the module to the remainder of the function body
+            // by storing it in an arena.
+            //
+            // This is needed because we need to store references derived from it in the
+            // work list.
+            let module = referenced_modules.alloc(module);
+
+            gas_meter
+                .charge_dependency(false, addr, name, NumBytes::new(size as u64))
+                .map_err(|err| {
+                    err.finish(Location::Module(ModuleId::new(*addr, name.to_owned())))
+                })?;
+
+            // Explore all dependencies and friends that have been visited yet.
+            for (addr, name) in module
+                .immediate_dependencies_iter()
+                .chain(module.immediate_friends_iter())
+                .rev()
+            {
+                // TODO: Allow the check of special addresses to be customized.
+                if !addr.is_special() && visited.insert((addr, name), ()).is_none() {
+                    stack.push((addr, name, false));
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -1936,8 +2059,10 @@ impl<'a> Resolver<'a> {
 pub struct Module {
     #[allow(dead_code)]
     id: ModuleId,
+    // module size in bytes
+    pub(crate) size: usize,
     // primitive pools
-    module: Arc<CompiledModule>,
+    pub(crate) module: Arc<CompiledModule>,
 
     //
     // types as indexes into the Loader type list
@@ -1984,6 +2109,7 @@ pub struct Module {
 impl Module {
     fn new(
         sig_cache: &[Vec<Type>],
+        module_size: usize,
         module: CompiledModule,
         cache: &ModuleCache,
     ) -> Result<Self, (PartialVMError, CompiledModule)> {
@@ -2148,6 +2274,7 @@ impl Module {
         match create() {
             Ok(_) => Ok(Self {
                 id,
+                size: module_size,
                 module: Arc::new(module),
                 struct_refs,
                 structs,
