@@ -485,6 +485,9 @@ pub enum StatusCode {
     // There was an error when accessing chain-specific account information
     CHAIN_ACCOUNT_INFO_DOES_NOT_EXIST = 30,
 
+    // Send Transaction has obstructed by global frozen config
+    SEND_TXN_GLOBAL_FROZEN = 40,
+
     // The code is not running in genesis
     NOT_GENESIS = 500,
     // Config value doesn't exist
