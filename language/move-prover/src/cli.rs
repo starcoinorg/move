@@ -19,7 +19,7 @@ use move_compiler::shared::NumericalAddress;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use simplelog::{
-    CombinedLogger, Config, ConfigBuilder, LevelPadding, SimpleLogger, TermLogger, TerminalMode,
+    CombinedLogger, Config, ConfigBuilder, LevelPadding, SimpleLogger, TermLogger, TerminalMode, ColorChoice,
 };
 
 use codespan_reporting::diagnostic::Severity;
@@ -803,6 +803,7 @@ impl Options {
                 self.verbosity_level,
                 config,
                 TerminalMode::Mixed,
+                ColorChoice::Auto,
             )])
         } else {
             CombinedLogger::init(vec![SimpleLogger::new(self.verbosity_level, config)])
