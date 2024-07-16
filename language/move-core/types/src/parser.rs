@@ -624,12 +624,12 @@ fn tests_parse_type_tag() {
         TypeTag::U128,
         TypeTag::Address,
         TypeTag::Bool,
-        TypeTag::Struct(StructTag {
+        TypeTag::Struct(Box::new(StructTag {
             address: AccountAddress::random(),
             module: Identifier::from_utf8("A".to_string().into_bytes()).unwrap(),
             name: Identifier::from_utf8("B".to_string().into_bytes()).unwrap(),
             type_params: vec![TypeTag::Address],
-        }),
+        })),
         TypeTag::Vector(Box::new(TypeTag::U8)),
     ] {
         let actual = parse_type_tag(t.to_string().as_str()).unwrap();
