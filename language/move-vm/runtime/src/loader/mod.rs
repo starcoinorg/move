@@ -234,6 +234,7 @@ impl Loader {
     }
 
     /// Flush this cache if it is marked as invalidated.
+    // equals empty()
     pub(crate) fn flush_if_invalidated(&self) {
         let mut invalidated = self.invalidated.write();
         if *invalidated {

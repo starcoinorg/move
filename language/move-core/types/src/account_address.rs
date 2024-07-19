@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use bech32::ToBase32;
 use hex::FromHex;
 use num::BigUint;
 use rand::{rngs::OsRng, Rng};
@@ -19,7 +20,7 @@ impl AccountAddress {
     pub const FOUR: Self = Self::get_hex_address_four();
     /// The number of bytes in an address.
     /// Default to 16 bytes, can be set to 20 bytes with address20 feature.
-    pub const LENGTH: usize = 32;
+    pub const LENGTH: usize = 16;
     /// Max address: 0xff....
     pub const MAX_ADDRESS: Self = Self([0xFF; Self::LENGTH]);
     /// Hex address: 0x1
@@ -182,7 +183,7 @@ impl AccountAddress {
     /// NOTE: For the purposes of displaying an address, using it in a response, or
     /// storing it at rest as a string, use `to_standard_string`.
     pub fn to_hex(&self) -> String {
-        format!("{:x}", self)
+        format!("{:#x}", self)
     }
 
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, AccountAddressParseError> {
@@ -237,6 +238,44 @@ impl AccountAddress {
 
         Ok(address)
     }
+
+    pub fn to_bech32(&self) -> String {
+        let mut data = self.to_vec().to_base32();
+        data.insert(
+            0,
+            bech32::u5::try_from_u8(1).expect("1 to u8 should success"),
+        );
+        bech32::encode("stc", data, bech32::Variant::Bech32).expect("bech32 encode should success")
+    }
+
+    fn parse_bench32(s: impl AsRef<str>) -> anyhow::Result<Vec<u8>> {
+        let (hrp, data, variant) = bech32::decode(s.as_ref())?;
+
+        anyhow::ensure!(variant == bech32::Variant::Bech32, "expect bech32 encoding");
+        anyhow::ensure!(hrp.as_str() == "stc", "expect bech32 hrp to be stc");
+
+        let version = data.first().map(|u| u.to_u8());
+        anyhow::ensure!(version.filter(|v| *v == 1u8).is_some(), "expect version 1");
+
+        let data: Vec<u8> = bech32::FromBase32::from_base32(&data[1..])?;
+
+        if data.len() == AccountAddress::LENGTH {
+            Ok(data)
+        } else if data.len() == AccountAddress::LENGTH + 32 {
+            // for address + auth key format, just ignore auth key
+            Ok(data[0..AccountAddress::LENGTH].to_vec())
+        } else {
+            anyhow::bail!("Invalid address's length");
+        }
+    }
+
+    //This method should not be part of the move core type, but can not implement from_str in starcoin project.
+    //May be the AccountAddress should not be move core type, move only take care of AddressBytes.
+    pub fn from_bech32(s: impl AsRef<str>) -> Result<Self, AccountAddressParseError> {
+        Self::from_bytes(
+            Self::parse_bench32(s).map_err(|_| AccountAddressParseError::ParseBech32Error)?,
+        )
+    }
 }
 
 impl AsRef<[u8]> for AccountAddress {
@@ -255,13 +294,14 @@ impl std::ops::Deref for AccountAddress {
 
 impl fmt::Display for AccountAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.to_standard_string())
+        // Forward to the LowerHex impl with a "0x" prepended (the # flag).
+        write!(f, "{:#x}", self)
     }
 }
 
 impl fmt::Debug for AccountAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:x}", self)
+        write!(f, "{:#x}", self)
     }
 }
 
@@ -378,7 +418,9 @@ impl FromStr for AccountAddress {
     /// Learn more about the different address formats by reading AIP-40:
     /// <https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-40.md>.
     fn from_str(s: &str) -> Result<Self, AccountAddressParseError> {
-        if !s.starts_with("0x") {
+        if s.starts_with("stc") {
+            AccountAddress::from_bech32(s)
+        } else if !s.starts_with("0x") {
             if s.is_empty() {
                 return Err(AccountAddressParseError::TooShort);
             }
@@ -420,7 +462,7 @@ impl Serialize for AccountAddress {
         S: Serializer,
     {
         if serializer.is_human_readable() {
-            self.to_hex().serialize(serializer)
+            self.to_string().serialize(serializer)
         } else {
             // See comment in deserialize.
             serializer.serialize_newtype_struct("AccountAddress", &self.0)
@@ -452,6 +494,9 @@ pub enum AccountAddressParseError {
 
     #[error("The given hex string is a special address not in LONG form, it must be 0x0 to 0xf without padding zeroes")]
     InvalidPaddingZeroes,
+
+    #[error("Parse bech32 error")]
+    ParseBech32Error,
 }
 
 #[cfg(test)]
@@ -469,7 +514,7 @@ mod tests {
         // Testing the special range of 0x0 to 0xf
         assert_eq!(
             &AccountAddress::from_hex(
-                "0000000000000000000000000000000000000000000000000000000000000000"
+                "00000000000000000000000000000000"
             )
             .unwrap()
             .to_standard_string(),
@@ -477,7 +522,7 @@ mod tests {
         );
         assert_eq!(
             &AccountAddress::from_hex(
-                "0000000000000000000000000000000000000000000000000000000000000001"
+                "00000000000000000000000000000001"
             )
             .unwrap()
             .to_standard_string(),
@@ -485,7 +530,7 @@ mod tests {
         );
         assert_eq!(
             &AccountAddress::from_hex(
-                "0000000000000000000000000000000000000000000000000000000000000004"
+                "00000000000000000000000000000004"
             )
             .unwrap()
             .to_standard_string(),
@@ -493,7 +538,7 @@ mod tests {
         );
         assert_eq!(
             &AccountAddress::from_hex(
-                "000000000000000000000000000000000000000000000000000000000000000f"
+                "0000000000000000000000000000000f"
             )
             .unwrap()
             .to_standard_string(),
@@ -503,58 +548,58 @@ mod tests {
         // Testing addresses outside of the special range
         assert_eq!(
             &AccountAddress::from_hex(
-                "0000000000000000000000000000000000000000000000000000000000000010"
+                "00000000000000000000000000000010"
             )
             .unwrap()
             .to_standard_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000010"
+            "0x00000000000000000000000000000010"
         );
         assert_eq!(
             &AccountAddress::from_hex(
-                "000000000000000000000000000000000000000000000000000000000000001f"
+                "0000000000000000000000000000001f"
             )
             .unwrap()
             .to_standard_string(),
-            "0x000000000000000000000000000000000000000000000000000000000000001f"
+            "0x0000000000000000000000000000001f"
         );
         assert_eq!(
             &AccountAddress::from_hex(
-                "00000000000000000000000000000000000000000000000000000000000000a0"
+                "000000000000000000000000000000a0"
             )
             .unwrap()
             .to_standard_string(),
-            "0x00000000000000000000000000000000000000000000000000000000000000a0"
+            "0x000000000000000000000000000000a0"
         );
         assert_eq!(
             &AccountAddress::from_hex(
-                "ca843279e3427144cead5e4d5999a3d0ca843279e3427144cead5e4d5999a3d0"
+                "ca843279e3427144cead5e4d5999a3d0"
             )
             .unwrap()
             .to_standard_string(),
-            "0xca843279e3427144cead5e4d5999a3d0ca843279e3427144cead5e4d5999a3d0"
+            "0xca843279e3427144cead5e4d5999a3d0"
         );
         assert_eq!(
             &AccountAddress::from_hex(
-                "1000000000000000000000000000000000000000000000000000000000000000"
+                "10000000000000000000000000000000"
             )
             .unwrap()
             .to_standard_string(),
-            "0x1000000000000000000000000000000000000000000000000000000000000000"
+            "0x10000000000000000000000000000000"
         );
 
         // Demonstrating that neither leading nor trailing zeroes get trimmed for
         // non-special addresses
         assert_eq!(
             &AccountAddress::from_hex(
-                "0f00000000000000000000000000000000000000000000000000000000000000"
+                "0f000000000000000000000000000000"
             )
             .unwrap()
             .to_standard_string(),
-            "0x0f00000000000000000000000000000000000000000000000000000000000000"
+            "0x0f000000000000000000000000000000"
         );
 
         // This is the equivalent of 0x1
-        let mut bytes = vec![0; 31];
+        let mut bytes = vec![0; 15];
         bytes.push(0b1);
         assert_eq!(
             &AccountAddress::from_bytes(bytes)
@@ -564,7 +609,7 @@ mod tests {
         );
 
         // This is the equivalent of 0xf
-        let mut bytes = vec![0; 31];
+        let mut bytes = vec![0; 15];
         bytes.push(0b1111);
         assert_eq!(
             &AccountAddress::from_bytes(bytes)
@@ -574,59 +619,59 @@ mod tests {
         );
 
         // This is the equivalent of
-        // 0x0000000000000000000000000000000000000000000000000000000000000010
-        let mut bytes = vec![0; 31];
+        // 0x00000000000000000000000000000010
+        let mut bytes = vec![0; 15];
         bytes.push(0b10000);
         assert_eq!(
             &AccountAddress::from_bytes(bytes)
                 .unwrap()
                 .to_standard_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000010"
+            "0x00000000000000000000000000000010"
         );
 
         // This is the equivalent of
         // 0x0100000000000000000000000000000000000000000000000000000000000000
         let mut bytes = vec![1; 1];
-        bytes.extend([0; 31].iter());
+        bytes.extend([0; 15].iter());
         assert_eq!(
             &AccountAddress::from_bytes(bytes)
                 .unwrap()
                 .to_standard_string(),
-            "0x0100000000000000000000000000000000000000000000000000000000000000"
+            "0x01000000000000000000000000000000"
         );
 
         // This is the equivalent of
-        // 0x1000000000000000000000000000000000000000000000000000000000000000
+        // 0x10000000000000000000000000000000
         let mut bytes = vec![16; 1];
-        bytes.extend([0; 31].iter());
+        bytes.extend([0; 15].iter());
         assert_eq!(
             &AccountAddress::from_bytes(bytes)
                 .unwrap()
                 .to_standard_string(),
-            "0x1000000000000000000000000000000000000000000000000000000000000000"
+            "0x10000000000000000000000000000000"
         );
     }
 
     #[test]
     fn test_display_impls() {
-        let hex = "ca843279e3427144cead5e4d5999a3d0ca843279e3427144cead5e4d5999a3d0";
-        let upper_hex = "CA843279E3427144CEAD5E4D5999A3D0CA843279E3427144CEAD5E4D5999A3D0";
+        let hex = "ca843279e3427144cead5e4d5999a3d0";
+        let upper_hex = "CA843279E3427144CEAD5E4D5999A3D0";
 
         let address = AccountAddress::from_hex(hex).unwrap();
 
         assert_eq!(format!("{}", address), format!("0x{}", hex));
-        assert_eq!(format!("{:?}", address), hex);
+        assert_eq!(format!("{:?}", address), format!("0x{}", hex));
         assert_eq!(format!("{:X}", address), upper_hex);
         assert_eq!(format!("{:x}", address), hex);
 
-        assert_eq!(format!("{:#x}", address), format!("0x{}", hex));
-        assert_eq!(format!("{:#X}", address), format!("0x{}", upper_hex));
+        assert_eq!(format!("{:x}", address), hex);
+        assert_eq!(format!("{:X}", address), upper_hex);
     }
 
     #[test]
     fn test_short_str_lossless() {
         let address = AccountAddress::from_hex(
-            "0000000000000000000000000000000000c0f1f95c5b1c5f0eda533eff269000",
+            "00c0f1f95c5b1c5f0eda533eff269000",
         )
         .unwrap();
 
@@ -639,7 +684,7 @@ mod tests {
     #[test]
     fn test_short_str_lossless_zero() {
         let address = AccountAddress::from_hex(
-            "0000000000000000000000000000000000000000000000000000000000000000",
+            "00000000000000000000000000000000",
         )
         .unwrap();
 
@@ -648,7 +693,7 @@ mod tests {
 
     #[test]
     fn test_address() {
-        let hex = "ca843279e3427144cead5e4d5999a3d0ca843279e3427144cead5e4d5999a3d0";
+        let hex = "ca843279e3427144cead5e4d5999a3d0";
         let bytes = Vec::from_hex(hex).expect("You must provide a valid Hex format");
 
         assert_eq!(
@@ -668,7 +713,7 @@ mod tests {
     #[test]
     fn test_from_hex_literal() {
         let hex_literal = "0x1";
-        let hex = "0000000000000000000000000000000000000000000000000000000000000001";
+        let hex = "00000000000000000000000000000001";
 
         let address_from_literal = AccountAddress::from_hex_literal(hex_literal).unwrap();
         let address = AccountAddress::from_hex(hex).unwrap();
@@ -676,11 +721,11 @@ mod tests {
         assert_eq!(address_from_literal, address);
         assert_eq!(hex_literal, address.to_hex_literal());
 
-        // Missing '0x'
+        // Missing '0x' is ok
         AccountAddress::from_hex_literal(hex).unwrap_err();
         // Too long
         AccountAddress::from_hex_literal(
-            "0x10000000000000000000000000000001100000000000000000000000000000001",
+            "0x100000000000000000000000000000001",
         )
         .unwrap_err();
     }
@@ -715,21 +760,21 @@ mod tests {
             &AccountAddress::from_str("0x010")
                 .unwrap()
                 .to_standard_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000010"
+            "0x00000000000000000000000000000010"
         );
         assert_eq!(
             &AccountAddress::from_str("0xfdfdf")
                 .unwrap()
                 .to_standard_string(),
-            "0x00000000000000000000000000000000000000000000000000000000000fdfdf"
+            "0x000000000000000000000000000fdfdf"
         );
         assert_eq!(
             &AccountAddress::from_str(
-                "0x0500000000000000000000000000000000000000000000000000000000aadfdf"
+                "0x05000000000000000000000000aadfdf"
             )
             .unwrap()
             .to_standard_string(),
-            "0x0500000000000000000000000000000000000000000000000000000000aadfdf"
+            "0x05000000000000000000000000aadfdf"
         );
 
         // As above but without the 0x prefix.
@@ -753,21 +798,21 @@ mod tests {
             &AccountAddress::from_str("010")
                 .unwrap()
                 .to_standard_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000010"
+            "0x00000000000000000000000000000010"
         );
         assert_eq!(
             &AccountAddress::from_str("fdfdf")
                 .unwrap()
                 .to_standard_string(),
-            "0x00000000000000000000000000000000000000000000000000000000000fdfdf"
+            "0x000000000000000000000000000fdfdf"
         );
         assert_eq!(
             &AccountAddress::from_str(
-                "0500000000000000000000000000000000000000000000000000000000aadfdf"
+                "05000000000000000000000000aadfdf"
             )
             .unwrap()
             .to_standard_string(),
-            "0x0500000000000000000000000000000000000000000000000000000000aadfdf"
+            "0x05000000000000000000000000aadfdf"
         );
     }
 
@@ -798,11 +843,11 @@ mod tests {
         assert!(&AccountAddress::from_str_strict("0xfdfdf").is_err());
         assert_eq!(
             &AccountAddress::from_str_strict(
-                "0x0500000000000000000000000000000000000000000000000000000000aadfdf"
+                "0x05000000000000000000000000aadfdf"
             )
             .unwrap()
             .to_standard_string(),
-            "0x0500000000000000000000000000000000000000000000000000000000aadfdf"
+            "0x05000000000000000000000000aadfdf"
         );
 
         // Assert that special addresses must be in either SHORT or LONG form, meaning
@@ -845,8 +890,8 @@ mod tests {
 
     #[test]
     fn test_serde_json() {
-        let hex = "ca843279e3427144cead5e4d5999a3d0ca843279e3427144cead5e4d5999a3d0";
-        let json_hex = "\"ca843279e3427144cead5e4d5999a3d0ca843279e3427144cead5e4d5999a3d0\"";
+        let hex = "ca843279e3427144cead5e4d5999a3d0";
+        let json_hex = "\"0xca843279e3427144cead5e4d5999a3d0\"";
 
         let address = AccountAddress::from_hex(hex).unwrap();
 
@@ -855,6 +900,23 @@ mod tests {
 
         assert_eq!(json, json_hex);
         assert_eq!(address, json_address);
+    }
+
+    #[test]
+    fn test_bech32() {
+        let hex = "0xca843279e3427144cead5e4d5999a3d0";
+        let json_hex = "\"0xca843279e3427144cead5e4d5999a3d0\"";
+        let bech32 = "stc1pe2zry70rgfc5fn4dtex4nxdr6qyyuevr";
+        let json_bech32 = "\"stc1pe2zry70rgfc5fn4dtex4nxdr6qyyuevr\"";
+
+        let address = AccountAddress::from_str(hex).unwrap();
+        let bech32_address = AccountAddress::from_str(bech32).unwrap();
+        let json_address: AccountAddress = serde_json::from_str(json_hex).unwrap();
+        let json_bech32_address: AccountAddress = serde_json::from_str(json_bech32).unwrap();
+
+        assert_eq!(address, bech32_address);
+        assert_eq!(address, json_address);
+        assert_eq!(address, json_bech32_address);
     }
 
     #[test]

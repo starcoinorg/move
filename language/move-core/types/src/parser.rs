@@ -407,6 +407,8 @@ mod tests {
         u256,
     };
     use std::str::FromStr;
+    use crate::identifier::Identifier;
+    use crate::language_storage::{StructTag, TypeTag};
 
     #[allow(clippy::unreadable_literal)]
     #[test]
@@ -633,5 +635,26 @@ mod tests {
             "Should have failed to parse type tag {}",
             s
         );
+    }
+
+    #[test]
+    fn tests_parse_type_tag() {
+        for t in &[
+            TypeTag::U8,
+            TypeTag::U64,
+            TypeTag::U128,
+            TypeTag::Address,
+            TypeTag::Bool,
+            TypeTag::Struct(Box::new(StructTag {
+                address: AccountAddress::random(),
+                module: Identifier::from_utf8("A".to_string().into_bytes()).unwrap(),
+                name: Identifier::from_utf8("B".to_string().into_bytes()).unwrap(),
+                type_args: vec![TypeTag::Address],
+            })),
+            TypeTag::Vector(Box::new(TypeTag::U8)),
+        ] {
+            let actual = parse_type_tag(t.to_string().as_str()).unwrap();
+            assert_eq!(&actual, t);
+        }
     }
 }

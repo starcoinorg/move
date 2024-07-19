@@ -2,7 +2,7 @@
 ============ disassembled file-format ==================
 // Move bytecode v7
 module 42.m {
-use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+use 0x00000000000000000000000000000001::vector;
 
 
 struct E<Ty0> has copy, drop, store {

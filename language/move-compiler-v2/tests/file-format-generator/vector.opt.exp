@@ -2,7 +2,7 @@
 ============ disassembled file-format ==================
 // Move bytecode v7
 module 42.vector {
-use 0000000000000000000000000000000000000000000000000000000000000001::vector as 1vector;
+use 0x00000000000000000000000000000001::vector as 1vector;
 
 
 

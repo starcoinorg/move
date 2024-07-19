@@ -154,7 +154,7 @@ impl VMStatus {
                 debug_assert!(code != StatusCode::EXECUTED);
                 debug_assert!(code != StatusCode::ABORTED);
                 code
-            },
+            }
         }
     }
 
@@ -162,7 +162,7 @@ impl VMStatus {
         match self {
             Self::Error { sub_status, .. } | Self::ExecutionFailure { sub_status, .. } => {
                 *sub_status
-            },
+            }
             Self::Executed | Self::MoveAbort(..) => None,
         }
     }
@@ -172,7 +172,7 @@ impl VMStatus {
         match self {
             Self::Error { message, .. } | Self::ExecutionFailure { message, .. } => {
                 message.as_ref()
-            },
+            }
             _ => None,
         }
     }
@@ -263,7 +263,7 @@ impl VMStatus {
                         message,
                     }),
                 }
-            },
+            }
         }
     }
 }
@@ -592,6 +592,21 @@ pub enum StatusCode {
     RESERVED_VALIDATION_ERROR_7 = 42,
     RESERVED_VALIDATION_ERROR_8 = 43,
     RESERVED_VALIDATION_ERROR_9 = 44,
+
+        // The code is not running in genesis
+    NOT_GENESIS = 500,
+    // Config value doesn't exist
+    CONFIG_VALUE_DOES_NOT_EXIST = 501,
+    // Timestamp is invalid
+    INVALID_TIMESTAMP = 502,
+    // Coin to deposit is zero
+    COIN_DEPOSIT_IS_ZERO = 503,
+    // Token to destroy is not zero
+    DESTROY_TOKEN_NON_ZERO = 504,
+    // Block number mismatch
+    BLOCK_NUMBER_MISMATCH = 505,
+    // Signer delegated
+    SIGNER_ALREADY_DELEGATED = 506,
 
     // When a code module/script is published it is verified. These are the
     // possible errors that can arise from the verification process.
@@ -986,6 +1001,11 @@ pub mod sub_status {
     pub const NFE_VECTOR_ERROR_BASE: u64 = 0;
     // Failure in BCS deserialization
     pub const NFE_BCS_SERIALIZATION_FAILURE: u64 = 0x1C5;
+    // Failure in BCS to_addr.
+    pub const NFE_BCS_TO_ADDRESS_FAILURE: u64 = 0x1c6;
+    // Failure in Token native functions.
+    pub const NFE_TOKEN_INVALID_TYPE_ARG_FAILURE: u64 = 0x200;
+    pub const NFE_RLP_DECODE_FAILURE: u64 = 0x300;
 
     pub mod unknown_invariant_violation {
         // Paranoid Type checking returns an error

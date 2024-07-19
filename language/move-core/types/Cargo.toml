@@ -30,6 +30,7 @@ serde = { workspace = true }
 serde_bytes = { workspace = true }
 thiserror = { workspace = true }
 uint = { workspace = true }
+bech32 = "0.9"
 
 [dev-dependencies]
 arbitrary = { workspace = true, features = ["derive_arbitrary"] }
