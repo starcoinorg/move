@@ -437,14 +437,29 @@ pub fn construct_pre_compiled_lib<
     flags: Flags,
     known_attributes: &BTreeSet<String>,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
-    let (files, pprog_and_comments_res) = Compiler::from_package_paths(
+    // let (files, pprog_and_comments_res) = Compiler::from_package_paths(
+    //     targets,
+    //     Vec::<PackagePaths<Paths, NamedAddress>>::new(),
+    //     flags,
+    //     known_attributes,
+    // )
+    // .set_interface_files_dir_opt(interface_files_dir_opt)
+    // .run::<PASS_PARSER>()?;
+
+    let compiler = Compiler::from_package_paths(
         targets,
         Vec::<PackagePaths<Paths, NamedAddress>>::new(),
         flags,
         known_attributes,
     )
-    .set_interface_files_dir_opt(interface_files_dir_opt)
-    .run::<PASS_PARSER>()?;
+    .set_interface_files_dir_opt(interface_files_dir_opt);
+    construct_pre_compiled_lib_from_compiler(compiler)
+}
+
+pub fn construct_pre_compiled_lib_from_compiler(
+    compiler: Compiler,
+) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
+    let (files, pprog_and_comments_res) = compiler.run::<PASS_PARSER>()?;
 
     let (_comments, stepped) = match pprog_and_comments_res {
         Err(errors) => return Ok(Err((files, errors))),
@@ -467,35 +482,35 @@ pub fn construct_pre_compiled_lib<
         PassResult::Parser(prog) => {
             assert!(parser.is_none());
             parser = Some(prog.clone())
-        },
+        }
         PassResult::Expansion(eprog) => {
             assert!(expansion.is_none());
             expansion = Some(eprog.clone())
-        },
+        }
         PassResult::Naming(nprog) => {
             assert!(naming.is_none());
             naming = Some(nprog.clone())
-        },
+        }
         PassResult::Typing(tprog) => {
             assert!(typing.is_none());
             typing = Some(tprog.clone())
-        },
+        }
         PassResult::Inlining(tprog) => {
             assert!(inlining.is_none());
             inlining = Some(tprog.clone())
-        },
+        }
         PassResult::HLIR(hprog) => {
             assert!(hlir.is_none());
             hlir = Some(hprog.clone());
-        },
+        }
         PassResult::CFGIR(cprog) => {
             assert!(cfgir.is_none());
             cfgir = Some(cprog.clone());
-        },
+        }
         PassResult::Compilation(units, _final_diags) => {
             assert!(compiled.is_none());
             compiled = Some(units.clone())
-        },
+        }
     };
     match run(
         &mut compilation_env,
@@ -805,7 +820,7 @@ fn run(
                 until,
                 result_check,
             )
-        },
+        }
         PassResult::Expansion(eprog) => {
             let nprog = naming::translate::program(compilation_env, pre_compiled_lib, eprog);
             compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
@@ -822,7 +837,7 @@ fn run(
                 until,
                 result_check,
             )
-        },
+        }
         PassResult::Naming(nprog) => {
             let tprog = typing::translate::program(compilation_env, pre_compiled_lib, nprog);
             compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
@@ -839,7 +854,7 @@ fn run(
                 until,
                 result_check,
             )
-        },
+        }
         PassResult::Typing(mut tprog) => {
             inlining::translate::run_inlining(compilation_env, pre_compiled_lib, &mut tprog);
             compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
@@ -856,7 +871,7 @@ fn run(
                 until,
                 result_check,
             )
-        },
+        }
         PassResult::Inlining(tprog) => {
             let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
             compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
@@ -873,7 +888,7 @@ fn run(
                 until,
                 result_check,
             )
-        },
+        }
         PassResult::HLIR(hprog) => {
             let cprog = cfgir::translate::program(compilation_env, pre_compiled_lib, hprog);
             compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
@@ -890,7 +905,7 @@ fn run(
                 until,
                 result_check,
             )
-        },
+        }
         PassResult::CFGIR(cprog) => {
             let compiled_units =
                 to_bytecode::translate::program(compilation_env, pre_compiled_lib, cprog);
@@ -904,7 +919,7 @@ fn run(
                 PASS_COMPILATION,
                 result_check,
             )
-        },
+        }
         PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
     }
 }
