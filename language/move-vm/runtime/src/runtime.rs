@@ -32,7 +32,7 @@ use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
 
 /// An instantiation of the MoveVM.
 pub(crate) struct VMRuntime {
-    loader: Loader,
+    pub(crate) loader: Loader,
     pub(crate) module_cache: Arc<ModuleCache>,
 }
 
