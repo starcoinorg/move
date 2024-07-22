@@ -608,6 +608,26 @@ pub enum StatusCode {
     // Signer delegated
     SIGNER_ALREADY_DELEGATED = 506,
 
+    // ------------------------------------------------//
+    // Add by Starcoin contributor
+    // Upgrade plan is none
+    UPGRADE_PLAN_IS_NONE = 507,
+    // Package hash incorrect
+    PACKAGE_HASH_INCORRECT = 508,
+    // Active time incorrect
+    ACTIVE_TIME_INCORRECT = 509,
+    // Strategy freezed
+    STRATEGY_FREEZED = 510,
+    // Strategy incorrect
+    STRATEGY_INCORRECT = 511,
+    // Strategy not two phase
+    STRATEGY_NOT_TWO_PHASE = 512,
+    // Unkown strategy
+    UNKNOWN_STRATEGY = 513,
+    // Send and package address mismatch
+    SENDER_AND_PACKAGE_ADDRESS_MISMATCH = 514,
+    // ------------------------------------------------//
+
     // When a code module/script is published it is verified. These are the
     // possible errors that can arise from the verification process.
     // Verification Errors: 1000-1999
