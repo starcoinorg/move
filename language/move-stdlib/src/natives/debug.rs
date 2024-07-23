@@ -27,6 +27,8 @@ pub struct PrintGasParameters {
 }
 
 #[inline]
+#[allow(unused_mut)]
+#[allow(unused_variables)]
 fn native_print(
     gas_params: &PrintGasParameters,
     _context: &mut NativeContext,
@@ -90,6 +92,7 @@ pub struct PrintStackTraceGasParameters {
 
 #[allow(unused_variables)]
 #[inline]
+#[allow(unused_variables)]
 fn native_print_stack_trace(
     gas_params: &PrintStackTraceGasParameters,
     context: &mut NativeContext,

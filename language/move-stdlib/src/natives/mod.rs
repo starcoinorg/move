@@ -37,6 +37,10 @@ impl GasParameters {
                     legacy_min_output_size: 0.into(),
                     failure: 0.into(),
                 },
+                to_address: bcs::ToAddressGasParameters {
+                    base: 0.into(),
+                    per_byte: 0.into(),
+                },
             },
 
             hash: hash::GasParameters {
