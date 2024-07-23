@@ -12,7 +12,7 @@ use crate::{
     session::Session,
 };
 use move_binary_format::{
-    errors::{Location, PartialVMError, VMResult},
+    errors::{Location, PartialVMError, VMResult, PartialVMResult},
     CompiledModule,
 };
 use move_core_types::{
@@ -183,5 +183,12 @@ impl MoveVM {
             .fetch_module(module)?
             .module()
             .metadata)
+    }
+
+    pub fn update_native_functions(
+        &mut self,
+        natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
+    ) -> PartialVMResult<()> {
+        self.runtime.loader.update_native_functions(natives)
     }
 }
