@@ -813,6 +813,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "chumsky"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d02796e4586c6c41aeb68eae9bfb4558a522c35f1430c14b40136c3706e09e4"
+
+[[package]]
 name = "claims"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2466,12 +2472,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "jpst"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "feb61a6bd5d40ffb161d35da618bdc09163de3d697f281fc6c2926bb19bd3caa"
+dependencies = [
+ "anyhow",
+ "jsonpath-plus",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29c15563dc2726973df627357ce0c9ddddbea194836909d655df6a75d2cf296d"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "jsonpath-plus"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eee6a1074e339e2bdd5806dcc503269298ce97f50c4bd2e9176afaaff4ea52fb"
+dependencies = [
+ "chumsky",
+ "either",
+ "serde_json",
 ]
 
 [[package]]
@@ -3460,6 +3491,8 @@ dependencies = [
  "clap 4.5.9",
  "datatest-stable",
  "difference",
+ "hex",
+ "jpst",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -3478,6 +3511,7 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "regex",
+ "serde_json",
  "tempfile",
  "termcolor",
 ]

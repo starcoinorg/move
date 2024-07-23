@@ -194,7 +194,7 @@ pub trait MoveTestAdapter<'a>: Sized {
         named_addr_opt: Option<Identifier>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, CompiledModule)>;
+    ) -> Result<(Option<String>, CompiledModule, Option<serde_json::Value>)>;
     fn execute_script(
         &mut self,
         script: CompiledScript,
@@ -203,7 +203,7 @@ pub trait MoveTestAdapter<'a>: Sized {
         args: Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> Result<Option<String>>;
+    ) -> Result<(Option<String>, Option<serde_json::Value>)>;
     fn call_function(
         &mut self,
         module: &ModuleId,
@@ -213,19 +213,19 @@ pub trait MoveTestAdapter<'a>: Sized {
         args: Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)>;
+    ) -> Result<(Option<String>, SerializedReturnValues, Option<serde_json::Value>)>;
     fn view_data(
         &mut self,
         address: AccountAddress,
         module: &ModuleId,
         resource: &IdentStr,
         type_args: Vec<TypeTag>,
-    ) -> Result<String>;
+    ) -> Result<(String, serde_json::Value)>;
 
     fn handle_subcommand(
         &mut self,
         subcommand: TaskInput<Self::Subcommand>,
-    ) -> Result<Option<String>>;
+    ) -> Result<(Option<String>, Option<serde_json::Value>)>;
 
     fn compile_module(
         &mut self,
@@ -402,7 +402,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 Self::Subcommand,
             >,
         >,
-    ) -> Result<Option<String>> {
+    ) -> Result<(Option<String>, Option<serde_json::Value>)> {
         let TaskInput {
             command,
             name,
@@ -433,7 +433,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                         disassembler_for_view(BinaryIndexedView::Module(&module)).disassemble()?
                     },
                 };
-                Ok(Some(result))
+                Ok((Some(result), None))
             },
             TaskCommand::Publish(
                 PublishCommand {
@@ -456,7 +456,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 } else {
                     None
                 };
-                let (mut output, module) = self.publish_module(
+                let (mut output, module,cmd_var_ctx) = self.publish_module(
                     module,
                     named_addr_opt.map(|s| Identifier::new(s.as_str()).unwrap()),
                     gas_budget,
@@ -477,7 +477,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                             .add_and_generate_interface_file(module);
                     },
                 };
-                Ok(merge_output(warnings_opt, output))
+                Ok((merge_output(warnings_opt, output), cmd_var_ctx))
             },
             TaskCommand::Run(
                 RunCommand {
@@ -505,12 +505,12 @@ pub trait MoveTestAdapter<'a>: Sized {
                 };
                 let args = self.compiled_state().resolve_args(args)?;
                 let type_args = self.compiled_state().resolve_type_args(type_args)?;
-                let mut output =
+                let (mut output, cmd_var_ctx) =
                     self.execute_script(script, type_args, signers, args, gas_budget, extra_args)?;
                 if print_bytecode {
                     output = merge_output(output, printed);
                 }
-                Ok(merge_output(warning_opt, output))
+                Ok((merge_output(warning_opt, output), cmd_var_ctx))
             },
             TaskCommand::Run(
                 RunCommand {
@@ -532,7 +532,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 let module_id = ModuleId::new(addr, module_name);
                 let type_args = self.compiled_state().resolve_type_args(type_args)?;
                 let args = self.compiled_state().resolve_args(args)?;
-                let (output, return_values) = self.call_function(
+                let (output, return_values, cmd_var_ctx) = self.call_function(
                     &module_id,
                     name.as_ident_str(),
                     type_args,
@@ -542,7 +542,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                     extra_args,
                 )?;
                 let rendered_return_value = display_return_values(return_values);
-                Ok(merge_output(output, rendered_return_value))
+                Ok((merge_output(output, rendered_return_value), cmd_var_ctx))
             },
             TaskCommand::View(ViewCommand { address, resource }) => {
                 let state: &CompiledState<'a> = self.compiled_state();
@@ -556,12 +556,13 @@ pub trait MoveTestAdapter<'a>: Sized {
                     .unwrap();
                 let module_id = ModuleId::new(module_addr, module);
                 let address = self.compiled_state().resolve_address(&address);
-                Ok(Some(self.view_data(
+                let (output, cmd_var_ctx) = self.view_data(
                     address,
                     &module_id,
                     name.as_ident_str(),
                     type_arguments,
-                )?))
+                )?;
+                Ok((Some(output), Some(cmd_var_ctx)))
             },
             TaskCommand::Subcommand(c) => self.handle_subcommand(TaskInput {
                 command: c,
@@ -983,7 +984,7 @@ where
     let default_syntax = if extension == MOVE_IR_EXTENSION {
         SyntaxChoice::IR
     } else {
-        assert!(extension == MOVE_EXTENSION);
+        assert_eq!(extension, MOVE_EXTENSION);
         SyntaxChoice::Source
     };
 
@@ -1027,16 +1028,29 @@ where
             if num_tasks > 1 { "s" } else { "" }
         )
         .unwrap();
-        let first_task = tasks.pop_front().unwrap();
-        let init_opt = match &first_task.command {
-            TaskCommand::Init(_, _) => Some(first_task.map(|known| match known {
-                TaskCommand::Init(command, extra_args) => (command, extra_args),
-                _ => unreachable!(),
-            })),
-            _ => {
-                tasks.push_front(first_task);
-                None
-            },
+        // let first_task = tasks.pop_front().unwrap();
+        // let init_opt = match &first_task.command {
+        //     TaskCommand::Init(_, _) => Some(first_task.map(|known| match known {
+        //         TaskCommand::Init(command, extra_args) => (command, extra_args),
+        //         _ => unreachable!(),
+        //     })),
+        //     _ => {
+        //         tasks.push_front(first_task);
+        //         None
+        //     },
+        // };
+        let mut ctx = jpst::TemplateContext::new();
+        let first_lazy_task = tasks.pop_front().unwrap();
+        let first_task = first_lazy_task.parse(&ctx)?;
+        let (first_task, init_opt) = match &first_task.command {
+            TaskCommand::Init(_, _) => (
+                None,
+                Some(first_task.map(|known| match known {
+                    TaskCommand::Init(command, extra_args) => (command, extra_args),
+                    _ => unreachable!(),
+                })),
+            ),
+            _ => (Some(first_task), None),
         };
         let (mut adapter, result_opt) = Adapter::init(
             default_syntax,
@@ -1049,9 +1063,16 @@ where
         if let Some(result) = result_opt {
             writeln!(output, "\ninit:\n{}", result)?;
         }
-        for task in tasks {
-            handle_known_task(&mut output, &mut adapter, task);
+
+        if let Some(first_task) = first_task {
+            handle_known_task(&mut output, &mut adapter, &mut ctx, first_task);
         }
+
+        for task in tasks {
+            let task = task.parse(&ctx)?;
+            handle_known_task(&mut output, &mut adapter, &mut ctx, task);
+        }
+
         // Extract any bytecode outputs, they should not be part of the diff.
         static BYTECODE_REX: Lazy<Regex> = Lazy::new(|| {
             Regex::new("(?m)== BEGIN Bytecode ==(.|\n|\r)*== END Bytecode ==").unwrap()
@@ -1095,6 +1116,7 @@ where
 fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     output: &mut String,
     adapter: &mut Adapter,
+    ctx: &mut jpst::TemplateContext,
     task: TaskInput<
         TaskCommand<
             Adapter::ExtraInitArgs,
@@ -1109,23 +1131,44 @@ fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     let task_name = task.name.to_owned();
     let start_line = task.start_line;
     let stop_line = task.stop_line;
-    if let Some(data) = &task.data {
-        adapter.register_temp_filename(data);
-    }
-    let result = adapter.handle_command(task);
-    let result_string = match result {
-        Ok(None) => return,
-        Ok(Some(s)) => s,
-        Err(e) => format!("Error: {}", e),
+    // if let Some(data) = &task.data {
+    //     adapter.register_temp_filename(data);
+    // }
+    // let result = adapter.handle_command(task);
+    // let result_string = match result {
+    //     Ok(None) => return,
+    //     Ok(Some(s)) => s,
+    //     Err(e) => format!("Error: {}", e),
+    // };
+    // let result_string = adapter.rewrite_temp_filenames(result_string);
+    // assert!(!result_string.is_empty());
+    // writeln!(
+    //     output,
+    //     "\ntask {} '{}'. lines {}-{}:\n{}",
+    //     task_number, task_name, start_line, stop_line, result_string
+    // )
+    // .unwrap();
+    let (result_string, cmd_var_ctx) = match adapter.handle_command(task) {
+        Ok((result_string, cmd_var_ctx)) => {
+            if let Some(s) = result_string.as_ref() {
+                assert!(!s.is_empty());
+            }
+            (result_string, cmd_var_ctx)
+        }
+        Err(e) => (Some(format!("Error: {}", e)), None),
     };
-    let result_string = adapter.rewrite_temp_filenames(result_string);
-    assert!(!result_string.is_empty());
-    writeln!(
-        output,
-        "\ntask {} '{}'. lines {}-{}:\n{}",
-        task_number, task_name, start_line, stop_line, result_string
-    )
-    .unwrap();
+
+    if let Some(s) = result_string {
+        write!(
+            output,
+            "\ntask {} '{}'. lines {}-{}:\n{}\n",
+            task_number, task_name, start_line, stop_line, s
+        )
+            .expect("write to string should not fail");
+    }
+    if let Some(cmd_var_ctx) = cmd_var_ctx {
+        ctx.entry(task_name).append(cmd_var_ctx);
+    }
 }
 
 fn handle_expected_output(
