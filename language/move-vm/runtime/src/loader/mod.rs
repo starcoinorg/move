@@ -53,9 +53,11 @@ mod type_loader;
 pub use function::LoadedFunction;
 pub(crate) use function::{Function, FunctionHandle, FunctionInstantiation, Scope};
 pub(crate) use modules::{Module, ModuleCache, ModuleStorage, ModuleStorageAdapter};
+use move_core_types::identifier::Identifier;
 use move_vm_types::loaded_data::runtime_types::{legacy_count_type_nodes, TypeBuilder};
 pub(crate) use script::{Script, ScriptCache};
 use type_loader::intern_type;
+use crate::native_functions::NativeFunction;
 
 type ScriptHash = [u8; 32];
 
@@ -2153,5 +2155,13 @@ impl Loader {
         let ty = self.load_type(type_tag, move_storage, module_storage)?;
         self.type_to_fully_annotated_layout(&ty, module_storage)
             .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    pub(crate) fn update_native_functions(
+        &mut self,
+        natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
+    ) -> PartialVMResult<()> {
+        self.natives = NativeFunctions::new(natives)?;
+        Ok(())
     }
 }
