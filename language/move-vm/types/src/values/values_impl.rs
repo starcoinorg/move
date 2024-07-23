@@ -2467,7 +2467,6 @@ pub(crate) const LEGACY_REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize:
 pub(crate) const LEGACY_STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
 
 impl Container {
-    #[cfg(test)]
     fn legacy_size(&self) -> AbstractMemorySize {
         match self {
             Self::Locals(r) | Self::Vec(r) | Self::Struct(r) => {
@@ -2502,22 +2501,19 @@ impl Container {
 }
 
 impl ContainerRef {
-    #[cfg(test)]
-    fn legacy_size(&self) -> AbstractMemorySize {
+    pub fn legacy_size(&self) -> AbstractMemorySize {
         LEGACY_REFERENCE_SIZE
     }
 }
 
 impl IndexedRef {
-    #[cfg(test)]
-    fn legacy_size(&self) -> AbstractMemorySize {
+    pub fn legacy_size(&self) -> AbstractMemorySize {
         LEGACY_REFERENCE_SIZE
     }
 }
 
 impl ValueImpl {
-    #[cfg(test)]
-    fn legacy_size(&self) -> AbstractMemorySize {
+    pub fn legacy_size(&self) -> AbstractMemorySize {
         use ValueImpl::*;
 
         match self {
@@ -2538,28 +2534,24 @@ impl ValueImpl {
 }
 
 impl Struct {
-    #[cfg(test)]
     fn legacy_size_impl(fields: &[ValueImpl]) -> AbstractMemorySize {
         fields
             .iter()
             .fold(LEGACY_STRUCT_SIZE, |acc, v| acc + v.legacy_size())
     }
 
-    #[cfg(test)]
-    pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
+    pub fn legacy_size(&self) -> AbstractMemorySize {
         Self::legacy_size_impl(&self.fields)
     }
 }
 
 impl Value {
-    #[cfg(test)]
-    pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
+    pub fn legacy_size(&self) -> AbstractMemorySize {
         self.0.legacy_size()
     }
 }
 
 impl ReferenceImpl {
-    #[cfg(test)]
     fn legacy_size(&self) -> AbstractMemorySize {
         match self {
             Self::ContainerRef(r) => r.legacy_size(),
@@ -2569,7 +2561,6 @@ impl ReferenceImpl {
 }
 
 impl Reference {
-    #[cfg(test)]
     pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
         self.0.legacy_size()
     }
