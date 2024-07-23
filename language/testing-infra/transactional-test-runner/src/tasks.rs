@@ -18,6 +18,89 @@ use std::{convert::TryInto, fmt::Debug, path::Path, str::FromStr};
 use tempfile::NamedTempFile;
 
 #[derive(Debug)]
+pub struct LazyParseCommand<Command> {
+    pub command_text: String,
+    phantom: std::marker::PhantomData<Command>,
+}
+
+impl<Command> LazyParseCommand<Command>
+    where
+        Command: Debug + Parser,
+{
+    pub fn new(command_text: String) -> Self {
+        Self {
+            command_text,
+            phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Parse the command text into the command, and render command text with jpst.
+    pub fn parse(&self, ctx: &jpst::TemplateContext) -> Result<Command> {
+        let command_text = jpst::format_str!(&self.command_text, ctx);
+        let command_split = command_text.split_ascii_whitespace().collect::<Vec<_>>();
+
+        let command = match Command::try_parse_from(command_split) {
+            Ok(command) => command,
+            Err(e) => {
+                let mut spit_iter = command_text.split_ascii_whitespace();
+                // skip 'task'
+                spit_iter.next();
+                let help_command = match spit_iter.next() {
+                    None => vec!["task", "--help"],
+                    Some(c) => vec!["task", c, "--help"],
+                };
+                let help = match Command::try_parse_from(help_command) {
+                    Ok(_) => panic!(),
+                    Err(e) => e,
+                };
+                bail!(
+                    "Invalid command. Got error {}\nCommand {}.\n{}",
+                    e,
+                    command_text,
+                    help
+                )
+            }
+        };
+        Ok(command)
+    }
+}
+
+#[derive(Debug)]
+pub struct LazyParseTaskInput<Command> {
+    pub command: LazyParseCommand<Command>,
+    pub name: String,
+    pub number: usize,
+    pub start_line: usize,
+    pub command_lines_stop: usize,
+    pub stop_line: usize,
+    pub data: Option<NamedTempFile>,
+}
+
+impl<Command> LazyParseTaskInput<Command>
+    where
+        Command: Debug + Parser,
+{
+    pub fn parse(self, ctx: &jpst::TemplateContext) -> Result<TaskInput<Command>> {
+        let command = self.command.parse(ctx)?;
+        let name = self.name;
+        let number = self.number;
+        let start_line = self.start_line;
+        let command_lines_stop = self.command_lines_stop;
+        let stop_line = self.stop_line;
+        let data = self.data;
+        Ok(TaskInput {
+            command,
+            name,
+            number,
+            start_line,
+            command_lines_stop,
+            stop_line,
+            data,
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct TaskInput<Command> {
     pub command: Command,
     pub name: String,
@@ -29,7 +112,7 @@ pub struct TaskInput<Command> {
 }
 
 #[allow(clippy::needless_collect)]
-pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput<Command>>> {
+pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<LazyParseTaskInput<Command>>> {
     use regex::Regex;
     use std::{
         fs::File,
@@ -105,31 +188,42 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
             command_text = format!("{} {}", command_text, text);
         }
         let command_split = command_text.split_ascii_whitespace().collect::<Vec<_>>();
-        let name_opt = command_split.get(1).map(|s| (*s).to_owned());
-        let command = match Command::try_parse_from(command_split) {
-            Ok(command) => command,
-            Err(e) => {
-                let mut spit_iter = command_text.split_ascii_whitespace();
-                // skip 'task'
-                spit_iter.next();
-                let help_command = match spit_iter.next() {
-                    None => vec!["task", "--help"],
-                    Some(c) => vec!["task", c, "--help"],
-                };
-                let help = match Command::try_parse_from(help_command) {
-                    Ok(_) => panic!(),
-                    Err(e) => e,
-                };
-                bail!(
-                    "Invalid command. Got error {}\nLines {} - {}.\n{}",
-                    e,
-                    start_line,
-                    command_lines_stop,
-                    help
-                )
-            },
-        };
-        let name = name_opt.unwrap();
+
+        //
+        // Optimized by Starcoin contributor
+        // =====================================
+        // let name_opt = command_split.get(1).map(|s| (*s).to_owned());
+        // let command = match Command::try_parse_from(command_split) {
+        //     Ok(command) => command,
+        //     Err(e) => {
+        //         let mut spit_iter = command_text.split_ascii_whitespace();
+        //         // skip 'task'
+        //         spit_iter.next();
+        //         let help_command = match spit_iter.next() {
+        //             None => vec!["task", "--help"],
+        //             Some(c) => vec!["task", c, "--help"],
+        //         };
+        //         let help = match Command::try_parse_from(help_command) {
+        //             Ok(_) => panic!(),
+        //             Err(e) => e,
+        //         };
+        //         bail!(
+        //             "Invalid command. Got error {}\nLines {} - {}.\n{}",
+        //             e,
+        //             start_line,
+        //             command_lines_stop,
+        //             help
+        //         )
+        //     }
+        // };
+        // let name = name_opt.unwrap();
+        // =====================================
+        let name = command_split
+            .get(1)
+            .map(|s| (*s).to_owned())
+            .unwrap_or_else(|| format!("unknown_{}", number));
+        let command = LazyParseCommand::new(command_text);
+        // =====================================
 
         let stop_line = if text.is_empty() {
             command_lines_stop
@@ -150,7 +244,7 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
             Some(data)
         };
 
-        tasks.push(TaskInput {
+        tasks.push(LazyParseTaskInput {
             command,
             name,
             number,
@@ -204,7 +298,9 @@ pub enum PrintBytecodeInputChoice {
 #[derive(Debug, Parser)]
 pub struct PrintBytecodeCommand {
     /// The kind of input: either a script, or a module.
-    #[clap(long = "input", value_enum, ignore_case = true, default_value_t = PrintBytecodeInputChoice::Script)]
+    #[clap(
+        long = "input", value_enum, ignore_case = true, default_value_t = PrintBytecodeInputChoice::Script
+    )]
     pub input: PrintBytecodeInputChoice,
     /// Select Move source ("move") source or MoveIR ("mvir").  Is inferred from filename if absent.
     #[clap(long = "syntax")]
@@ -242,7 +338,7 @@ pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     pub signers: Vec<ParsedAddress>,
     #[clap(
         long = "args",
-     value_parser = ParsedValue::<ExtraValueArgs>::parse,
+        value_parser = ParsedValue::< ExtraValueArgs >::parse,
         num_args = 0..,
     )]
     pub args: Vec<ParsedValue<ExtraValueArgs>>,
@@ -287,13 +383,13 @@ pub enum TaskCommand<
 }
 
 impl<
-        ExtraInitArgs: Parser,
-        ExtraPublishArgs: Parser,
-        ExtraValueArgs: ParsableValue,
-        ExtraRunArgs: Parser,
-        SubCommands: Parser,
-    > FromArgMatches
-    for TaskCommand<ExtraInitArgs, ExtraPublishArgs, ExtraValueArgs, ExtraRunArgs, SubCommands>
+    ExtraInitArgs: Parser,
+    ExtraPublishArgs: Parser,
+    ExtraValueArgs: ParsableValue,
+    ExtraRunArgs: Parser,
+    SubCommands: Parser,
+> FromArgMatches
+for TaskCommand<ExtraInitArgs, ExtraPublishArgs, ExtraValueArgs, ExtraRunArgs, SubCommands>
 {
     fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
         Ok(match matches.subcommand() {
@@ -303,7 +399,7 @@ impl<
             ),
             Some(("print-bytecode", matches)) => {
                 TaskCommand::PrintBytecode(FromArgMatches::from_arg_matches(matches)?)
-            },
+            }
             Some(("publish", matches)) => TaskCommand::Publish(
                 FromArgMatches::from_arg_matches(matches)?,
                 FromArgMatches::from_arg_matches(matches)?,
@@ -314,7 +410,7 @@ impl<
             ),
             Some(("view", matches)) => {
                 TaskCommand::View(FromArgMatches::from_arg_matches(matches)?)
-            },
+            }
             _ => TaskCommand::Subcommand(SubCommands::from_arg_matches(matches)?),
         })
     }
@@ -326,13 +422,13 @@ impl<
 }
 
 impl<
-        ExtraInitArgs: Parser,
-        ExtraPublishArgs: Parser,
-        ExtraValueArgs: ParsableValue,
-        ExtraRunArgs: Parser,
-        SubCommands: Parser,
-    > CommandFactory
-    for TaskCommand<ExtraInitArgs, ExtraPublishArgs, ExtraValueArgs, ExtraRunArgs, SubCommands>
+    ExtraInitArgs: Parser,
+    ExtraPublishArgs: Parser,
+    ExtraValueArgs: ParsableValue,
+    ExtraRunArgs: Parser,
+    SubCommands: Parser,
+> CommandFactory
+for TaskCommand<ExtraInitArgs, ExtraPublishArgs, ExtraValueArgs, ExtraRunArgs, SubCommands>
 {
     fn command() -> Command {
         SubCommands::command()
@@ -350,6 +446,7 @@ impl<
         todo!()
     }
 }
+
 // Note: this needs to be manually implemented because clap cannot handle generic tuples
 // with more than 1 element currently.
 //
@@ -357,15 +454,14 @@ impl<
 // (`cargo expand` is useful in printing out the derived code.)
 //
 impl<
-        ExtraInitArgs: Parser,
-        ExtraPublishArgs: Parser,
-        ExtraValueArgs: ParsableValue,
-        ExtraRunArgs: Parser,
-        SubCommands: Parser,
-    > Parser
-    for TaskCommand<ExtraInitArgs, ExtraPublishArgs, ExtraValueArgs, ExtraRunArgs, SubCommands>
-{
-}
+    ExtraInitArgs: Parser,
+    ExtraPublishArgs: Parser,
+    ExtraValueArgs: ParsableValue,
+    ExtraRunArgs: Parser,
+    SubCommands: Parser,
+> Parser
+for TaskCommand<ExtraInitArgs, ExtraPublishArgs, ExtraValueArgs, ExtraRunArgs, SubCommands>
+{}
 
 #[derive(Debug, Parser)]
 pub struct EmptyCommand {}
