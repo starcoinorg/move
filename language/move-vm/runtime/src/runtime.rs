@@ -203,7 +203,7 @@ impl VMRuntime {
         Ok(())
     }
 
-    fn deserialize_arg(
+    pub(crate) fn deserialize_arg(
         &self,
         module_store: &ModuleStorageAdapter,
         ty: &Type,

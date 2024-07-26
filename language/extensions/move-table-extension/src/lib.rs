@@ -179,14 +179,14 @@ impl<'a> NativeTableContext<'a> {
                     Op::New(val) => {
                         let bytes = serialize(&value_layout, &val)?;
                         entries.insert(key, Op::New(bytes.into()));
-                    },
+                    }
                     Op::Modify(val) => {
                         let bytes = serialize(&value_layout, &val)?;
                         entries.insert(key, Op::Modify(bytes.into()));
-                    },
+                    }
                     Op::Delete => {
                         entries.insert(key, Op::Delete);
-                    },
+                    }
                 }
             }
             if !entries.is_empty() {
@@ -222,7 +222,7 @@ impl TableData {
                     content: Default::default(),
                 };
                 e.insert(table)
-            },
+            }
             Entry::Occupied(e) => e.into_mut(),
         })
     }
@@ -247,11 +247,11 @@ impl Table {
                             GlobalValue::cached(val)?,
                             Some(NumBytes::new(val_bytes.len() as u64)),
                         )
-                    },
+                    }
                     None => (GlobalValue::none(), None),
                 };
                 (entry.insert(gv), Some(loaded))
-            },
+            }
             Entry::Occupied(entry) => (entry.into_mut(), None),
         })
     }
@@ -308,7 +308,7 @@ pub fn table_natives(table_addr: AccountAddress, gas_params: GasParameters) -> N
     native_functions::make_table_from_iter(table_addr, natives)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommonGasParameters {
     pub load_base_legacy: InternalGas,
     pub load_base_new: InternalGas,
@@ -327,7 +327,7 @@ impl CommonGasParameters {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewTableHandleGasParameters {
     pub base: InternalGas,
 }
@@ -361,9 +361,10 @@ fn native_new_table_handle(
         .insert(TableHandle(handle), TableInfo::new(key_type, value_type))
         .is_none());
 
-    Ok(NativeResult::ok(gas_params.base, smallvec![
-        Value::address(handle)
-    ]))
+    Ok(NativeResult::ok(
+        gas_params.base,
+        smallvec![Value::address(handle)],
+    ))
 }
 
 pub fn make_native_new_table_handle(gas_params: NewTableHandleGasParameters) -> NativeFunction {
@@ -374,7 +375,7 @@ pub fn make_native_new_table_handle(gas_params: NewTableHandleGasParameters) -> 
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddBoxGasParameters {
     pub base: InternalGas,
     pub per_byte_serialized: InternalGasPerByte,
@@ -424,7 +425,7 @@ pub fn make_native_add_box(
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BorrowBoxGasParameters {
     pub base: InternalGas,
     pub per_byte_serialized: InternalGasPerByte,
@@ -473,7 +474,7 @@ pub fn make_native_borrow_box(
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainsBoxGasParameters {
     pub base: InternalGas,
     pub per_byte_serialized: InternalGasPerByte,
@@ -521,7 +522,7 @@ pub fn make_native_contains_box(
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoveGasParameters {
     pub base: InternalGas,
     pub per_byte_serialized: InternalGasPerByte,
@@ -570,7 +571,7 @@ pub fn make_native_remove_box(
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DestroyEmptyBoxGasParameters {
     pub base: InternalGas,
 }
@@ -604,7 +605,7 @@ pub fn make_native_destroy_empty_box(gas_params: DestroyEmptyBoxGasParameters) -
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DropUncheckedBoxGasParameters {
     pub base: InternalGas,
 }
@@ -629,7 +630,7 @@ pub fn make_native_drop_unchecked_box(gas_params: DropUncheckedBoxGasParameters)
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasParameters {
     pub common: CommonGasParameters,
     pub new_table_handle: NewTableHandleGasParameters,

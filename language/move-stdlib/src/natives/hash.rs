@@ -20,7 +20,7 @@ use std::{collections::VecDeque, sync::Arc};
  *   gas cost: base_cost + unit_cost * max(input_length_in_bytes, legacy_min_input_len)
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sha2_256GasParameters {
     pub base: InternalGas,
     pub per_byte: InternalGasPerByte,
@@ -47,9 +47,10 @@ fn native_sha2_256(
             );
 
     let hash_vec = Sha256::digest(hash_arg.as_slice()).to_vec();
-    Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(
-        hash_vec
-    )]))
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::vector_u8(hash_vec)],
+    ))
 }
 
 pub fn make_native_sha2_256(gas_params: Sha2_256GasParameters) -> NativeFunction {
@@ -66,7 +67,7 @@ pub fn make_native_sha2_256(gas_params: Sha2_256GasParameters) -> NativeFunction
  *   gas cost: base_cost + unit_cost * max(input_length_in_bytes, legacy_min_input_len)
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sha3_256GasParameters {
     pub base: InternalGas,
     pub per_byte: InternalGasPerByte,
@@ -93,9 +94,10 @@ fn native_sha3_256(
             );
 
     let hash_vec = Sha3_256::digest(hash_arg.as_slice()).to_vec();
-    Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(
-        hash_vec
-    )]))
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::vector_u8(hash_vec)],
+    ))
 }
 
 pub fn make_native_sha3_256(gas_params: Sha3_256GasParameters) -> NativeFunction {
@@ -109,7 +111,7 @@ pub fn make_native_sha3_256(gas_params: Sha3_256GasParameters) -> NativeFunction
 /***************************************************************************************************
  * module
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasParameters {
     pub sha2_256: Sha2_256GasParameters,
     pub sha3_256: Sha3_256GasParameters,
