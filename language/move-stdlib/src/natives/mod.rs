@@ -116,8 +116,8 @@ pub fn all_natives(
 
 #[derive(Debug, Clone)]
 pub struct NurseryGasParameters {
-    event: event::GasParameters,
-    debug: debug::GasParameters,
+    pub event: event::GasParameters,
+    pub debug: debug::GasParameters,
 }
 
 impl NurseryGasParameters {
