@@ -339,7 +339,7 @@ fn setup_move_home(test_path: &str) -> (String, String) {
 fn clean_up(package_path: &str) {
     fs::remove_dir_all(format!("{}/.git", package_path)).unwrap();
     let credential_path = format!("{}{}", package_path, MOVEY_CREDENTIAL_PATH);
-    let _ = fs::remove_file(&credential_path);
+    let _ = fs::remove_file(credential_path);
 }
 
 // create a dummy move_credential.toml file for testing
