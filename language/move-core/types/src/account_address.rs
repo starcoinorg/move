@@ -4,12 +4,12 @@
 
 use bech32::ToBase32;
 use hex::FromHex;
-use rand::{rngs::OsRng, Rng};
 use openrpc_schema::schemars::{
     gen::SchemaGenerator,
     schema::{InstanceType, Schema, SchemaObject},
     JsonSchema,
 };
+use rand::{rngs::OsRng, Rng};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryFrom, fmt, str::FromStr};
 
@@ -74,6 +74,19 @@ impl AccountAddress {
         let mut rng = OsRng;
         let buf: [u8; Self::LENGTH] = rng.gen();
         Self(buf)
+    }
+
+    /// Returns whether the address is a "special" address. Addresses are considered
+    /// special if the first 63 characters of the hex string are zero. In other words,
+    /// an address is special if the first 31 bytes are zero and the last byte is
+    /// smaller than than `0b10000` (16). In other words, special is defined as an address
+    /// that matches the following regex: `^0x0{63}[0-9a-f]$`. In short form this means
+    /// the addresses in the range from `0x0` to `0xf` (inclusive) are special.
+    ///
+    /// For more details see the v1 address standard defined as part of AIP-40:
+    /// <https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-40.md>
+    pub fn is_special(&self) -> bool {
+        self.0[..Self::LENGTH - 1].iter().all(|x| *x == 0) && self.0[Self::LENGTH - 1] < 0b10000
     }
 
     /// Return a canonical string representation of the address

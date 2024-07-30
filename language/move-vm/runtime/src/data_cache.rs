@@ -5,6 +5,8 @@
 use crate::loader::Loader;
 use std::collections::btree_map;
 
+use crate::logging::expect_no_verification_errors;
+use bytes::Bytes;
 use move_binary_format::errors::*;
 use move_binary_format::file_format::CompiledScript;
 use move_binary_format::CompiledModule;
@@ -38,6 +40,31 @@ impl AccountDataCache {
         Self {
             data_map: BTreeMap::new(),
             module_map: BTreeMap::new(),
+        }
+    }
+}
+
+fn load_module_impl<'r, S: MoveResolver>(
+    remote: &'r S,
+    account_map: &BTreeMap<AccountAddress, AccountDataCache>,
+    module_id: &ModuleId,
+) -> PartialVMResult<Bytes> {
+    if let Some(account_cache) = account_map.get(module_id.address()) {
+        if let Some((blob, _is_republishing)) = account_cache.module_map.get(module_id.name()) {
+            return Ok(blob.clone().into());
+        }
+    }
+
+    match remote.get_module(module_id) {
+        Ok(Some(bytes)) => Ok(bytes.into()),
+        Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
+            .with_message(format!("Cannot find {:?} in data cache", module_id))),
+        Err(err) => {
+            let msg = format!("Unexpected storage error: {:?}", err);
+            Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(msg),
+            )
         }
     }
 }
@@ -200,7 +227,7 @@ impl<'r, 'l, S: MoveResolver> TransactionDataCache<'r, 'l, S> {
             btree_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
             btree_map::Entry::Vacant(entry) => {
                 // bytes fetching, allow loading to fail if the flag is set
-                let bytes = match load_moule_impl(self.remote, &self.account_map, entry.key())
+                let bytes = match load_module_impl(self.remote, &self.account_map, entry.key())
                     .map_err(|err| err.finish(Location::Undefined))
                 {
                     Ok(bytes) => bytes,
@@ -306,25 +333,9 @@ impl<'r, 'l, S: MoveResolver> DataStore for TransactionDataCache<'r, 'l, S> {
     }
 
     fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
-        if let Some(account_cache) = self.account_map.get(module_id.address()) {
-            if let Some((blob, _is_republishing)) = account_cache.module_map.get(module_id.name()) {
-                return Ok(blob.clone());
-            }
-        }
-        match self.remote.get_module(module_id) {
-            Ok(Some(bytes)) => Ok(bytes),
-            Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find {:?} in data cache", module_id))
-                .finish(Location::Undefined)),
-            Err(err) => {
-                let msg = format!("Unexpected storage error: {:?}", err);
-                Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(msg)
-                        .finish(Location::Undefined),
-                )
-            }
-        }
+        load_module_impl(self.remote, &self.account_map, module_id)
+            .map(|bytes| bytes.to_vec())
+            .map_err(|pve| pve.finish(Location::Undefined))
     }
 
     fn publish_module(

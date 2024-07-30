@@ -1623,7 +1623,7 @@ impl Loader {
     // Script verification and loading
     //
 
-    pub(crate) fn check_script_dependencies_and_check_gas<S>(
+    pub(crate) fn check_script_dependencies_and_check_gas<S: MoveResolver>(
         &self,
         data_store: &mut TransactionDataCache<S>,
         gas_meter: &mut impl GasMeter,
@@ -1665,7 +1665,7 @@ impl Loader {
     /// performance.
     ///
     /// TODO: Revisit the order of traversal. Consider switching to alphabetical order.
-    pub(crate) fn check_dependencies_and_charge_gas<'a, S, I>(
+    pub(crate) fn check_dependencies_and_charge_gas<'a, S: MoveResolver, I>(
         &self,
         data_store: &mut TransactionDataCache<S>,
         gas_meter: &mut impl GasMeter,
