@@ -16,6 +16,8 @@ use move_binary_format::{
     },
     file_format_common::{instruction_key, Opcodes},
 };
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::IdentStr;
 use move_core_types::{
     gas_algebra::{
         AbstractMemorySize, GasQuantity, InternalGas, InternalGasPerAbstractMemoryUnit,
@@ -550,6 +552,16 @@ impl<'b> GasMeter for GasStatus<'b> {
     fn charge_drop_frame(
         &mut self,
         _locals: impl Iterator<Item = impl ValueView>,
+    ) -> PartialVMResult<()> {
+        Ok(())
+    }
+
+    fn charge_dependency(
+        &mut self,
+        _is_new: bool,
+        _addr: &AccountAddress,
+        _name: &IdentStr,
+        _size: NumBytes,
     ) -> PartialVMResult<()> {
         Ok(())
     }
