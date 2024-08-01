@@ -31,6 +31,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use tempfile::NamedTempFile;
+use crate::diagnostics::codes::Severity::NonblockingError;
 
 //**************************************************************************************************
 // Definitions
@@ -478,16 +479,22 @@ pub fn construct_pre_compiled_lib_from_compiler(
     let mut cfgir = None;
     let mut compiled = None;
 
-    let save_result = |cur: &PassResult, _env: &CompilationEnv| match cur {
+    let save_result = |cur: &PassResult, env: &mut CompilationEnv| match cur {
         PassResult::Parser(prog) => {
             assert!(parser.is_none());
             parser = Some(prog.clone())
         }
         PassResult::Expansion(eprog) => {
+            if env.check_diags_at_or_above_severity(NonblockingError).is_err(){
+                return;
+            }
             assert!(expansion.is_none());
             expansion = Some(eprog.clone())
         }
         PassResult::Naming(nprog) => {
+            if env.check_diags_at_or_above_severity(NonblockingError).is_err(){
+                return;
+            }
             assert!(naming.is_none());
             naming = Some(nprog.clone())
         }
@@ -500,6 +507,9 @@ pub fn construct_pre_compiled_lib_from_compiler(
             inlining = Some(tprog.clone())
         }
         PassResult::HLIR(hprog) => {
+            if env.check_diags_at_or_above_severity(NonblockingError).is_err(){
+                return;
+            }
             assert!(hlir.is_none());
             hlir = Some(hprog.clone());
         }
@@ -783,7 +793,7 @@ fn run(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     cur: PassResult,
     until: Pass,
-    mut result_check: impl FnMut(&PassResult, &CompilationEnv),
+    mut result_check: impl FnMut(&PassResult, &mut CompilationEnv),
 ) -> Result<PassResult, Diagnostics> {
     assert!(
         until <= PASS_COMPILATION,
