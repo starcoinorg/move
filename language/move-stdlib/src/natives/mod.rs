@@ -16,7 +16,7 @@ pub mod unit_test;
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::{make_table_from_iter, NativeFunctionTable};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasParameters {
     pub bcs: bcs::GasParameters,
     pub hash: hash::GasParameters,

@@ -19,7 +19,7 @@ use std::{collections::VecDeque, sync::Arc};
  *   gas cost: base_cost
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WriteToEventStoreGasParameters {
     pub unit_cost: InternalGasPerAbstractMemoryUnit,
 }
@@ -53,7 +53,7 @@ pub fn make_native_write_to_event_store(
 /***************************************************************************************************
  * module
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasParameters {
     pub write_to_event_store: WriteToEventStoreGasParameters,
 }

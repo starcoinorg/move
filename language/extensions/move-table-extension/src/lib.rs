@@ -308,7 +308,7 @@ pub fn table_natives(table_addr: AccountAddress, gas_params: GasParameters) -> N
     native_functions::make_table_from_iter(table_addr, natives)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommonGasParameters {
     pub load_base_legacy: InternalGas,
     pub load_base_new: InternalGas,
@@ -327,7 +327,7 @@ impl CommonGasParameters {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewTableHandleGasParameters {
     pub base: InternalGas,
 }
@@ -374,7 +374,7 @@ pub fn make_native_new_table_handle(gas_params: NewTableHandleGasParameters) -> 
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddBoxGasParameters {
     pub base: InternalGas,
     pub per_byte_serialized: InternalGasPerByte,
@@ -424,7 +424,7 @@ pub fn make_native_add_box(
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BorrowBoxGasParameters {
     pub base: InternalGas,
     pub per_byte_serialized: InternalGasPerByte,
@@ -473,7 +473,7 @@ pub fn make_native_borrow_box(
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainsBoxGasParameters {
     pub base: InternalGas,
     pub per_byte_serialized: InternalGasPerByte,
@@ -521,7 +521,7 @@ pub fn make_native_contains_box(
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoveGasParameters {
     pub base: InternalGas,
     pub per_byte_serialized: InternalGasPerByte,
@@ -570,7 +570,7 @@ pub fn make_native_remove_box(
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DestroyEmptyBoxGasParameters {
     pub base: InternalGas,
 }
@@ -604,7 +604,7 @@ pub fn make_native_destroy_empty_box(gas_params: DestroyEmptyBoxGasParameters) -
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DropUncheckedBoxGasParameters {
     pub base: InternalGas,
 }
@@ -629,7 +629,7 @@ pub fn make_native_drop_unchecked_box(gas_params: DropUncheckedBoxGasParameters)
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasParameters {
     pub common: CommonGasParameters,
     pub new_table_handle: NewTableHandleGasParameters,
