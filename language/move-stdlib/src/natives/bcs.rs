@@ -100,7 +100,7 @@ pub fn make_native_to_bytes(gas_params: ToBytesGasParameters) -> NativeFunction 
  *   gas cost: base_cost + unit_cost * data_length
  *
  **************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToAddressGasParameters {
     pub base: InternalGas,
     pub per_byte: InternalGasPerByte,
