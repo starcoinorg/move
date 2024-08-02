@@ -12,12 +12,12 @@
 
 pub mod data_cache;
 mod interpreter;
-mod loader;
+pub mod loader;
 pub mod logging;
 pub mod move_vm;
 pub mod native_extensions;
 pub mod native_functions;
-mod runtime;
+pub mod runtime;
 pub mod session;
 #[macro_use]
 mod tracing;
@@ -27,7 +27,6 @@ pub mod config;
 #[cfg(any(debug_assertions, feature = "debugging"))]
 mod debug;
 
+pub mod module_traversal;
 #[cfg(test)]
 mod unit_tests;
-
-pub mod move_vm_adapter;

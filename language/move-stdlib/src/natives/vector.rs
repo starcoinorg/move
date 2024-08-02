@@ -224,7 +224,7 @@ pub fn native_spawn_from(
     let mut memory_cost = 0.into();
     let mut cost = gas_params.base;
 
-    let res = r.spawn_from(&mut memory_cost, offset as usize, len as usize, &ty_args[0]);
+    let res = r.spawn_from(&mut memory_cost, offset, len, &ty_args[0]);
     if gas_params.legacy_per_abstract_memory_unit != 0.into() {
         cost += gas_params.legacy_per_abstract_memory_unit * std::cmp::max(memory_cost, 1.into());
     }

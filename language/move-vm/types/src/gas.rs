@@ -3,6 +3,8 @@
 
 use crate::views::{TypeView, ValueView};
 use move_binary_format::errors::PartialVMResult;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::IdentStr;
 use move_core_types::{
     gas_algebra::{InternalGas, NumArgs, NumBytes},
     language_storage::ModuleId,
@@ -232,6 +234,14 @@ pub trait GasMeter {
         &mut self,
         locals: impl Iterator<Item = impl ValueView>,
     ) -> PartialVMResult<()>;
+
+    fn charge_dependency(
+        &mut self,
+        is_new: bool,
+        addr: &AccountAddress,
+        name: &IdentStr,
+        size: NumBytes,
+    ) -> PartialVMResult<()>;
 }
 
 /// A dummy gas meter that does not meter anything.
@@ -445,6 +455,16 @@ impl GasMeter for UnmeteredGasMeter {
     fn charge_drop_frame(
         &mut self,
         _locals: impl Iterator<Item = impl ValueView>,
+    ) -> PartialVMResult<()> {
+        Ok(())
+    }
+
+    fn charge_dependency(
+        &mut self,
+        _is_new: bool,
+        _addr: &AccountAddress,
+        _name: &IdentStr,
+        _size: NumBytes,
     ) -> PartialVMResult<()> {
         Ok(())
     }

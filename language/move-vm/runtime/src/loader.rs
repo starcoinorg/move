@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::data_cache::TransactionDataCache;
+use crate::module_traversal::TraversalContext;
 use crate::{
     config::VMConfig,
     logging::expect_no_verification_errors,
@@ -23,6 +25,8 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::account_address::AccountAddress;
+use move_core_types::gas_algebra::NumBytes;
+use move_core_types::resolver::MoveResolver;
 use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
@@ -30,12 +34,14 @@ use move_core_types::{
     value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     vm_status::StatusCode,
 };
+use move_vm_types::gas::GasMeter;
 use move_vm_types::{
     data_store::DataStore,
     loaded_data::runtime_types::{CachedStructIndex, DepthFormula, StructType, Type},
 };
 use parking_lot::RwLock;
 use sha3::{Digest, Sha3_256};
+use std::collections::btree_map;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Debug,
@@ -43,6 +49,7 @@ use std::{
     sync::Arc,
 };
 use tracing::error;
+use typed_arena::Arena;
 
 type ScriptHash = [u8; 32];
 
@@ -170,6 +177,7 @@ impl ModuleCache {
         &mut self,
         natives: &NativeFunctions,
         id: ModuleId,
+        module_size: usize,
         module: CompiledModule,
     ) -> VMResult<Arc<Module>> {
         if let Some(cached) = self.module_at(&id) {
@@ -180,7 +188,7 @@ impl ModuleCache {
         // leave a clean state
 
         let sig_cache = self.add_module(natives, &module)?;
-        match Module::new(&sig_cache, module, self) {
+        match Module::new(&sig_cache, module_size, module, self) {
             Ok(module) => Ok(Arc::clone(self.modules.insert(id, module))),
             Err((err, module)) => {
                 // remove all structs and functions that have been pushed
@@ -477,13 +485,14 @@ impl ModuleCache {
         &self,
         func_name: &IdentStr,
         module_id: &ModuleId,
-    ) -> PartialVMResult<usize> {
+    ) -> PartialVMResult<(usize, Arc<Function>)> {
         match self
             .modules
             .get(module_id)
             .and_then(|module| module.function_map.get(func_name))
+            .and_then(|&idx| self.functions.get(idx).map(|func| (idx, Arc::clone(func))))
         {
-            Some(func_idx) => Ok(*func_idx),
+            Some(func) => Ok(func),
             None => Err(
                 PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(format!(
                     "Cannot find {:?}::{:?} in cache",
@@ -712,7 +721,7 @@ impl Loader {
     // Entry point for script execution (`MoveVM::execute_script`).
     // Verifies the script if it is not in the cache of scripts loaded.
     // Type parameters are checked as well after every type is loaded.
-    pub(crate) fn load_script(
+    pub fn load_script(
         &self,
         script_blob: &[u8],
         ty_args: &[TypeTag],
@@ -831,7 +840,8 @@ impl Loader {
             .module_cache
             .read()
             .resolve_function_by_name(function_name, module_id)
-            .map_err(|err| err.finish(Location::Undefined))?;
+            .map_err(|err| err.finish(Location::Undefined))?
+            .0;
         let func = self.module_cache.read().function_at(idx);
 
         let parameters = func.parameter_types.clone();
@@ -849,6 +859,154 @@ impl Loader {
             type_arguments,
             parameters,
             return_,
+        };
+        Ok((module, func, loaded))
+    }
+
+    // Loading verifies the module if it was never loaded.
+    fn load_function_without_type_args<S: MoveResolver>(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        data_store: &TransactionDataCache<S>,
+    ) -> VMResult<(Arc<Module>, Arc<Function>, Vec<Type>, Vec<Type>)> {
+        let module = self.load_module(module_id, data_store)?;
+        let func = self
+            .module_cache
+            .read()
+            .resolve_function_by_name(function_name, module_id)
+            .map_err(|err| err.finish(Location::Undefined))?
+            .1;
+
+        let parameters = func.parameter_types().to_vec();
+
+        let return_ = func.return_types().to_vec();
+
+        Ok((module, func, parameters, return_))
+    }
+
+    // Matches the actual returned type to the expected type, binding any type args to the
+    // necessary type as stored in the map. The expected type must be a concrete type (no TyParam).
+    // Returns true if a successful match is made.
+    fn match_return_type<'a>(
+        returned: &Type,
+        expected: &'a Type,
+        map: &mut BTreeMap<u16, &'a Type>,
+    ) -> bool {
+        match (returned, expected) {
+            // The important case, deduce the type params
+            (Type::TyParam(idx), _) => match map.entry(*idx) {
+                btree_map::Entry::Vacant(vacant_entry) => {
+                    vacant_entry.insert(expected);
+                    true
+                }
+                btree_map::Entry::Occupied(occupied_entry) => *occupied_entry.get() == expected,
+            },
+            // Recursive types we need to recurse the matching types
+            (Type::Reference(ret_inner), Type::Reference(expected_inner))
+            | (Type::MutableReference(ret_inner), Type::MutableReference(expected_inner)) => {
+                Self::match_return_type(ret_inner, expected_inner, map)
+            }
+            (Type::Vector(ret_inner), Type::Vector(expected_inner)) => {
+                Self::match_return_type(ret_inner, expected_inner, map)
+            }
+            // Abilities should not contribute to the equality check as they just serve for caching computations.
+            // For structs the both need to be the same struct.
+            (Type::Struct(ret_idx), Type::Struct(expected_idx)) => *ret_idx == *expected_idx,
+            // For struct instantiations we need to additionally match all type arguments
+            (
+                Type::StructInstantiation(ret_idx, ret_fields),
+                Type::StructInstantiation(expected_idx, expected_fields),
+            ) => {
+                *ret_idx == *expected_idx
+                    && ret_fields.len() == expected_fields.len()
+                    && ret_fields
+                        .iter()
+                        .zip(expected_fields.iter())
+                        .all(|types| Self::match_return_type(types.0, types.1, map))
+            }
+            // For primitive types we need to assure the types match
+            (Type::U8, Type::U8)
+            | (Type::U16, Type::U16)
+            | (Type::U32, Type::U32)
+            | (Type::U64, Type::U64)
+            | (Type::U128, Type::U128)
+            | (Type::U256, Type::U256)
+            | (Type::Bool, Type::Bool)
+            | (Type::Address, Type::Address)
+            | (Type::Signer, Type::Signer) => true,
+            // Otherwise the types do not match and we can't match return type to the expected type.
+            // Note we don't use the _ pattern but spell out all cases, so that the compiler will
+            // bark when a case is missed upon future updates to the types.
+            (Type::U8, _)
+            | (Type::U16, _)
+            | (Type::U32, _)
+            | (Type::U64, _)
+            | (Type::U128, _)
+            | (Type::U256, _)
+            | (Type::Bool, _)
+            | (Type::Address, _)
+            | (Type::Signer, _)
+            | (Type::Struct { .. }, _)
+            | (Type::StructInstantiation { .. }, _)
+            | (Type::Vector(_), _)
+            | (Type::MutableReference(_), _)
+            | (Type::Reference(_), _) => false,
+        }
+    }
+    // Loading verifies the module if it was never loaded.
+    // Type parameters are inferred from the expected return type. Returns an error if it's not
+    // possible to infer the type parameters or return type cannot be matched.
+    // The type parameters are verified with capabilities.
+    pub(crate) fn load_function_with_type_arg_inference<S: MoveResolver>(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        expected_return_type: &Type,
+        data_store: &TransactionDataCache<S>,
+    ) -> VMResult<(Arc<Module>, Arc<Function>, LoadedFunctionInstantiation)> {
+        let (module, func, parameters, return_vec) =
+            self.load_function_without_type_args(module_id, function_name, data_store)?;
+
+        if return_vec.len() != 1 {
+            // For functions that are marked constructor this should not happen.
+            return Err(PartialVMError::new(StatusCode::ABORTED).finish(Location::Undefined));
+        }
+        let return_type = &return_vec[0];
+
+        let mut map = BTreeMap::new();
+        if !Self::match_return_type(return_type, expected_return_type, &mut map) {
+            // For functions that are marked constructor this should not happen.
+            return Err(
+                PartialVMError::new(StatusCode::INVALID_MAIN_FUNCTION_SIGNATURE)
+                    .finish(Location::Undefined),
+            );
+        }
+
+        // Construct the type arguments from the match
+        let mut type_arguments = vec![];
+        let type_param_len = func.type_parameters().len();
+        for i in 0..type_param_len {
+            if let Option::Some(t) = map.get(&(i as u16)) {
+                type_arguments.push((*t).clone());
+            } else {
+                // Unknown type argument we are not able to infer the type arguments.
+                // For functions that are marked constructor this should not happen.
+                return Err(
+                    PartialVMError::new(StatusCode::INVALID_MAIN_FUNCTION_SIGNATURE)
+                        .finish(Location::Undefined),
+                );
+            }
+        }
+
+        // verify type arguments for capability constraints
+        self.verify_ty_args(func.type_parameters(), &type_arguments)
+            .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
+
+        let loaded = LoadedFunctionInstantiation {
+            type_arguments,
+            parameters,
+            return_: return_vec,
         };
         Ok((module, func, loaded))
     }
@@ -1115,7 +1273,7 @@ impl Loader {
         id: &ModuleId,
         data_store: &impl DataStore,
         allow_loading_failure: bool,
-    ) -> VMResult<CompiledModule> {
+    ) -> VMResult<(CompiledModule, usize)> {
         // bytes fetching, allow loading to fail if the flag is set
         let bytes = match data_store.load_module(id) {
             Ok(bytes) => bytes,
@@ -1155,7 +1313,7 @@ impl Loader {
             .map_err(expect_no_verification_errors)?;
         self.check_natives(&module)
             .map_err(expect_no_verification_errors)?;
-        Ok(module)
+        Ok((module, bytes.len()))
     }
 
     // Everything in `load_and_verify_module` and also recursively load and verify all the
@@ -1177,7 +1335,8 @@ impl Loader {
         }
 
         // module self-check
-        let module = self.load_and_verify_module(id, data_store, allow_module_loading_failure)?;
+        let (module, module_size) =
+            self.load_and_verify_module(id, data_store, allow_module_loading_failure)?;
         visited.insert(id.clone());
         friends_discovered.extend(module.immediate_friends());
 
@@ -1195,7 +1354,7 @@ impl Loader {
 
         // if linking goes well, insert the module to the code cache
         let mut locked_cache = self.module_cache.write();
-        let module_ref = locked_cache.insert(&self.natives, id.clone(), module)?;
+        let module_ref = locked_cache.insert(&self.natives, id.clone(), module_size, module)?;
         drop(locked_cache); // explicit unlock
 
         Ok(module_ref)
@@ -1459,6 +1618,123 @@ impl Loader {
             }
         }
     }
+
+    //
+    // Script verification and loading
+    //
+
+    pub(crate) fn check_script_dependencies_and_check_gas<S: MoveResolver>(
+        &self,
+        data_store: &mut TransactionDataCache<S>,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+        script_blob: &[u8],
+    ) -> VMResult<()> {
+        let mut sha3_256 = Sha3_256::new();
+        sha3_256.update(script_blob);
+        let hash_value: [u8; 32] = sha3_256.finalize().into();
+
+        let script = data_store.load_compiled_script_to_cache(script_blob, hash_value)?;
+        let script = traversal_context.referenced_scripts.alloc(script);
+
+        // TODO(Gas): Should we charge dependency gas for the script itself?
+        self.check_dependencies_and_charge_gas(
+            data_store,
+            gas_meter,
+            &mut traversal_context.visited,
+            traversal_context.referenced_modules,
+            script.immediate_dependencies_iter(),
+        )?;
+
+        Ok(())
+    }
+
+    /// Traverses the whole transitive closure of dependencies, starting from the specified
+    /// modules and performs gas metering.
+    ///
+    /// The traversal follows a depth-first order, with the module itself being visited first,
+    /// followed by its dependencies, and finally its friends.
+    /// DO NOT CHANGE THE ORDER unless you have a good reason, or otherwise this could introduce
+    /// a breaking change to the gas semantics.
+    ///
+    /// This will result in the shallow-loading of the modules -- they will be read from the
+    /// storage as bytes and then deserialized, but NOT converted into the runtime representation.
+    ///
+    /// It should also be noted that this is implemented in a way that avoids the cloning of
+    /// `ModuleId`, a.k.a. heap allocations, as much as possible, which is critical for
+    /// performance.
+    ///
+    /// TODO: Revisit the order of traversal. Consider switching to alphabetical order.
+    pub(crate) fn check_dependencies_and_charge_gas<'a, S: MoveResolver, I>(
+        &self,
+        data_store: &mut TransactionDataCache<S>,
+        gas_meter: &mut impl GasMeter,
+        visited: &mut BTreeMap<(&'a AccountAddress, &'a IdentStr), ()>,
+        referenced_modules: &'a Arena<Arc<CompiledModule>>,
+        ids: I,
+    ) -> VMResult<()>
+    where
+        I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
+        I::IntoIter: DoubleEndedIterator,
+    {
+        // Initialize the work list (stack) and the map of visited modules.
+        //
+        // TODO: Determine the reserved capacity based on the max number of dependencies allowed.
+        let mut stack = Vec::with_capacity(512);
+
+        for (addr, name) in ids.into_iter().rev() {
+            // TODO: Allow the check of special addresses to be customized.
+            if !addr.is_special() && visited.insert((addr, name), ()).is_none() {
+                stack.push((addr, name, true));
+            }
+        }
+
+        while let Some((addr, name, allow_loading_failure)) = stack.pop() {
+            // Load and deserialize the module only if it has not been cached by the loader.
+            // Otherwise this will cause a significant regression in performance.
+            let (module, size) = match self
+                .module_cache
+                .read()
+                .module_at(&ModuleId::new(addr.clone(), name.into()))
+            {
+                Some(module) => (module.module.clone(), module.size),
+                None => {
+                    let (module, size, _) = data_store.load_compiled_module_to_cache(
+                        ModuleId::new(*addr, name.to_owned()),
+                        allow_loading_failure,
+                    )?;
+                    (module, size)
+                }
+            };
+
+            // Extend the lifetime of the module to the remainder of the function body
+            // by storing it in an arena.
+            //
+            // This is needed because we need to store references derived from it in the
+            // work list.
+            let module = referenced_modules.alloc(module);
+
+            gas_meter
+                .charge_dependency(false, addr, name, NumBytes::new(size as u64))
+                .map_err(|err| {
+                    err.finish(Location::Module(ModuleId::new(*addr, name.to_owned())))
+                })?;
+
+            // Explore all dependencies and friends that have been visited yet.
+            for (addr, name) in module
+                .immediate_dependencies_iter()
+                .chain(module.immediate_friends_iter())
+                .rev()
+            {
+                // TODO: Allow the check of special addresses to be customized.
+                if !addr.is_special() && visited.insert((addr, name), ()).is_none() {
+                    stack.push((addr, name, false));
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 //
@@ -1585,12 +1861,14 @@ impl<'a> Resolver<'a> {
 
         Ok(Type::StructInstantiation(
             struct_inst.def,
-            Arc::new(struct_inst
-                .instantiation
-                .iter()
-                .map(|ty| ty.subst(ty_args))
-                .collect::<PartialVMResult<_>>()?,
-        )))
+            Arc::new(
+                struct_inst
+                    .instantiation
+                    .iter()
+                    .map(|ty| ty.subst(ty_args))
+                    .collect::<PartialVMResult<_>>()?,
+            ),
+        ))
     }
 
     pub(crate) fn get_field_type(&self, idx: FieldHandleIndex) -> PartialVMResult<Type> {
@@ -1744,12 +2022,14 @@ impl<'a> Resolver<'a> {
         match &self.binary {
             BinaryType::Module(module) => Ok(Type::StructInstantiation(
                 module.field_instantiations[idx.0 as usize].owner,
-                Arc::new(module.field_instantiations[idx.0 as usize]
-                    .instantiation
-                    .iter()
-                    .map(|ty| ty.subst(args))
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ))),
+                Arc::new(
+                    module.field_instantiations[idx.0 as usize]
+                        .instantiation
+                        .iter()
+                        .map(|ty| ty.subst(args))
+                        .collect::<PartialVMResult<Vec<_>>>()?,
+                ),
+            )),
             BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
         }
     }
@@ -1776,11 +2056,13 @@ impl<'a> Resolver<'a> {
 // When code executes indexes in instructions are resolved against those runtime structure
 // so that any data needed for execution is immediately available
 #[derive(Debug)]
-pub(crate) struct Module {
+pub struct Module {
     #[allow(dead_code)]
     id: ModuleId,
+    // module size in bytes
+    pub(crate) size: usize,
     // primitive pools
-    module: Arc<CompiledModule>,
+    pub(crate) module: Arc<CompiledModule>,
 
     //
     // types as indexes into the Loader type list
@@ -1827,6 +2109,7 @@ pub(crate) struct Module {
 impl Module {
     fn new(
         sig_cache: &[Vec<Type>],
+        module_size: usize,
         module: CompiledModule,
         cache: &ModuleCache,
     ) -> Result<Self, (PartialVMError, CompiledModule)> {
@@ -1915,7 +2198,7 @@ impl Module {
                         }
                     }
                 } else {
-                    function_refs.push(cache.resolve_function_by_name(func_name, &module_id)?);
+                    function_refs.push(cache.resolve_function_by_name(func_name, &module_id)?.0);
                 }
             }
 
@@ -1941,12 +2224,12 @@ impl Module {
                                         return Err(PartialVMError::new(
                                             StatusCode::VERIFIER_INVARIANT_VIOLATION,
                                         )
-                                            .with_message(
-                                                "the type argument for vector-related bytecode \
+                                        .with_message(
+                                            "the type argument for vector-related bytecode \
                                             expects one and only one signature token"
-                                                    .to_owned(),
-                                            ));
-                                    },
+                                                .to_owned(),
+                                        ));
+                                    }
                                     Some(ty) => ty.clone(),
                                 };
                                 single_signature_token_map.insert(*si, ty);
@@ -1991,6 +2274,7 @@ impl Module {
         match create() {
             Ok(_) => Ok(Self {
                 id,
+                size: module_size,
                 module: Arc::new(module),
                 struct_refs,
                 structs,
@@ -2031,11 +2315,11 @@ impl Module {
         self.struct_instantiations[idx as usize].field_count
     }
 
-    pub(crate) fn module(&self) -> &CompiledModule {
+    pub fn module(&self) -> &CompiledModule {
         &self.module
     }
 
-    pub(crate) fn arc_module(&self) -> Arc<CompiledModule> {
+    pub fn arc_module(&self) -> Arc<CompiledModule> {
         self.module.clone()
     }
 
@@ -2116,7 +2400,8 @@ impl Script {
             );
             let ref_idx = cache
                 .resolve_function_by_name(func_name, &module_id)
-                .map_err(|err| err.finish(Location::Undefined))?;
+                .map_err(|err| err.finish(Location::Undefined))?
+                .0;
             function_refs.push(ref_idx);
         }
 
@@ -2191,7 +2476,7 @@ impl Script {
                 | Bytecode::VecUnpack(si, _)
                 | Bytecode::VecSwap(si) => {
                     if !single_signature_token_map.contains_key(si) {
-                        let ty = match sig_cache[si.0 as usize].get(0){
+                        let ty = match sig_cache[si.0 as usize].get(0) {
                             None => {
                                 return Err(PartialVMError::new(
                                     StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -2205,10 +2490,7 @@ impl Script {
                             }
                             Some(ty) => ty.clone(),
                         };
-                        single_signature_token_map.insert(
-                            *si,
-                            ty,
-                        );
+                        single_signature_token_map.insert(*si, ty);
                     }
                 }
                 _ => {}
@@ -2254,7 +2536,7 @@ enum Scope {
 // A runtime function
 // #[derive(Debug)]
 // https://github.com/rust-lang/rust/issues/70263
-pub(crate) struct Function {
+pub struct Function {
     #[allow(unused)]
     file_format_version: u32,
     index: FunctionDefinitionIndex,
@@ -2303,7 +2585,7 @@ impl Function {
         // Native functions do not have a code unit
         let (code, locals_idx) = match &def.code {
             Some(code) => (code.code.clone(), Some(code.locals)),
-            None => (vec![],None),
+            None => (vec![], None),
         };
         let type_parameters = handle.type_parameters.clone();
         Self {
@@ -2386,7 +2668,7 @@ impl Function {
         &self.return_types
     }
 
-    pub(crate) fn parameter_types(&self) -> &[Type] {
+    pub fn parameter_types(&self) -> &[Type] {
         &self.parameter_types
     }
 

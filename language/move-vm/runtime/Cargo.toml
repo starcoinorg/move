@@ -23,6 +23,8 @@ move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
 move-core-types = { path = "../../move-core/types" }
 move-vm-types = { path = "../types" }
 move-binary-format = { path = "../../move-binary-format" }
+typed-arena = "2.0.2"
+bytes = "1.6.1"
 
 [dev-dependencies]
 anyhow = "1.0.52"
