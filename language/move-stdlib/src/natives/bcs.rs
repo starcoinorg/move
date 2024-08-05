@@ -148,8 +148,9 @@ pub struct GasParameters {
 }
 
 pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, NativeFunction)> {
-    let natives = [("to_bytes", make_native_to_bytes(gas_params.to_bytes))];
-    let natives = [("to_address", make_native_to_address(gas_params.to_address))];
-
+    let natives = [
+        ("to_bytes", make_native_to_bytes(gas_params.to_bytes)),
+        ("to_address", make_native_to_address(gas_params.to_address)),
+    ];
     make_module_natives(natives)
 }
