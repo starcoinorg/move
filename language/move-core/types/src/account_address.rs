@@ -5,6 +5,11 @@
 use bech32::ToBase32;
 use hex::FromHex;
 use num::BigUint;
+use openrpc_schema::schemars::{
+    gen::SchemaGenerator,
+    schema::{InstanceType, Schema, SchemaObject},
+    JsonSchema,
+};
 use rand::{rngs::OsRng, Rng};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryFrom, fmt, str::FromStr};
@@ -14,6 +19,21 @@ use std::{convert::TryFrom, fmt, str::FromStr};
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(arbitrary::Arbitrary))]
 pub struct AccountAddress([u8; AccountAddress::LENGTH]);
+
+impl JsonSchema for AccountAddress {
+    fn schema_name() -> String {
+        "AccountAddress".to_owned()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        SchemaObject {
+            instance_type: Some(InstanceType::String.into()),
+            format: Some("AccountAddress".to_owned()),
+            ..Default::default()
+        }
+            .into()
+    }
+}
 
 impl AccountAddress {
     /// Hex address: 0x4
