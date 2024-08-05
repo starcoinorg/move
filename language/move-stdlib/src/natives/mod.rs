@@ -118,7 +118,7 @@ pub fn all_natives(
     make_table_from_iter(move_std_addr, natives)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NurseryGasParameters {
     pub event: event::GasParameters,
     pub debug: debug::GasParameters,
