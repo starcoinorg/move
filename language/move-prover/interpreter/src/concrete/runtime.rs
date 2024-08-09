@@ -13,6 +13,7 @@ use move_core_types::{
     value::MoveValue,
     vm_status::StatusCode,
 };
+use move_model::ty::ReferenceKind;
 use move_model::{
     model::{AbilitySet, FunctionEnv, GlobalEnv, TypeParameter},
     ty as MT,
@@ -136,7 +137,7 @@ fn check_and_convert_type_args_and_args(
         // TODO (mengxu): clean this up when we no longer accept `&signer` as valid arguments
         // for transaction scripts and `public(script)` functions.
         match local_ty {
-            MT::Type::Reference(false, base_ty)
+            MT::Type::Reference(ReferenceKind::Immutable, base_ty)
                 if matches!(*base_ty, MT::Type::Primitive(MT::PrimitiveType::Signer)) =>
             {
                 match arg {

@@ -16,6 +16,7 @@ use move_compiler::{
 use move_core_types::value::MoveValue;
 use move_ir_types::location::Spanned;
 
+use crate::ty::ReferenceKind;
 use crate::{
     ast::{Exp, ExpData, LocalVarDecl, ModuleName, Operation, QualifiedSymbol, QuantKind, Value},
     builder::{
@@ -531,7 +532,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                 if ty == Type::Error {
                     Type::Error
                 } else {
-                    Type::Reference(*is_mut, Box::new(ty))
+                    Type::Reference(ReferenceKind::from_is_mut(*is_mut), Box::new(ty))
                 }
             }
             Base(ty) => self.translate_hlir_base_type(ty),
@@ -680,7 +681,10 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                     rty
                 }
             }
-            Ref(is_mut, ty) => Type::Reference(*is_mut, Box::new(self.translate_type(ty))),
+            Ref(is_mut, ty) => Type::Reference(
+                ReferenceKind::from_is_mut(*is_mut),
+                Box::new(self.translate_type(ty)),
+            ),
             Fun(args, result) => Type::Fun(
                 self.translate_types(args),
                 Box::new(self.translate_type(result)),

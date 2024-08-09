@@ -61,6 +61,7 @@ use move_core_types::{
 };
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 
+use crate::ty::ReferenceKind;
 use crate::{
     ast::{
         Attribute, ConditionKind, Exp, ExpData, GlobalInvariant, ModuleName, PropertyBag,
@@ -1032,9 +1033,9 @@ impl GlobalEnv {
             let decl = module.get_spec_fun(caller.id);
             decl.callees.contains(&fun)
                 || decl
-                    .callees
-                    .iter()
-                    .any(|trans_caller| is_caller(env, visited, *trans_caller, fun))
+                .callees
+                .iter()
+                .any(|trans_caller| is_caller(env, visited, *trans_caller, fun))
         }
         let module = self.get_module(id.module_id);
         let is_recursive = *module.get_spec_fun(id.id).is_recursive.borrow();
@@ -1343,14 +1344,14 @@ impl GlobalEnv {
         for func_env in module_env.into_functions() {
             if Self::enclosing_span(func_env.get_loc().span(), loc.span())
                 || Self::enclosing_span(
-                    func_env
-                        .get_spec()
-                        .loc
-                        .clone()
-                        .unwrap_or_else(|| self.unknown_loc.clone())
-                        .span(),
-                    loc.span(),
-                )
+                func_env
+                    .get_spec()
+                    .loc
+                    .clone()
+                    .unwrap_or_else(|| self.unknown_loc.clone())
+                    .span(),
+                loc.span(),
+            )
             {
                 return Some(func_env.clone());
             }
@@ -1405,7 +1406,7 @@ impl GlobalEnv {
     }
 
     /// Returns an iterator for all modules in the environment.
-    pub fn get_modules(&self) -> impl Iterator<Item = ModuleEnv<'_>> {
+    pub fn get_modules(&self) -> impl Iterator<Item=ModuleEnv<'_>> {
         self.module_data.iter().map(move |module_data| ModuleEnv {
             env: self,
             data: module_data,
@@ -1413,7 +1414,7 @@ impl GlobalEnv {
     }
 
     /// Returns an iterator for all bytecode modules in the environment.
-    pub fn get_bytecode_modules(&self) -> impl Iterator<Item = &CompiledModule> {
+    pub fn get_bytecode_modules(&self) -> impl Iterator<Item=&CompiledModule> {
         self.module_data
             .iter()
             .map(|module_data| &module_data.module)
@@ -2027,12 +2028,12 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Returns iterator over `NamedConstantEnv`s in this module.
-    pub fn get_named_constants(&'env self) -> impl Iterator<Item = NamedConstantEnv<'env>> {
+    pub fn get_named_constants(&'env self) -> impl Iterator<Item=NamedConstantEnv<'env>> {
         self.clone().into_named_constants()
     }
 
     /// Returns an iterator over `NamedConstantEnv`s in this module.
-    pub fn into_named_constants(self) -> impl Iterator<Item = NamedConstantEnv<'env>> {
+    pub fn into_named_constants(self) -> impl Iterator<Item=NamedConstantEnv<'env>> {
         self.data
             .named_constants
             .iter()
@@ -2071,12 +2072,12 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Returns iterator over FunctionEnvs in this module.
-    pub fn get_functions(&'env self) -> impl Iterator<Item = FunctionEnv<'env>> {
+    pub fn get_functions(&'env self) -> impl Iterator<Item=FunctionEnv<'env>> {
         self.clone().into_functions()
     }
 
     /// Returns iterator over FunctionEnvs in this module.
-    pub fn into_functions(self) -> impl Iterator<Item = FunctionEnv<'env>> {
+    pub fn into_functions(self) -> impl Iterator<Item=FunctionEnv<'env>> {
         self.data
             .function_data
             .iter()
@@ -2174,12 +2175,12 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Returns iterator over structs in this module.
-    pub fn get_structs(&'env self) -> impl Iterator<Item = StructEnv<'env>> {
+    pub fn get_structs(&'env self) -> impl Iterator<Item=StructEnv<'env>> {
         self.clone().into_structs()
     }
 
     /// Returns iterator over structs in this module.
-    pub fn into_structs(self) -> impl Iterator<Item = StructEnv<'env>> {
+    pub fn into_structs(self) -> impl Iterator<Item=StructEnv<'env>> {
         self.data
             .struct_data
             .iter()
@@ -2201,12 +2202,14 @@ impl<'env> ModuleEnv<'env> {
             SignatureToken::U256 => Type::Primitive(PrimitiveType::U256),
             SignatureToken::Address => Type::Primitive(PrimitiveType::Address),
             SignatureToken::Signer => Type::Primitive(PrimitiveType::Signer),
-            SignatureToken::Reference(t) => {
-                Type::Reference(false, Box::new(self.globalize_signature(t)))
-            }
-            SignatureToken::MutableReference(t) => {
-                Type::Reference(true, Box::new(self.globalize_signature(t)))
-            }
+            SignatureToken::Reference(t) => Type::Reference(
+                ReferenceKind::Immutable,
+                Box::new(self.globalize_signature(t)),
+            ),
+            SignatureToken::MutableReference(t) => Type::Reference(
+                ReferenceKind::Mutable,
+                Box::new(self.globalize_signature(t)),
+            ),
             SignatureToken::TypeParameter(index) => Type::TypeParameter(*index),
             SignatureToken::Vector(bt) => Type::Vector(Box::new(self.globalize_signature(bt))),
             SignatureToken::Struct(handle_idx) => {
@@ -2285,7 +2288,7 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Returns specification variables of this module.
-    pub fn get_spec_vars(&'env self) -> impl Iterator<Item = (&'env SpecVarId, &'env SpecVarDecl)> {
+    pub fn get_spec_vars(&'env self) -> impl Iterator<Item=(&'env SpecVarId, &'env SpecVarDecl)> {
         self.data.spec_vars.iter()
     }
 
@@ -2304,7 +2307,7 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Returns specification functions of this module.
-    pub fn get_spec_funs(&'env self) -> impl Iterator<Item = (&'env SpecFunId, &'env SpecFunDecl)> {
+    pub fn get_spec_funs(&'env self) -> impl Iterator<Item=(&'env SpecFunId, &'env SpecFunDecl)> {
         self.data.spec_funs.iter()
     }
 
@@ -2329,7 +2332,7 @@ impl<'env> ModuleEnv<'env> {
     pub fn get_spec_funs_of_name(
         &self,
         name: Symbol,
-    ) -> impl Iterator<Item = (&'env SpecFunId, &'env SpecFunDecl)> {
+    ) -> impl Iterator<Item=(&'env SpecFunId, &'env SpecFunDecl)> {
         self.data
             .spec_funs
             .iter()
@@ -2576,7 +2579,7 @@ impl<'env> StructEnv<'env> {
     }
 
     /// Get an iterator for the fields, ordered by offset.
-    pub fn get_fields(&'env self) -> impl Iterator<Item = FieldEnv<'env>> {
+    pub fn get_fields(&'env self) -> impl Iterator<Item=FieldEnv<'env>> {
         self.data
             .field_data
             .values()
@@ -3125,8 +3128,8 @@ impl<'env> FunctionEnv<'env> {
         env.get_num_property(&self.get_spec().properties, name)
             .is_some()
             || env
-                .get_num_property(&self.module_env.get_spec().properties, name)
-                .is_some()
+            .get_num_property(&self.module_env.get_spec().properties, name)
+            .is_some()
     }
 
     /// Returns the value of a numeric pragma for this function. This first looks up a
@@ -3250,9 +3253,9 @@ impl<'env> FunctionEnv<'env> {
         self.module_env.is_script_module()
             || self.definition_view().is_entry()
             || match self.definition_view().visibility() {
-                Visibility::Public | Visibility::Friend => true,
-                Visibility::Private => false,
-            }
+            Visibility::Public | Visibility::Friend => true,
+            Visibility::Private => false,
+        }
     }
 
     /// Return whether this function is exposed outside of the module.
@@ -3260,9 +3263,9 @@ impl<'env> FunctionEnv<'env> {
         self.module_env.is_script_module()
             || self.definition_view().is_entry()
             || match self.definition_view().visibility() {
-                Visibility::Public => true,
-                Visibility::Private | Visibility::Friend => false,
-            }
+            Visibility::Public => true,
+            Visibility::Private | Visibility::Friend => false,
+        }
     }
 
     /// Returns true if the function is a script function

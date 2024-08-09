@@ -21,6 +21,7 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     value::{MoveStructLayout, MoveTypeLayout},
 };
+use move_model::ty::ReferenceKind;
 use move_model::{
     model::{GlobalEnv, ModuleId, StructId},
     ty as MT,
@@ -795,9 +796,8 @@ pub fn convert_model_local_type(env: &GlobalEnv, ty: &MT::Type, subst: &[BaseTyp
         | MT::Type::Vector(..)
         | MT::Type::Struct(..)
         | MT::Type::TypeParameter(..) => Type::Base(convert_model_base_type(env, ty, subst)),
-        MT::Type::Reference(is_mut, base_ty) => {
-            convert_model_base_type(env, base_ty, subst).into_ref_type(*is_mut)
-        }
+        MT::Type::Reference(is_mut, base_ty) => convert_model_base_type(env, base_ty, subst)
+            .into_ref_type(*is_mut == ReferenceKind::Mutable),
         _ => unreachable!(),
     }
 }

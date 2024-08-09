@@ -2,14 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_model::{ast::TempIndex, model::FunctionEnv, ty::Type};
-
 use crate::{
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
     stackless_bytecode::{AssignKind, Bytecode, Operation},
 };
+use move_model::ty::ReferenceKind;
+use move_model::{ast::TempIndex, model::FunctionEnv, ty::Type};
 
 pub struct EliminateImmRefsProcessor {}
 
@@ -61,7 +61,7 @@ impl<'a> EliminateImmRefs<'a> {
     }
 
     fn transform_type(&self, ty: Type) -> Type {
-        if let Type::Reference(false, y) = ty {
+        if let Type::Reference(ReferenceKind::Immutable, y) = ty {
             *y
         } else {
             ty
