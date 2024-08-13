@@ -27,18 +27,46 @@ pub enum Type {
     Vector(Box<Type>),
     Struct(ModuleId, StructId, Vec<Type>),
     TypeParameter(u16),
+    // todo(simon): change args type to Box<Type>?
+    Fun(/*args*/ Vec<Type>, /*result*/ Box<Type>),
 
     // Types only appearing in programs.
-    Reference(bool, Box<Type>),
+    Reference(ReferenceKind, Box<Type>),
 
     // Types only appearing in specifications
-    Fun(Vec<Type>, Box<Type>),
     TypeDomain(Box<Type>),
     ResourceDomain(ModuleId, StructId, Option<Vec<Type>>),
 
     // Temporary types used during type checking
     Error,
+    // todo(simon) change Var type to u32?
     Var(u16),
+}
+
+/// Represents a reference kind.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum ReferenceKind {
+    Immutable,
+    Mutable,
+}
+
+impl ReferenceKind {
+    pub fn from_is_mut(is_mut: bool) -> ReferenceKind {
+        if is_mut {
+            ReferenceKind::Mutable
+        } else {
+            ReferenceKind::Immutable
+        }
+    }
+}
+
+impl fmt::Display for ReferenceKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ReferenceKind::Immutable => f.write_str("`&`"),
+            ReferenceKind::Mutable => f.write_str("`&mut`"),
+        }
+    }
 }
 
 pub const BOOL_TYPE: Type = Type::Primitive(PrimitiveType::Bool);
@@ -120,12 +148,12 @@ impl Type {
 
     /// Determines whether this is a mutable reference.
     pub fn is_mutable_reference(&self) -> bool {
-        matches!(self, Type::Reference(true, _))
+        matches!(self, Type::Reference(ReferenceKind::Mutable, _))
     }
 
     /// Determines whether this is an immutable reference.
     pub fn is_immutable_reference(&self) -> bool {
-        matches!(self, Type::Reference(false, _))
+        matches!(self, Type::Reference(ReferenceKind::Immutable, _))
     }
 
     /// Determines whether this type is a struct.
@@ -434,7 +462,7 @@ impl Type {
                     .expect("Invariant violation: vector type argument contains incomplete, tuple, or spec type"))
             )),
             Reference(r, t) =>
-                if r {
+                if r == ReferenceKind::Mutable {
                     Some(MType::MutableReference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
                 } else {
                     Some(MType::Reference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
@@ -1240,10 +1268,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 Ok(())
             }
             Reference(is_mut, t) => {
-                f.write_str("&")?;
-                if *is_mut {
-                    f.write_str("mut ")?;
-                }
+                f.write_str(is_mut.to_string().as_str())?;
                 write!(f, "{}", t.display(self.context))
             }
             TypeParameter(idx) => {

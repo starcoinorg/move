@@ -11,16 +11,6 @@ use std::{
 
 use itertools::Itertools;
 
-use move_model::{
-    ast,
-    ast::{Exp, ExpData, TempIndex, Value},
-    exp_generator::ExpGenerator,
-    model::{FunId, FunctionEnv, GlobalEnv, Loc, ModuleId, QualifiedId, QualifiedInstId, StructId},
-    pragmas::{ABORTS_IF_IS_PARTIAL_PRAGMA, EMITS_IS_PARTIAL_PRAGMA, EMITS_IS_STRICT_PRAGMA},
-    spec_translator::{SpecTranslator, TranslatedSpec},
-    ty::{Type, TypeDisplayContext, BOOL_TYPE, NUM_TYPE},
-};
-
 use crate::{
     function_data_builder::FunctionDataBuilder,
     function_target::{FunctionData, FunctionTarget},
@@ -35,6 +25,16 @@ use crate::{
         Operation, PropKind,
     },
     usage_analysis, verification_analysis,
+};
+use move_model::ty::ReferenceKind;
+use move_model::{
+    ast,
+    ast::{Exp, ExpData, TempIndex, Value},
+    exp_generator::ExpGenerator,
+    model::{FunId, FunctionEnv, GlobalEnv, Loc, ModuleId, QualifiedId, QualifiedInstId, StructId},
+    pragmas::{ABORTS_IF_IS_PARTIAL_PRAGMA, EMITS_IS_PARTIAL_PRAGMA, EMITS_IS_STRICT_PRAGMA},
+    spec_translator::{SpecTranslator, TranslatedSpec},
+    ty::{Type, TypeDisplayContext, BOOL_TYPE, NUM_TYPE},
 };
 
 const REQUIRES_FAILS_MESSAGE: &str = "precondition does not hold at this call";
@@ -750,9 +750,10 @@ impl<'a> Instrumenter<'a> {
 
             // Update memory. We create a mut ref for the location then write the value back to it.
             let (addr_temp, _) = self.builder.emit_let(addr);
-            let mem_ref = self
-                .builder
-                .new_temp(Type::Reference(true, Box::new(ghost_mem_ty)));
+            let mem_ref = self.builder.new_temp(Type::Reference(
+                ReferenceKind::Mutable,
+                Box::new(ghost_mem_ty),
+            ));
             // mem_ref = borrow_global_mut<ghost_mem>(addr)
             self.builder.emit_with(|id| {
                 Bytecode::Call(
@@ -1161,9 +1162,9 @@ fn check_opaque_modifies_completeness(
         if !found {
             let loc = fun_env.get_spec_loc();
             env.error(&loc,
-            &format!("function `{}` is opaque but its specification does not have a modifies clause for `{}`",
-                fun_env.get_full_name_str(),
-                env.display(mem))
+                      &format!("function `{}` is opaque but its specification does not have a modifies clause for `{}`",
+                               fun_env.get_full_name_str(),
+                               env.display(mem)),
             )
         }
     }

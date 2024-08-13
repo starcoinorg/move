@@ -18,6 +18,7 @@ use move_core_types::{
     language_storage::CORE_CODE_ADDRESS,
     vm_status::{sub_status, StatusCode},
 };
+use move_model::ty::ReferenceKind;
 use move_model::{
     ast::{Exp, MemoryLabel, TempIndex},
     model::{FunId, FunctionEnv, ModuleId, StructId},
@@ -2426,7 +2427,7 @@ impl<'env> FunctionContext<'env> {
                 if local_ty != param_decl_ty {
                     assert!(matches!(
                             param_decl_ty,
-                            MT::Type::Reference(false, base_ty)
+                            MT::Type::Reference(ReferenceKind::Immutable, base_ty)
                             if local_ty == base_ty.as_ref()));
                 }
                 let ty = convert_model_local_type(env, local_ty, &self.ty_args);
