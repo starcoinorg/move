@@ -2920,7 +2920,7 @@ pub struct AbilityConstraint(pub AbilitySet);
 
 /// Represents a parameter.
 #[derive(Debug, Clone)]
-pub struct Parameter(pub Symbol, pub Type);
+pub struct Parameter(pub Symbol, pub Type /*TODO(simon),pub Loc*/);
 
 #[derive(Debug)]
 pub struct FunctionData {

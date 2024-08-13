@@ -838,7 +838,7 @@ impl TypeUnificationAdapter {
         treat_rhs_type_param_as_var_after_index: Option<TypeParameterIndex>,
     ) -> Self
     where
-        I: Iterator<Item=&'a Type> + Clone,
+        I: Iterator<Item = &'a Type> + Clone,
     {
         debug_assert!(
             treat_lhs_type_param_as_var_after_index.is_some()
@@ -1115,7 +1115,7 @@ impl TypeInstantiationDerivation {
         mark_irrelevant_param_as_error: bool,
     ) -> BTreeSet<Vec<Type>>
     where
-        I: Iterator<Item=&'a Type> + Clone,
+        I: Iterator<Item = &'a Type> + Clone,
     {
         let initial_param_insts: Vec<_> = (0..params_arity)
             .map(|idx| Type::TypeParameter(idx as TypeParameterIndex))
