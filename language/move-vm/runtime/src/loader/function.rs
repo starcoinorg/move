@@ -192,11 +192,11 @@ impl Function {
                     .module_at(module_id)
                     .expect("ModuleId on Function must exist");
                 Resolver::for_module(loader, module_store, module)
-            },
+            }
             Scope::Script(script_hash) => {
                 let script = loader.get_script(script_hash);
                 Resolver::for_script(loader, module_store, script)
-            },
+            }
         }
     }
 
@@ -244,7 +244,7 @@ impl Function {
         }
     }
 
-    pub(crate) fn is_native(&self) -> bool {
+    pub fn is_native(&self) -> bool {
         self.is_native
     }
 
