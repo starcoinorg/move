@@ -51,13 +51,9 @@ impl Compatibility {
         }
     }
 
-    pub fn new(
-        check_struct_and_pub_function_linking: bool,
-        check_struct_layout: bool,
-        check_friend_linking: bool,
-    ) -> Self {
+    pub fn new(check_struct_layout: bool, check_friend_linking: bool) -> Self {
         Self {
-            check_struct_and_pub_function_linking,
+            check_struct_and_pub_function_linking: true,
             check_struct_layout,
             check_friend_linking,
         }
@@ -91,7 +87,7 @@ impl Compatibility {
                     struct_and_pub_function_linking = false;
                     struct_layout = false;
                     break;
-                },
+                }
             };
 
             if !struct_abilities_compatibile(old_struct.abilities, new_struct.abilities)
@@ -137,7 +133,7 @@ impl Compatibility {
                         struct_and_pub_function_linking = false;
                     }
                     continue;
-                },
+                }
             };
             let is_vis_compatible = match (old_func.visibility, new_func.visibility) {
                 // public must remain public

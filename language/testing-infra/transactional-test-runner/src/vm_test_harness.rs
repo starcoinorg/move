@@ -48,12 +48,12 @@ use move_vm_test_utils::{
     InMemoryStorage,
 };
 use once_cell::sync::Lazy;
+use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter::Iterator,
     path::Path,
 };
-use serde_json::Value;
 
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
@@ -129,7 +129,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         let additional_mapping = match task_opt.map(|t| t.command) {
             Some((InitCommand { named_addresses }, _)) => {
                 verify_and_create_named_address_mapping(named_addresses).unwrap()
-            },
+            }
             None => BTreeMap::new(),
         };
 
@@ -218,7 +218,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
             gas_budget,
             |session, gas_status| {
                 let compat = Compatibility::new(
-                    !extra_args.skip_check_struct_and_pub_function_linking,
                     !extra_args.skip_check_struct_layout,
                     !extra_args.skip_check_friend_linking,
                 );
@@ -307,7 +306,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
         extra_args: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues, Option::<Value>)> {
+    ) -> Result<(Option<String>, SerializedReturnValues, Option<Value>)> {
         let signers: Vec<_> = signers
             .into_iter()
             .map(|addr| self.compiled_state().resolve_address(&addr))
@@ -372,11 +371,14 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                 let annotated =
                     MoveValueAnnotator::new(self.storage.clone()).view_resource(&tag, &data)?;
                 Ok((format!("{}", annotated), serde_json::to_value(&annotated)?))
-            },
+            }
         }
     }
 
-    fn handle_subcommand(&mut self, _: TaskInput<Self::Subcommand>) -> Result<(Option<String>, Option<Value>)> {
+    fn handle_subcommand(
+        &mut self,
+        _: TaskInput<Self::Subcommand>,
+    ) -> Result<(Option<String>, Option<Value>)> {
         unreachable!()
     }
 }
@@ -457,7 +459,7 @@ static PRECOMPILED_MOVE_STDLIB: Lazy<Option<(FullyCompiledProgram, Vec<PackagePa
             Err((files, errors)) => {
                 eprintln!("!!!Standard library failed to compile!!!");
                 move_compiler::diagnostics::report_diagnostics(&files, errors)
-            },
+            }
         }
     });
 
@@ -536,10 +538,13 @@ pub fn run_test_with_config(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (suffix, config) =
         if get_move_compiler_v2_from_env() && !matches!(config, TestRunConfig::CompilerV2 { .. }) {
-            (Some(EXP_EXT_V2.to_owned()), TestRunConfig::CompilerV2 {
-                language_version: LanguageVersion::default(),
-                v2_experiments: vec![],
-            })
+            (
+                Some(EXP_EXT_V2.to_owned()),
+                TestRunConfig::CompilerV2 {
+                    language_version: LanguageVersion::default(),
+                    v2_experiments: vec![],
+                },
+            )
         } else {
             (Some(EXP_EXT.to_owned()), config)
         };

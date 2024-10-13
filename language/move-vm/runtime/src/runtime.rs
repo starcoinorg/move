@@ -85,7 +85,7 @@ impl VMRuntime {
                         "[VM] module deserialization failed".to_string(),
                     )
                     .finish(Location::Undefined));
-            },
+            }
         };
 
         // Make sure all modules' self addresses matches the transaction sender. The self address is
@@ -219,7 +219,7 @@ impl VMRuntime {
                     StatusCode::INVALID_PARAM_TYPE_FOR_DESERIALIZATION,
                 )
                 .with_message("[VM] failed to get layout from type".to_string()));
-            },
+            }
         };
 
         let deserialization_error = || -> PartialVMError {
@@ -240,7 +240,7 @@ impl VMRuntime {
         }
     }
 
-    fn deserialize_args(
+    pub(crate) fn deserialize_args(
         &self,
         module_store: &ModuleStorageAdapter,
         param_tys: Vec<Type>,
@@ -274,7 +274,7 @@ impl VMRuntime {
                         self.loader.vm_config().check_invariant_in_swap_loc,
                     )?;
                     dummy_locals.borrow_loc(idx)
-                },
+                }
                 _ => self.deserialize_arg(module_store, &ty, arg_bytes),
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
@@ -292,7 +292,7 @@ impl VMRuntime {
                 let ref_value: Reference = value.cast()?;
                 let inner_value = ref_value.read_ref()?;
                 (&**inner, inner_value)
-            },
+            }
             _ => (ty, value),
         };
 

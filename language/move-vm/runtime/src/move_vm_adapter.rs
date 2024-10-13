@@ -158,7 +158,7 @@ impl<'r, 'l> SessionAdapter<'r, 'l> {
                     .map_err(|err| err.finish(Location::Undefined))?;
                 let old_m = normalized::Module::new(&old_module);
                 let new_m = normalized::Module::new(&module);
-                if Compatibility::new(true, true, false)
+                if Compatibility::new(true, false)
                     .check(&old_m, &new_m)
                     .is_err()
                     && !option.force_publish
