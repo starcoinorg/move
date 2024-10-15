@@ -626,6 +626,8 @@ pub enum StatusCode {
     UNKNOWN_STRATEGY = 513,
     // Send and package address mismatch
     SENDER_AND_PACKAGE_ADDRESS_MISMATCH = 514,
+    // No user Transactions are allowed when the global state is frozen
+    SEND_TXN_GLOBAL_FROZEN = 515,
     // ------------------------------------------------//
 
     // When a code module/script is published it is verified. These are the
