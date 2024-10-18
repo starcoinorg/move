@@ -31,7 +31,7 @@ serde_bytes = { workspace = true }
 thiserror = { workspace = true }
 uint = { workspace = true }
 bech32 = "0.9"
-openrpc-schema = {git = "https://github.com/starcoinorg/openrpc-rs",rev = "f8ab047e30927cdf2f605b61a219c975d6c4f666"}
+openrpc-schema = {git = "https://github.com/starcoinorg/openrpc-rs",rev = "1f2f7d3495e3bd3ef3b6fcf7c4e0602cad090d5e"}
 
 [dev-dependencies]
 arbitrary = { workspace = true, features = ["derive_arbitrary"] }

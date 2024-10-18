@@ -97,7 +97,7 @@ better_any = "0.1.1"
 bigdecimal = { version = "0.4.0", features = ["serde"] }
 bitvec = "1.0.1"
 byteorder = "1.4.3"
-bytes = { version = "1.4.0", features = ["serde"] }
+bytes = { version = "1.6.1", features = ["serde"] }
 chrono = { version = "0.4.19", features = ["clock", "serde"] }
 claims = "0.7"
 clap = { version = "4.3.9", features = ["derive", "env", "unstable-styles"] }

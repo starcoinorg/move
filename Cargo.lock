@@ -705,9 +705,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.6.0"
+version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "514de17de45fdb8dc022b1a7975556c53c86f9f0aa5f534b98977b171857c2c9"
+checksum = "428d9aa8fbc0670b7b8d6030a7fadd0f86151cae55e4dbbece15f3780a3dfaf3"
 dependencies = [
  "serde",
 ]
@@ -3997,7 +3997,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 [[package]]
 name = "openrpc-schema"
 version = "0.1.0"
-source = "git+https://github.com/starcoinorg/openrpc-rs?rev=f8ab047e30927cdf2f605b61a219c975d6c4f666#f8ab047e30927cdf2f605b61a219c975d6c4f666"
+source = "git+https://github.com/starcoinorg/openrpc-rs?rev=1f2f7d3495e3bd3ef3b6fcf7c4e0602cad090d5e#1f2f7d3495e3bd3ef3b6fcf7c4e0602cad090d5e"
 dependencies = [
  "schemars",
  "serde",
@@ -4950,8 +4950,9 @@ dependencies = [
 [[package]]
 name = "schemars"
 version = "0.8.8"
-source = "git+https://github.com/starcoinorg/schemars?rev=9b3705780b8fe9c8676ff82919869ba7405b1062#9b3705780b8fe9c8676ff82919869ba7405b1062"
+source = "git+https://github.com/starcoinorg/schemars?rev=a64c6ddf7ca4796e090208b1476de2e53772042f#a64c6ddf7ca4796e090208b1476de2e53772042f"
 dependencies = [
+ "bytes",
  "dyn-clone",
  "multiaddr",
  "schemars_derive",
@@ -4962,7 +4963,7 @@ dependencies = [
 [[package]]
 name = "schemars_derive"
 version = "0.8.8"
-source = "git+https://github.com/starcoinorg/schemars?rev=9b3705780b8fe9c8676ff82919869ba7405b1062#9b3705780b8fe9c8676ff82919869ba7405b1062"
+source = "git+https://github.com/starcoinorg/schemars?rev=a64c6ddf7ca4796e090208b1476de2e53772042f#a64c6ddf7ca4796e090208b1476de2e53772042f"
 dependencies = [
  "proc-macro2",
  "quote",
