@@ -12,7 +12,7 @@ use crate::{
     session::Session,
 };
 use move_binary_format::{
-    errors::{Location, PartialVMError, VMResult, PartialVMResult},
+    errors::{Location, PartialVMError, PartialVMResult, VMResult},
     CompiledModule,
 };
 use move_core_types::{
@@ -41,6 +41,11 @@ impl MoveVM {
             runtime: VMRuntime::new(natives, vm_config)
                 .map_err(|err| err.finish(Location::Undefined))?,
         })
+    }
+
+    /// Returns VM configuration used to initialize the VM.
+    pub fn vm_config(&self) -> &VMConfig {
+        self.runtime.loader().vm_config()
     }
 
     /// Create a new Session backed by the given storage.
