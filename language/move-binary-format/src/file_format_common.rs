@@ -479,7 +479,7 @@ pub const VERSION_6: u32 = 6;
 pub const VERSION_7: u32 = 7;
 
 /// Mark which version is the default version
-pub const VERSION_DEFAULT: u32 = VERSION_6;
+pub const VERSION_DEFAULT: u32 = VERSION_7;
 
 /// Mark which version is the latest version
 pub const VERSION_MAX: u32 = VERSION_7;
