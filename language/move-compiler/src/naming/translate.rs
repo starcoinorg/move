@@ -18,6 +18,7 @@ use crate::{
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
+use log::info;
 
 //**************************************************************************************************
 // Context
@@ -917,6 +918,7 @@ fn exp(context: &mut Context, e: E::Exp) -> Box<N::Exp> {
 fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
     use E::Exp_ as EE;
     use N::Exp_ as NE;
+    let e1 = e.clone();
     let sp!(eloc, e_) = e;
     let ne_ = match e_ {
         EE::Unit { trailing } => NE::Unit { trailing },
@@ -1101,6 +1103,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
             NE::Spec(u, used_vars, used_func_ptrs)
         },
         EE::UnresolvedError => {
+            println!("YSG {:?} {:?}", eloc, e1);
             assert!(context.env.has_errors());
             NE::UnresolvedError
         },

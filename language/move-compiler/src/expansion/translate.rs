@@ -1771,7 +1771,7 @@ fn access_specifier_name_access_chain(
                     } else {
                         context.env.add_diag(diag!(
                             NameResolution::UnboundModule,
-                            (name.loc, format!("Unbound module alias '{}'", name))
+                            (name.loc, format!("access_specifier_name_access_chain Unbound module alias '{}'", name))
                         ));
                         (None, None, None)
                     }
@@ -2245,7 +2245,7 @@ fn name_access_chain(
             None => {
                 context.env.add_diag(diag!(
                     NameResolution::UnboundModule,
-                    (n1.loc, format!("Unbound module alias '{}'", n1))
+                    (n1.loc, format!("name_access_chain Unbound module alias '{}'", n1))
                 ));
                 return None;
             },
@@ -2282,7 +2282,7 @@ fn name_access_chain_to_module_ident(
             None => {
                 context.env.add_diag(diag!(
                     NameResolution::UnboundModule,
-                    (name.loc, format!("Unbound module alias '{}'", name)),
+                    (name.loc, format!("name_access_chain_to_module_ident Unbound module alias '{}'", name)),
                 ));
                 None
             },

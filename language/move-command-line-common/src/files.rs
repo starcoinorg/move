@@ -13,7 +13,9 @@ pub struct FileHash(pub [u8; 32]);
 
 impl FileHash {
     pub fn new(file_contents: &str) -> Self {
-        Self(sha2::Sha256::digest(file_contents.as_bytes()).into())
+        let res = Self(sha2::Sha256::digest(file_contents.as_bytes()).into());
+        println!("YSG str {} hash {}", file_contents, res);
+        res
     }
 
     pub const fn empty() -> Self {

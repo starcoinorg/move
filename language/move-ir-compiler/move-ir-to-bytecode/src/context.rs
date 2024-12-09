@@ -400,7 +400,7 @@ impl<'a> Context<'a> {
     /// Get the handle for the alias, fails if it is not bound.
     fn module_handle(&self, module_name: &ModuleName) -> Result<&ModuleHandle> {
         match self.modules.get(module_name) {
-            None => bail!("Unbound module alias {}", module_name),
+            None => bail!("module_handle Unbound module alias {}", module_name),
             Some((_, mh)) => Ok(mh),
         }
     }
@@ -408,7 +408,7 @@ impl<'a> Context<'a> {
     /// Get the identifier for the alias, fails if it is not bound.
     pub fn module_ident(&self, module_name: &ModuleName) -> Result<&ModuleIdent> {
         match self.modules.get(module_name) {
-            None => bail!("Unbound module alias {}", module_name),
+            None => bail!("module_ident Unbound module alias {}", module_name),
             Some((id, _)) => Ok(id),
         }
     }

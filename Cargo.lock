@@ -2992,6 +2992,7 @@ dependencies = [
  "codespan-reporting",
  "datatest-stable",
  "hex",
+ "log",
  "move-binary-format",
  "move-borrow-graph",
  "move-bytecode-source-map",
