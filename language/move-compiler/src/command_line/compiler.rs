@@ -485,16 +485,10 @@ pub fn construct_pre_compiled_lib_from_compiler(
             parser = Some(prog.clone())
         }
         PassResult::Expansion(eprog) => {
-            if env.check_diags_at_or_above_severity(NonblockingError).is_err(){
-                return;
-            }
             assert!(expansion.is_none());
             expansion = Some(eprog.clone())
         }
         PassResult::Naming(nprog) => {
-            if env.check_diags_at_or_above_severity(NonblockingError).is_err(){
-                return;
-            }
             assert!(naming.is_none());
             naming = Some(nprog.clone())
         }
@@ -507,9 +501,6 @@ pub fn construct_pre_compiled_lib_from_compiler(
             inlining = Some(tprog.clone())
         }
         PassResult::HLIR(hprog) => {
-            if env.check_diags_at_or_above_severity(NonblockingError).is_err(){
-                return;
-            }
             assert!(hlir.is_none());
             hlir = Some(hprog.clone());
         }
