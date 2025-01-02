@@ -1044,29 +1044,16 @@ where
             if num_tasks > 1 { "s" } else { "" }
         )
         .unwrap();
-        // let first_task = tasks.pop_front().unwrap();
-        // let init_opt = match &first_task.command {
-        //     TaskCommand::Init(_, _) => Some(first_task.map(|known| match known {
-        //         TaskCommand::Init(command, extra_args) => (command, extra_args),
-        //         _ => unreachable!(),
-        //     })),
-        //     _ => {
-        //         tasks.push_front(first_task);
-        //         None
-        //     },
-        // };
-        let mut ctx = jpst::TemplateContext::new();
-        let first_lazy_task = tasks.pop_front().unwrap();
-        let first_task = first_lazy_task.parse(&ctx)?;
-        let (first_task, init_opt) = match &first_task.command {
-            TaskCommand::Init(_, _) => (
-                None,
-                Some(first_task.map(|known| match known {
-                    TaskCommand::Init(command, extra_args) => (command, extra_args),
-                    _ => unreachable!(),
-                })),
-            ),
-            _ => (Some(first_task), None),
+        let first_task = tasks.pop_front().unwrap();
+        let init_opt = match &first_task.command {
+            TaskCommand::Init(_, _) => Some(first_task.map(|known| match known {
+                TaskCommand::Init(command, extra_args) => (command, extra_args),
+                _ => unreachable!(),
+            })),
+            _ => {
+                tasks.push_front(first_task);
+                None
+            },
         };
         let (mut adapter, result_opt) = Adapter::init(
             default_syntax,
@@ -1080,13 +1067,8 @@ where
             writeln!(output, "\ninit:\n{}", result)?;
         }
 
-        if let Some(first_task) = first_task {
-            handle_known_task(&mut output, &mut adapter, &mut ctx, first_task);
-        }
-
         for task in tasks {
-            let task = task.parse(&ctx)?;
-            handle_known_task(&mut output, &mut adapter, &mut ctx, task);
+            handle_known_task(&mut output, &mut adapter, task);
         }
 
         // Extract any bytecode outputs, they should not be part of the diff.
@@ -1132,7 +1114,6 @@ where
 fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     output: &mut String,
     adapter: &mut Adapter,
-    ctx: &mut jpst::TemplateContext,
     task: TaskInput<
         TaskCommand<
             Adapter::ExtraInitArgs,
@@ -1147,41 +1128,23 @@ fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     let task_name = task.name.to_owned();
     let start_line = task.start_line;
     let stop_line = task.stop_line;
-    // if let Some(data) = &task.data {
-    //     adapter.register_temp_filename(data);
-    // }
-    // let result = adapter.handle_command(task);
-    // let result_string = match result {
-    //     Ok(None) => return,
-    //     Ok(Some(s)) => s,
-    //     Err(e) => format!("Error: {}", e),
-    // };
-    // let result_string = adapter.rewrite_temp_filenames(result_string);
-    // assert!(!result_string.is_empty());
-    // writeln!(
-    //     output,
-    //     "\ntask {} '{}'. lines {}-{}:\n{}",
-    //     task_number, task_name, start_line, stop_line, result_string
-    // )
-    // .unwrap();
-    let result_string = match adapter.handle_command(task) {
-        Ok(result_string) => {
-            if let Some(s) = result_string.as_ref() {
-                assert!(!s.is_empty());
-            }
-            result_string
-        }
-        Err(e) => Some(format!("Error: {}", e)),
-    };
-
-    if let Some(s) = result_string {
-        write!(
-            output,
-            "\ntask {} '{}'. lines {}-{}:\n{}\n",
-            task_number, task_name, start_line, stop_line, s
-        )
-            .expect("write to string should not fail");
+    if let Some(data) = &task.data {
+        adapter.register_temp_filename(data);
     }
+    let result = adapter.handle_command(task);
+    let result_string = match result {
+        Ok(None) => return,
+        Ok(Some(s)) => s,
+        Err(e) => format!("Error: {}", e),
+    };
+    let result_string = adapter.rewrite_temp_filenames(result_string);
+    assert!(!result_string.is_empty());
+    writeln!(
+        output,
+        "\ntask {} '{}'. lines {}-{}:\n{}",
+        task_number, task_name, start_line, stop_line, result_string
+    )
+    .unwrap();
 }
 
 fn handle_expected_output(
