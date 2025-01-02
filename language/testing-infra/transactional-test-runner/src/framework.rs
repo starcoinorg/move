@@ -194,7 +194,7 @@ pub trait MoveTestAdapter<'a>: Sized {
         named_addr_opt: Option<Identifier>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, CompiledModule, Option<serde_json::Value>)>;
+    ) -> Result<(Option<String>, CompiledModule)>;
     fn execute_script(
         &mut self,
         script: CompiledScript,
@@ -203,7 +203,7 @@ pub trait MoveTestAdapter<'a>: Sized {
         args: Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, Option<serde_json::Value>)>;
+    ) -> Result<Option<String>>;
     fn call_function(
         &mut self,
         module: &ModuleId,
@@ -213,19 +213,19 @@ pub trait MoveTestAdapter<'a>: Sized {
         args: Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues, Option<serde_json::Value>)>;
+    ) -> Result<(Option<String>, SerializedReturnValues)>;
     fn view_data(
         &mut self,
         address: AccountAddress,
         module: &ModuleId,
         resource: &IdentStr,
         type_args: Vec<TypeTag>,
-    ) -> Result<(String, serde_json::Value)>;
+    ) -> Result<String>;
 
     fn handle_subcommand(
         &mut self,
         subcommand: TaskInput<Self::Subcommand>,
-    ) -> Result<(Option<String>, Option<serde_json::Value>)>;
+    ) -> Result<Option<String>>;
 
     fn compile_module(
         &mut self,
@@ -402,7 +402,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 Self::Subcommand,
             >,
         >,
-    ) -> Result<(Option<String>, Option<serde_json::Value>)> {
+    ) -> Result<Option<String>> {
         let TaskInput {
             command,
             name,
@@ -433,7 +433,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                         disassembler_for_view(BinaryIndexedView::Module(&module)).disassemble()?
                     },
                 };
-                Ok((Some(result), None))
+                Ok(Some(result))
             },
             TaskCommand::Publish(
                 PublishCommand {
@@ -456,7 +456,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 } else {
                     None
                 };
-                let (mut output, module,cmd_var_ctx) = self.publish_module(
+                let (mut output, module) = self.publish_module(
                     module,
                     named_addr_opt.map(|s| Identifier::new(s.as_str()).unwrap()),
                     gas_budget,
@@ -477,7 +477,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                             .add_and_generate_interface_file(module);
                     },
                 };
-                Ok((merge_output(warnings_opt, output), cmd_var_ctx))
+                Ok(merge_output(warnings_opt, output))
             },
             TaskCommand::Run(
                 RunCommand {
@@ -505,12 +505,12 @@ pub trait MoveTestAdapter<'a>: Sized {
                 };
                 let args = self.compiled_state().resolve_args(args)?;
                 let type_args = self.compiled_state().resolve_type_args(type_args)?;
-                let (mut output, cmd_var_ctx) =
+                let mut output=
                     self.execute_script(script, type_args, signers, args, gas_budget, extra_args)?;
                 if print_bytecode {
                     output = merge_output(output, printed);
                 }
-                Ok((merge_output(warning_opt, output), cmd_var_ctx))
+                Ok(merge_output(warning_opt, output))
             },
             TaskCommand::Run(
                 RunCommand {
@@ -532,7 +532,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 let module_id = ModuleId::new(addr, module_name);
                 let type_args = self.compiled_state().resolve_type_args(type_args)?;
                 let args = self.compiled_state().resolve_args(args)?;
-                let (output, return_values, cmd_var_ctx) = self.call_function(
+                let (output, return_values) = self.call_function(
                     &module_id,
                     name.as_ident_str(),
                     type_args,
@@ -542,7 +542,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                     extra_args,
                 )?;
                 let rendered_return_value = display_return_values(return_values);
-                Ok((merge_output(output, rendered_return_value), cmd_var_ctx))
+                Ok(merge_output(output, rendered_return_value))
             },
             TaskCommand::View(ViewCommand { address, resource }) => {
                 let state: &CompiledState<'a> = self.compiled_state();
@@ -556,13 +556,13 @@ pub trait MoveTestAdapter<'a>: Sized {
                     .unwrap();
                 let module_id = ModuleId::new(module_addr, module);
                 let address = self.compiled_state().resolve_address(&address);
-                let (output, cmd_var_ctx) = self.view_data(
+                let output = self.view_data(
                     address,
                     &module_id,
                     name.as_ident_str(),
                     type_arguments,
                 )?;
-                Ok((Some(output), Some(cmd_var_ctx)))
+                Ok(Some(output))
             },
             TaskCommand::Subcommand(c) => self.handle_subcommand(TaskInput {
                 command: c,
@@ -1164,14 +1164,14 @@ fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     //     task_number, task_name, start_line, stop_line, result_string
     // )
     // .unwrap();
-    let (result_string, cmd_var_ctx) = match adapter.handle_command(task) {
-        Ok((result_string, cmd_var_ctx)) => {
+    let result_string = match adapter.handle_command(task) {
+        Ok(result_string) => {
             if let Some(s) = result_string.as_ref() {
                 assert!(!s.is_empty());
             }
-            (result_string, cmd_var_ctx)
+            result_string
         }
-        Err(e) => (Some(format!("Error: {}", e)), None),
+        Err(e) => Some(format!("Error: {}", e)),
     };
 
     if let Some(s) = result_string {
@@ -1181,9 +1181,6 @@ fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
             task_number, task_name, start_line, stop_line, s
         )
             .expect("write to string should not fail");
-    }
-    if let Some(cmd_var_ctx) = cmd_var_ctx {
-        ctx.entry(task_name).append(cmd_var_ctx);
     }
 }
 
