@@ -6,6 +6,10 @@ module A::M {
         x: u64,
     }
 
+    public fun foo(s: &signer): u64 acquires Foo {
+        borrow_global<Foo>(std::signer::address_of(s)).x
+    }
+
     public fun publish_foo(s: &signer) {
         move_to<Foo>(s, Foo { x: 500 })
     }
@@ -25,10 +29,11 @@ script {
 
 //# view --address A --resource 0x2a::M::Foo
 
-//# run --signers A --args {{$.view[-1].x}}
+//# run --signers A
 script {
+    use A::M;
 
-    fun main(_s: signer, x: u64) {
-        assert!(x == 500, 1001);
+    fun main(s: signer) {
+        assert!(M::foo(&s) == 500, 1001);
     }
 }
