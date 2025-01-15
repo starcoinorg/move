@@ -31,7 +31,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use tempfile::NamedTempFile;
-use crate::diagnostics::codes::Severity::NonblockingError;
 
 //**************************************************************************************************
 // Definitions
@@ -479,7 +478,7 @@ pub fn construct_pre_compiled_lib_from_compiler(
     let mut cfgir = None;
     let mut compiled = None;
 
-    let save_result = |cur: &PassResult, env: &mut CompilationEnv| match cur {
+    let save_result = |cur: &PassResult, _env: &mut CompilationEnv| match cur {
         PassResult::Parser(prog) => {
             assert!(parser.is_none());
             parser = Some(prog.clone())

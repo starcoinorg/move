@@ -48,7 +48,6 @@ use move_vm_test_utils::{
     InMemoryStorage,
 };
 use once_cell::sync::Lazy;
-use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter::Iterator,
@@ -96,11 +95,11 @@ fn move_test_debug() -> bool {
 }
 
 impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
-    type ExtraInitArgs = EmptyCommand;
     type ExtraPublishArgs = AdapterPublishArgs;
-    type ExtraRunArgs = AdapterExecuteArgs;
     type ExtraValueArgs = ();
+    type ExtraRunArgs = AdapterExecuteArgs;
     type Subcommand = EmptyCommand;
+    type ExtraInitArgs = EmptyCommand;
 
     fn compiled_state(&mut self) -> &mut CompiledState<'a> {
         &mut self.compiled_state
@@ -207,7 +206,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         _named_addr_opt: Option<Identifier>,
         gas_budget: Option<u64>,
         extra_args: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, CompiledModule, Option<Value>)> {
+    ) -> Result<(Option<String>, CompiledModule)> {
         let mut module_bytes = vec![];
         module.serialize_for_version(Some(file_format_common::VERSION_MAX), &mut module_bytes)?;
 
@@ -231,7 +230,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
             },
             production_vm_config_with_paranoid_type_checks(),
         ) {
-            Ok(()) => Ok((None, module, None)),
+            Ok(()) => Ok((None, module)),
             Err(vm_error) => Err(anyhow!(
                 "Unable to publish module '{}'. Got VMError: {}",
                 module.self_id(),
@@ -251,7 +250,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
         extra_args: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, Option<Value>)> {
+    ) -> Result<Option<String>> {
         let signers: Vec<_> = signers
             .into_iter()
             .map(|addr| self.compiled_state().resolve_address(&addr))
@@ -294,7 +293,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                 )
             )
         })?;
-        Ok((None, None))
+        Ok(None)
     }
 
     fn call_function(
@@ -306,7 +305,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
         extra_args: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues, Option<Value>)> {
+    ) -> Result<(Option<String>, SerializedReturnValues)> {
         let signers: Vec<_> = signers
             .into_iter()
             .map(|addr| self.compiled_state().resolve_address(&addr))
@@ -349,7 +348,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                     )
                 )
             })?;
-        Ok((None, serialized_return_values, None))
+        Ok((None, serialized_return_values))
     }
 
     fn view_data(
@@ -358,7 +357,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         module: &ModuleId,
         resource: &IdentStr,
         type_args: Vec<TypeTag>,
-    ) -> Result<(String, Value)> {
+    ) -> Result<String> {
         let tag = StructTag {
             address: *module.address(),
             module: module.name().to_owned(),
@@ -366,19 +365,16 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
             type_args,
         };
         match self.storage.get_resource(&address, &tag).unwrap() {
-            None => Ok(("[No Resource Exists]".to_owned(), Value::Null)),
+            None => Ok("[No Resource Exists]".to_owned()),
             Some(data) => {
                 let annotated =
                     MoveValueAnnotator::new(self.storage.clone()).view_resource(&tag, &data)?;
-                Ok((format!("{}", annotated), serde_json::to_value(&annotated)?))
+                Ok(format!("{}", annotated))
             }
         }
     }
 
-    fn handle_subcommand(
-        &mut self,
-        _: TaskInput<Self::Subcommand>,
-    ) -> Result<(Option<String>, Option<Value>)> {
+    fn handle_subcommand(&mut self, _: TaskInput<Self::Subcommand>) -> Result<Option<String>> {
         unreachable!()
     }
 }
