@@ -31,6 +31,8 @@ use std::{
     collections::BTreeMap,
     sync::atomic::{AtomicBool, Ordering},
 };
+use std::collections::BTreeSet;
+use move_compiler::shared::known_attributes::KnownAttribute;
 
 /// Atomic used to prevent re-initialization of logging.
 static LOGGER_CONFIGURED: AtomicBool = AtomicBool::new(false);
@@ -96,6 +98,9 @@ pub struct Options {
     /// TODO: this currently create errors during deserialization, so skip them for this.
     #[serde(skip_serializing)]
     pub errmapgen: ErrmapOptions,
+
+    /// Known attribute names.  Depends on compilation context (Move variant)
+    pub known_attributes: BTreeSet<String>,
 }
 
 impl Default for Options {
@@ -123,6 +128,7 @@ impl Default for Options {
                 CompilerVersion::V2_0 => true,
             },
             language_version: None,
+            known_attributes: KnownAttribute::get_all_attribute_names().clone()
         }
     }
 }
