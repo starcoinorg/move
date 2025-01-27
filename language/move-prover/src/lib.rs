@@ -61,7 +61,8 @@ pub fn run_move_prover<W: WriteColor>(
         }],
         options.model_builder.clone(),
         options.skip_attribute_checks,
-        KnownAttribute::get_all_attribute_names(),
+        //KnownAttribute::get_all_attribute_names(),
+        &options.known_attributes,
     )?;
     run_move_prover_with_model(&mut env, error_writer, options, Some(now))
 }
