@@ -6,6 +6,7 @@ use crate::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     parser::{parse_struct_tag, parse_type_tag},
+    safe_serialize,
 };
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -37,9 +38,21 @@ pub enum TypeTag {
     #[serde(rename = "signer", alias = "Signer")]
     Signer,
     #[serde(rename = "vector", alias = "Vector")]
-    Vector(Box<TypeTag>),
+    Vector(
+        #[serde(
+            serialize_with = "safe_serialize::type_tag_recursive_serialize",
+            deserialize_with = "safe_serialize::type_tag_recursive_deserialize"
+        )]
+        Box<TypeTag>,
+    ),
     #[serde(rename = "struct", alias = "Struct")]
-    Struct(Box<StructTag>),
+    Struct(
+        #[serde(
+            serialize_with = "safe_serialize::type_tag_recursive_serialize",
+            deserialize_with = "safe_serialize::type_tag_recursive_deserialize"
+        )]
+        Box<StructTag>,
+    ),
 
     // NOTE: Added in bytecode version v6, do not reorder!
     #[serde(rename = "u16", alias = "U16")]
