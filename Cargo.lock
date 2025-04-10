@@ -4474,7 +4474,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 [[package]]
 name = "openrpc-schema"
 version = "0.1.0"
-source = "git+https://github.com/starcoinorg/openrpc-rs?rev=f8ab047e30927cdf2f605b61a219c975d6c4f666#f8ab047e30927cdf2f605b61a219c975d6c4f666"
+source = "git+https://github.com/starcoinorg/openrpc-rs?rev=1f2f7d3495e3bd3ef3b6fcf7c4e0602cad090d5e#1f2f7d3495e3bd3ef3b6fcf7c4e0602cad090d5e"
 dependencies = [
  "schemars",
  "serde 1.0.204",
@@ -5733,8 +5733,9 @@ dependencies = [
 [[package]]
 name = "schemars"
 version = "0.8.8"
-source = "git+https://github.com/starcoinorg/schemars?rev=9b3705780b8fe9c8676ff82919869ba7405b1062#9b3705780b8fe9c8676ff82919869ba7405b1062"
+source = "git+https://github.com/starcoinorg/schemars?rev=a64c6ddf7ca4796e090208b1476de2e53772042f#a64c6ddf7ca4796e090208b1476de2e53772042f"
 dependencies = [
+ "bytes",
  "dyn-clone",
  "multiaddr",
  "schemars_derive",
@@ -5745,7 +5746,7 @@ dependencies = [
 [[package]]
 name = "schemars_derive"
 version = "0.8.8"
-source = "git+https://github.com/starcoinorg/schemars?rev=9b3705780b8fe9c8676ff82919869ba7405b1062#9b3705780b8fe9c8676ff82919869ba7405b1062"
+source = "git+https://github.com/starcoinorg/schemars?rev=a64c6ddf7ca4796e090208b1476de2e53772042f#a64c6ddf7ca4796e090208b1476de2e53772042f"
 dependencies = [
  "proc-macro2 1.0.86",
  "quote 1.0.36",
