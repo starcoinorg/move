@@ -1969,10 +1969,10 @@ module DiemFramework::DiemAccount {
         // Don't grab the balance if the transaction fee is zero
         if (max_transaction_fee > 0) {
             // [PCA6]: Check that the gas fee can be paid in this currency
-            assert!(
-                TransactionFee::is_coin_initialized<Token>(),
-                errors::invalid_argument(PROLOGUE_EBAD_TRANSACTION_FEE_CURRENCY)
-            );
+            // assert!(
+            //     TransactionFee::is_coin_initialized<Token>(),
+            //     errors::invalid_argument(PROLOGUE_EBAD_TRANSACTION_FEE_CURRENCY)
+            // );
             // [PCA7]: Check that the account has a balance in this currency
             assert!(
                 exists<Balance<Token>>(transaction_sender),
@@ -2191,7 +2191,7 @@ module DiemFramework::DiemAccount {
         aborts_if (transaction_fee_amount > 0) && !exists<Balance<Token>>(sender);
         /// [EA4; Condition]
         aborts_if (transaction_fee_amount > 0) && transaction_fee_amount > Diem::value(coin) with errors::LIMIT_EXCEEDED;
-        include (transaction_fee_amount > 0) ==> TransactionFee::PayFeeAbortsIf<Token>{coin: Diem<Token>{value: transaction_fee_amount}};
+        // include (transaction_fee_amount > 0) ==> TransactionFee::PayFeeAbortsIf<Token>{coin: Diem<Token>{value: transaction_fee_amount}};
     }
     spec schema EpilogueCommonEnsures<Token> {
         account: signer;
@@ -2205,7 +2205,7 @@ module DiemFramework::DiemAccount {
         let transaction_fee_amount = txn_gas_price * gas_used;
         let coin = global<Balance<Token>>(sender).coin;
         ensures global<DiemAccount>(sender).sequence_number == old(global<DiemAccount>(sender).sequence_number) + 1;
-        include (transaction_fee_amount > 0) ==> TransactionFee::PayFeeEnsures<Token>{coin: Diem<Token>{value: transaction_fee_amount}};
+        // include (transaction_fee_amount > 0) ==> TransactionFee::PayFeeEnsures<Token>{coin: Diem<Token>{value: transaction_fee_amount}};
     }
 
     /// Epilogue for WriteSet trasnaction

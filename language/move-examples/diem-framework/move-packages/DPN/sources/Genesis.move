@@ -91,7 +91,7 @@ module DiemFramework::Genesis {
         XDX::initialize(dr_account, tc_account);
 
         AccountFreezing::initialize(dr_account);
-        TransactionFee::initialize(tc_account);
+        // TransactionFee::initialize(tc_account);
 
         DiemSystem::initialize_validator_set(dr_account);
         DiemVersion::initialize(dr_account, initial_diem_version);

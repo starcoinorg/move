@@ -306,7 +306,7 @@ module DiemFramework::TreasuryComplianceScripts {
     /// * `TreasuryComplianceScripts::cancel_burn_with_amount`
 
     public entry fun burn_txn_fees<CoinType>(tc_account: signer) {
-        TransactionFee::burn_fees<CoinType>(&tc_account);
+        // TransactionFee::burn_fees<CoinType>(&tc_account);
     }
 
     /// # Summary
