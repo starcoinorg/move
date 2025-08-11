@@ -18,7 +18,7 @@ module DiemFramework::Genesis {
     use DiemFramework::DiemTimestamp;
     use DiemFramework::DiemTransactionPublishingOption;
     use DiemFramework::DiemVersion;
-    use DiemFramework::TransactionFee;
+    // use DiemFramework::TransactionFee;
     use DiemFramework::DiemVMConfig;
     use DiemFramework::ParallelExecutionConfig;
     use DiemFramework::ValidatorConfig;
@@ -91,7 +91,7 @@ module DiemFramework::Genesis {
         XDX::initialize(dr_account, tc_account);
 
         AccountFreezing::initialize(dr_account);
-        TransactionFee::initialize(tc_account);
+        // TransactionFee::initialize(tc_account);
 
         DiemSystem::initialize_validator_set(dr_account);
         DiemVersion::initialize(dr_account, initial_diem_version);

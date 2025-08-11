@@ -14,7 +14,7 @@ module DiemFramework::DiemAccount {
     use DiemFramework::DiemTimestamp;
     use DiemFramework::DiemTransactionPublishingOption;
     use DiemFramework::SlidingNonce;
-    use DiemFramework::TransactionFee;
+    // use DiemFramework::TransactionFee;
     use DiemFramework::ValidatorConfig;
     use DiemFramework::ValidatorOperatorConfig;
     use DiemFramework::VASP;
@@ -1965,9 +1965,9 @@ module DiemFramework::DiemAccount {
         if (max_transaction_fee > 0) {
             // [PCA6]: Check that the gas fee can be paid in this currency
             assert!(
-                TransactionFee::is_coin_initialized<Token>(),
-                errors::invalid_argument(PROLOGUE_EBAD_TRANSACTION_FEE_CURRENCY)
-            );
+            //     TransactionFee::is_coin_initialized<Token>(),
+            //     errors::invalid_argument(PROLOGUE_EBAD_TRANSACTION_FEE_CURRENCY)
+            // );
             // [PCA7]: Check that the account has a balance in this currency
             assert!(
                 exists<Balance<Token>>(transaction_sender),
@@ -2045,7 +2045,7 @@ module DiemFramework::DiemAccount {
         /// [PCA5] Covered: L69 (Match 5)
         aborts_if max_transaction_fee > MAX_U64 with errors::INVALID_ARGUMENT;
         /// [PCA6] Covered: L69 (Match 5)
-        aborts_if max_transaction_fee > 0 && !TransactionFee::is_coin_initialized<Token>() with errors::INVALID_ARGUMENT;
+        // aborts_if max_transaction_fee > 0 && !TransactionFee::is_coin_initialized<Token>() with errors::INVALID_ARGUMENT;
         /// [PCA7] Covered: L69 (Match 5)
         aborts_if max_transaction_fee > 0 && !exists<Balance<Token>>(transaction_sender) with errors::INVALID_ARGUMENT;
         /// [PCA8] Covered: L69 (Match 5)
@@ -2153,7 +2153,7 @@ module DiemFramework::DiemAccount {
             );
 
             // NB: `withdraw_from_balance` is not used as limits do not apply to this transaction fee
-            TransactionFee::pay_fee(Diem::withdraw(coin, transaction_fee_amount))
+            // TransactionFee::pay_fee(Diem::withdraw(coin, transaction_fee_amount))
         }
     }
     spec epilogue_common {
@@ -2186,7 +2186,7 @@ module DiemFramework::DiemAccount {
         aborts_if (transaction_fee_amount > 0) && !exists<Balance<Token>>(sender);
         /// [EA4; Condition]
         aborts_if (transaction_fee_amount > 0) && transaction_fee_amount > Diem::value(coin) with errors::LIMIT_EXCEEDED;
-        include (transaction_fee_amount > 0) ==> TransactionFee::PayFeeAbortsIf<Token>{coin: Diem<Token>{value: transaction_fee_amount}};
+        // include (transaction_fee_amount > 0) ==> TransactionFee::PayFeeAbortsIf<Token>{coin: Diem<Token>{value: transaction_fee_amount}};
     }
     spec schema EpilogueCommonEnsures<Token> {
         account: signer;
@@ -2200,7 +2200,7 @@ module DiemFramework::DiemAccount {
         let transaction_fee_amount = txn_gas_price * gas_used;
         let coin = global<Balance<Token>>(sender).coin;
         ensures global<DiemAccount>(sender).sequence_number == old(global<DiemAccount>(sender).sequence_number) + 1;
-        include (transaction_fee_amount > 0) ==> TransactionFee::PayFeeEnsures<Token>{coin: Diem<Token>{value: transaction_fee_amount}};
+        // include (transaction_fee_amount > 0) ==> TransactionFee::PayFeeEnsures<Token>{coin: Diem<Token>{value: transaction_fee_amount}};
     }
 
     /// Epilogue for WriteSet trasnaction

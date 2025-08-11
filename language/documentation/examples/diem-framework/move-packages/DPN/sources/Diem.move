@@ -15,7 +15,7 @@ module DiemFramework::Diem {
 
     friend DiemFramework::DesignatedDealer;
     friend DiemFramework::XDX;
-    friend DiemFramework::TransactionFee;
+    // friend DiemFramework::TransactionFee;
 
     /// The `Diem` resource defines the Diem coin for each currency in
     /// Diem. Each "coin" is coupled with a type `CoinType` specifying the
