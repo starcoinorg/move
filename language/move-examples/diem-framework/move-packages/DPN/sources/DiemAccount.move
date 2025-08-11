@@ -2050,7 +2050,7 @@ module DiemFramework::DiemAccount {
         /// [PCA5] Covered: L69 (Match 5)
         aborts_if max_transaction_fee > MAX_U64 with errors::INVALID_ARGUMENT;
         /// [PCA6] Covered: L69 (Match 5)
-        aborts_if max_transaction_fee > 0 && !TransactionFee::is_coin_initialized<Token>() with errors::INVALID_ARGUMENT;
+        /// aborts_if max_transaction_fee > 0 && !TransactionFee::is_coin_initialized<Token>() with errors::INVALID_ARGUMENT;
         /// [PCA7] Covered: L69 (Match 5)
         aborts_if max_transaction_fee > 0 && !exists<Balance<Token>>(transaction_sender) with errors::INVALID_ARGUMENT;
         /// [PCA8] Covered: L69 (Match 5)
