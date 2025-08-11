@@ -2158,7 +2158,7 @@ module DiemFramework::DiemAccount {
             );
 
             // NB: `withdraw_from_balance` is not used as limits do not apply to this transaction fee
-            TransactionFee::pay_fee(Diem::withdraw(coin, transaction_fee_amount))
+            // TransactionFee::pay_fee(Diem::withdraw(coin, transaction_fee_amount))
         }
     }
     spec epilogue_common {
