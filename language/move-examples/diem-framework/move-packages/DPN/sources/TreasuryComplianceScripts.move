@@ -9,7 +9,7 @@ module DiemFramework::TreasuryComplianceScripts {
     use DiemFramework::DiemAccount;
     use DiemFramework::Diem;
     use DiemFramework::SlidingNonce;
-    use DiemFramework::TransactionFee;
+    // use DiemFramework::TransactionFee;
     use DiemFramework::AccountFreezing;
     use DiemFramework::DualAttestation;
     use DiemFramework::VASPDomain;

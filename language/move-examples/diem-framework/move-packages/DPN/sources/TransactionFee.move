@@ -70,10 +70,10 @@ module DiemFramework::TransactionFee {
 
     /// Deposit `coin` into the transaction fees bucket
     public fun pay_fee<CoinType>(coin: Diem<CoinType>) acquires TransactionFee {
-        DiemTimestamp::assert_operating();
-        assert!(is_coin_initialized<CoinType>(), errors::not_published(ETRANSACTION_FEE));
-        let fees = borrow_global_mut<TransactionFee<CoinType>>(@TreasuryCompliance);
-        Diem::deposit(&mut fees.balance, coin)
+        // DiemTimestamp::assert_operating();
+        // assert!(is_coin_initialized<CoinType>(), errors::not_published(ETRANSACTION_FEE));
+        // let fees = borrow_global_mut<TransactionFee<CoinType>>(@TreasuryCompliance);
+        // Diem::deposit(&mut fees.balance, coin)
     }
 
     spec pay_fee {
@@ -100,27 +100,27 @@ module DiemFramework::TransactionFee {
     public fun burn_fees<CoinType>(
         tc_account: &signer,
     ) acquires TransactionFee {
-        DiemTimestamp::assert_operating();
-        Roles::assert_treasury_compliance(tc_account);
-        assert!(is_coin_initialized<CoinType>(), errors::not_published(ETRANSACTION_FEE));
-        if (XDX::is_xdx<CoinType>()) {
-            // TODO: Once the composition of XDX is determined fill this in to
-            // unpack and burn the backing coins of the XDX coin.
-            abort errors::invalid_state(ETRANSACTION_FEE)
-        } else {
-            // extract fees
-            let fees = borrow_global_mut<TransactionFee<CoinType>>(@TreasuryCompliance);
-            let coin = Diem::withdraw_all(&mut fees.balance);
-            let burn_cap = Diem::remove_burn_capability<CoinType>(tc_account);
-            // burn
-            Diem::burn_now(
-                coin,
-                &mut fees.preburn,
-                @TreasuryCompliance,
-                &burn_cap
-            );
-            Diem::publish_burn_capability(tc_account, burn_cap);
-        }
+        // DiemTimestamp::assert_operating();
+        // Roles::assert_treasury_compliance(tc_account);
+        // assert!(is_coin_initialized<CoinType>(), errors::not_published(ETRANSACTION_FEE));
+        // if (XDX::is_xdx<CoinType>()) {
+        //     // TODO: Once the composition of XDX is determined fill this in to
+        //     // unpack and burn the backing coins of the XDX coin.
+        //     abort errors::invalid_state(ETRANSACTION_FEE)
+        // } else {
+        //     // extract fees
+        //     let fees = borrow_global_mut<TransactionFee<CoinType>>(@TreasuryCompliance);
+        //     let coin = Diem::withdraw_all(&mut fees.balance);
+        //     let burn_cap = Diem::remove_burn_capability<CoinType>(tc_account);
+        //     // burn
+        //     Diem::burn_now(
+        //         coin,
+        //         &mut fees.preburn,
+        //         @TreasuryCompliance,
+        //         &burn_cap
+        //     );
+        //     Diem::publish_burn_capability(tc_account, burn_cap);
+        // }
     }
     spec burn_fees {
         pragma disable_invariants_in_body;

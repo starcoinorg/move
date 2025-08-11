@@ -14,7 +14,7 @@ module DiemFramework::DiemAccount {
     use DiemFramework::DiemTimestamp;
     use DiemFramework::DiemTransactionPublishingOption;
     use DiemFramework::SlidingNonce;
-    use DiemFramework::TransactionFee;
+    // use DiemFramework::TransactionFee;
     use DiemFramework::ValidatorConfig;
     use DiemFramework::ValidatorOperatorConfig;
     use DiemFramework::VASP;

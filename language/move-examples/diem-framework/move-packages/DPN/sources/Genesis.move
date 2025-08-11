@@ -18,7 +18,7 @@ module DiemFramework::Genesis {
     use DiemFramework::DiemTimestamp;
     use DiemFramework::DiemTransactionPublishingOption;
     use DiemFramework::DiemVersion;
-    use DiemFramework::TransactionFee;
+    // use DiemFramework::TransactionFee;
     use DiemFramework::DiemVMConfig;
     use DiemFramework::ParallelExecutionConfig;
     use DiemFramework::ValidatorConfig;
