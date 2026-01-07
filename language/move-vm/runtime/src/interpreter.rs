@@ -652,8 +652,7 @@ impl Interpreter {
                         module_store,
                         data_store,
                         gas_meter,
-                        &mut traversal_context.visited,
-                        traversal_context.referenced_modules,
+                        traversal_context,
                         [(arena_id.address(), arena_id.name())],
                     )
                     .map_err(|err| err

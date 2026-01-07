@@ -47,4 +47,59 @@ impl<'a> TraversalContext<'a> {
             referenced_module_bundles: &storage.referenced_module_bundles,
         }
     }
+
+    pub fn visit_if_not_special_address(
+        &mut self,
+        addr: &'a AccountAddress,
+        name: &'a IdentStr,
+    ) -> bool {
+        if addr.is_special() {
+            return false;
+        }
+        self.visited.insert((addr, name), ()).is_none()
+    }
+
+    pub fn visit_if_not_special_module_id(&mut self, module_id: &'a ModuleId) -> bool {
+        self.visit_if_not_special_address(module_id.address(), module_id.name())
+    }
+
+    pub fn is_visited(&self, addr: &'a AccountAddress, name: &'a IdentStr) -> bool {
+        self.visited.contains_key(&(addr, name))
+    }
+
+    pub fn is_visited_module_id(&self, module_id: &'a ModuleId) -> bool {
+        self.is_visited(module_id.address(), module_id.name())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+
+    #[test]
+    fn visit_helpers_skip_special_addresses() {
+        let storage = TraversalStorage::new();
+        let mut context = TraversalContext::new(&storage);
+        let name = IdentStr::new("M").unwrap();
+
+        assert!(!context.visit_if_not_special_address(&AccountAddress::ONE, name));
+        assert!(!context.is_visited(&AccountAddress::ONE, name));
+    }
+
+    #[test]
+    fn visit_helpers_track_non_special_addresses() {
+        let storage = TraversalStorage::new();
+        let mut context = TraversalContext::new(&storage);
+        let name = IdentStr::new("M").unwrap();
+        let addr = AccountAddress::from_hex_literal("0x10").unwrap();
+
+        assert!(context.visit_if_not_special_address(&addr, name));
+        assert!(!context.visit_if_not_special_address(&addr, name));
+        assert!(context.is_visited(&addr, name));
+
+        let module_id = ModuleId::new(addr, Identifier::new("M").unwrap());
+        assert!(!context.visit_if_not_special_module_id(&module_id));
+        assert!(context.is_visited_module_id(&module_id));
+    }
 }

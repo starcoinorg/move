@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::VMConfig, data_cache::TransactionDataCache, logging::expect_no_verification_errors,
+    config::VMConfig, data_cache::TransactionDataCache,
+    dependencies_gas_charging, logging::expect_no_verification_errors,
     module_traversal::TraversalContext, native_functions::NativeFunctions,
 };
 use hashbrown::Equivalent;
@@ -22,7 +23,7 @@ use move_binary_format::{
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
     account_address::AccountAddress,
-    gas_algebra::{NumBytes, NumTypeNodes},
+    gas_algebra::NumTypeNodes,
     ident_str,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag, TypeTag},
@@ -280,8 +281,7 @@ impl Loader {
             module_store,
             data_store,
             gas_meter,
-            &mut traversal_context.visited,
-            traversal_context.referenced_modules,
+            traversal_context,
             script.immediate_dependencies_iter(),
         )?;
 
@@ -775,67 +775,20 @@ impl Loader {
         module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
-        visited: &mut BTreeMap<(&'a AccountAddress, &'a IdentStr), ()>,
-        referenced_modules: &'a Arena<Arc<CompiledModule>>,
+        traversal_context: &mut TraversalContext<'a>,
         ids: I,
     ) -> VMResult<()>
     where
         I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
         I::IntoIter: DoubleEndedIterator,
     {
-        // Initialize the work list (stack) and the map of visited modules.
-        //
-        // TODO: Determine the reserved capacity based on the max number of dependencies allowed.
-        let mut stack = Vec::with_capacity(512);
-
-        for (addr, name) in ids.into_iter().rev() {
-            // TODO: Allow the check of special addresses to be customized.
-            if !addr.is_special() && visited.insert((addr, name), ()).is_none() {
-                stack.push((addr, name, true));
-            }
-        }
-
-        while let Some((addr, name, allow_loading_failure)) = stack.pop() {
-            // Load and deserialize the module only if it has not been cached by the loader.
-            // Otherwise this will cause a significant regression in performance.
-            let (module, size) = match module_store.module_at_by_ref(addr, name) {
-                Some(module) => (module.module.clone(), module.size),
-                None => {
-                    let (module, size, _) = data_store.load_compiled_module_to_cache(
-                        ModuleId::new(*addr, name.to_owned()),
-                        allow_loading_failure,
-                    )?;
-                    (module, size)
-                },
-            };
-
-            // Extend the lifetime of the module to the remainder of the function body
-            // by storing it in an arena.
-            //
-            // This is needed because we need to store references derived from it in the
-            // work list.
-            let module = referenced_modules.alloc(module);
-
-            gas_meter
-                .charge_dependency(false, addr, name, NumBytes::new(size as u64))
-                .map_err(|err| {
-                    err.finish(Location::Module(ModuleId::new(*addr, name.to_owned())))
-                })?;
-
-            // Explore all dependencies and friends that have been visited yet.
-            for (addr, name) in module
-                .immediate_dependencies_iter()
-                .chain(module.immediate_friends_iter())
-                .rev()
-            {
-                // TODO: Allow the check of special addresses to be customized.
-                if !addr.is_special() && visited.insert((addr, name), ()).is_none() {
-                    stack.push((addr, name, false));
-                }
-            }
-        }
-
-        Ok(())
+        dependencies_gas_charging::check_dependencies_and_charge_gas(
+            module_store,
+            data_store,
+            gas_meter,
+            traversal_context,
+            ids,
+        )
     }
 
     /// Similar to `check_dependencies_and_charge_gas`, except that this does not recurse
@@ -845,39 +798,19 @@ impl Loader {
         module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
-        visited: &mut BTreeMap<(&'a AccountAddress, &'a IdentStr), ()>,
+        traversal_context: &mut TraversalContext<'a>,
         ids: I,
     ) -> VMResult<()>
     where
         I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
     {
-        for (addr, name) in ids.into_iter() {
-            // TODO: Allow the check of special addresses to be customized.
-            if addr.is_special() || visited.insert((addr, name), ()).is_some() {
-                continue;
-            }
-
-            // Load and deserialize the module only if it has not been cached by the loader.
-            // Otherwise this will cause a significant regression in performance.
-            let size = match module_store.module_at_by_ref(addr, name) {
-                Some(module) => module.size,
-                None => match data_store
-                    .load_compiled_module_to_cache(ModuleId::new(*addr, name.to_owned()), true)
-                {
-                    Ok((_module, size, _hash)) => size,
-                    Err(err) if err.major_status() == StatusCode::LINKER_ERROR => continue,
-                    Err(err) => return Err(err),
-                },
-            };
-
-            gas_meter
-                .charge_dependency(false, addr, name, NumBytes::new(size as u64))
-                .map_err(|err| {
-                    err.finish(Location::Module(ModuleId::new(*addr, name.to_owned())))
-                })?;
-        }
-
-        Ok(())
+        dependencies_gas_charging::check_dependencies_and_charge_gas_non_recursive_optional(
+            module_store,
+            data_store,
+            gas_meter,
+            traversal_context,
+            ids,
+        )
     }
 
     // The interface for module loading. Aligned with `load_type` and `load_function`, this function

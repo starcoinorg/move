@@ -13,6 +13,7 @@
 pub mod data_cache;
 mod interpreter;
 mod loader;
+mod dependencies_gas_charging;
 pub mod logging;
 pub mod move_vm;
 pub mod native_extensions;

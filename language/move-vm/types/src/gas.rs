@@ -301,6 +301,17 @@ pub trait GasMeter {
 
     fn charge_create_ty(&mut self, num_nodes: NumTypeNodes) -> PartialVMResult<()>;
 
+    /// Charge for dependency module access.
+    ///
+    /// Semantics:
+    /// - Calls must follow the loader's deterministic traversal order (module first, then its
+    ///   dependencies, then friends).
+    /// - `is_new` is true when the dependency is first visited in the current traversal context;
+    ///   false for repeated visits or cache hits.
+    /// - Dependencies under "special" addresses (0x0..0xf) are skipped by default and should not
+    ///   be charged.
+    ///
+    /// Loader v1 preserves legacy behavior by reporting `is_new = false` for all calls.
     fn charge_dependency(
         &mut self,
         is_new: bool,
@@ -308,6 +319,47 @@ pub trait GasMeter {
         name: &IdentStr,
         size: NumBytes,
     ) -> PartialVMResult<()>;
+}
+
+/// Dependency charging helpers built on top of `GasMeter::charge_dependency`.
+pub trait DependencyGasMeter {
+    fn charge_dependency(
+        &mut self,
+        is_new: bool,
+        addr: &AccountAddress,
+        name: &IdentStr,
+        size: NumBytes,
+    ) -> PartialVMResult<()>;
+
+    fn charge_dependency_for_existing(
+        &mut self,
+        addr: &AccountAddress,
+        name: &IdentStr,
+        size: NumBytes,
+    ) -> PartialVMResult<()> {
+        self.charge_dependency(false, addr, name, size)
+    }
+
+    fn charge_dependency_for_new(
+        &mut self,
+        addr: &AccountAddress,
+        name: &IdentStr,
+        size: NumBytes,
+    ) -> PartialVMResult<()> {
+        self.charge_dependency(true, addr, name, size)
+    }
+}
+
+impl<T: GasMeter + ?Sized> DependencyGasMeter for T {
+    fn charge_dependency(
+        &mut self,
+        is_new: bool,
+        addr: &AccountAddress,
+        name: &IdentStr,
+        size: NumBytes,
+    ) -> PartialVMResult<()> {
+        GasMeter::charge_dependency(self, is_new, addr, name, size)
+    }
 }
 
 /// A dummy gas meter that does not meter anything.

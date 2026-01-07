@@ -496,8 +496,7 @@ impl<'r, 'l> Session<'r, 'l> {
                 &self.module_store,
                 &mut self.data_cache,
                 gas_meter,
-                &mut traversal_context.visited,
-                traversal_context.referenced_modules,
+                traversal_context,
                 ids,
             )
     }
@@ -518,7 +517,7 @@ impl<'r, 'l> Session<'r, 'l> {
                 &self.module_store,
                 &mut self.data_cache,
                 gas_meter,
-                &mut traversal_context.visited,
+                traversal_context,
                 ids,
             )
     }
