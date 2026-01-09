@@ -750,10 +750,18 @@ impl Interpreter {
         data_store: &'c mut TransactionDataCache,
         module_store: &'c ModuleStorageAdapter,
         gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<&'c mut GlobalValue> {
-        match data_store.load_resource(loader, addr, ty, module_store) {
+        match data_store.load_resource_with_metadata(
+            loader,
+            addr,
+            ty,
+            module_store,
+            gas_meter,
+            traversal_context,
+        ) {
             Ok((gv, load_res)) => {
                 if let Some(bytes_loaded) = load_res {
                     gas_meter.charge_load_resource(
@@ -778,11 +786,20 @@ impl Interpreter {
         data_store: &mut TransactionDataCache,
         module_store: &ModuleStorageAdapter,
         gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<()> {
-        let res = Self::load_resource(loader, data_store, module_store, gas_meter, addr, ty)?
-            .borrow_global();
+        let res = Self::load_resource(
+            loader,
+            data_store,
+            module_store,
+            gas_meter,
+            traversal_context,
+            addr,
+            ty,
+        )?
+        .borrow_global();
         gas_meter.charge_borrow_global(
             is_mut,
             is_generic,
@@ -837,10 +854,19 @@ impl Interpreter {
         data_store: &mut TransactionDataCache,
         module_store: &ModuleStorageAdapter,
         gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<()> {
-        let gv = Self::load_resource(loader, data_store, module_store, gas_meter, addr, ty)?;
+        let gv = Self::load_resource(
+            loader,
+            data_store,
+            module_store,
+            gas_meter,
+            traversal_context,
+            addr,
+            ty,
+        )?;
         let exists = gv.exists()?;
         gas_meter.charge_exists(is_generic, TypeWithLoader { ty, loader }, exists)?;
         self.check_access(loader, AccessKind::Reads, ty, addr)?;
@@ -856,12 +882,21 @@ impl Interpreter {
         data_store: &mut TransactionDataCache,
         module_store: &ModuleStorageAdapter,
         gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<()> {
         let resource =
-            match Self::load_resource(loader, data_store, module_store, gas_meter, addr, ty)?
-                .move_from()
+            match Self::load_resource(
+                loader,
+                data_store,
+                module_store,
+                gas_meter,
+                traversal_context,
+                addr,
+                ty,
+            )?
+            .move_from()
             {
                 Ok(resource) => {
                     gas_meter.charge_move_from(
@@ -892,11 +927,20 @@ impl Interpreter {
         data_store: &mut TransactionDataCache,
         module_store: &ModuleStorageAdapter,
         gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
         addr: AccountAddress,
         ty: &Type,
         resource: Value,
     ) -> PartialVMResult<()> {
-        let gv = Self::load_resource(loader, data_store, module_store, gas_meter, addr, ty)?;
+        let gv = Self::load_resource(
+            loader,
+            data_store,
+            module_store,
+            gas_meter,
+            traversal_context,
+            addr,
+            ty,
+        )?;
         // NOTE(Gas): To maintain backward compatibility, we need to charge gas after attempting
         //            the move_to operation.
         match gv.move_to(resource) {
@@ -2563,6 +2607,7 @@ impl Frame {
                             data_store,
                             module_store,
                             gas_meter,
+                            traversal_context,
                             addr,
                             &ty,
                         )?;
@@ -2582,6 +2627,7 @@ impl Frame {
                             data_store,
                             module_store,
                             gas_meter,
+                            traversal_context,
                             addr,
                             ty,
                         )?;
@@ -2595,6 +2641,7 @@ impl Frame {
                             data_store,
                             module_store,
                             gas_meter,
+                            traversal_context,
                             addr,
                             &ty,
                         )?;
@@ -2611,6 +2658,7 @@ impl Frame {
                             data_store,
                             module_store,
                             gas_meter,
+                            traversal_context,
                             addr,
                             ty,
                         )?;
@@ -2624,6 +2672,7 @@ impl Frame {
                             data_store,
                             module_store,
                             gas_meter,
+                            traversal_context,
                             addr,
                             &ty,
                         )?;
@@ -2640,6 +2689,7 @@ impl Frame {
                             data_store,
                             module_store,
                             gas_meter,
+                            traversal_context,
                             addr,
                             ty,
                         )?;
@@ -2659,6 +2709,7 @@ impl Frame {
                             data_store,
                             module_store,
                             gas_meter,
+                            traversal_context,
                             addr,
                             &ty,
                             resource,
@@ -2682,6 +2733,7 @@ impl Frame {
                             data_store,
                             module_store,
                             gas_meter,
+                            traversal_context,
                             addr,
                             ty,
                             resource,

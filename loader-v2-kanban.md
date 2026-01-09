@@ -36,20 +36,20 @@
 - Done: Dependency metering is threaded through loader entrypoints; script/layout caches are
   implemented with cache-hit metering; metadata access routes through the loader; tests cover
   cache-hit behavior; eager loader flow remains the default.
-- [ ] Thread dependency metering through current loader entrypoints (module load, type load,
+- [x] Thread dependency metering through current loader entrypoints (module load, type load,
       script load) without changing eager semantics. (M2)
 - [x] Add script cache with deserialized/verified states; persist by script hash in transaction
       cache and VM cache. (M2)
 - [x] Ensure script verification meters immediate dependencies even on cache hits (align with
       aptos-core lazy behavior); add tests for cache-hit metering. (M2)
-- [ ] Add `ModuleMetadataLoader` interface + eager implementation; route metadata access through
+- [x] Add `ModuleMetadataLoader` interface + eager implementation; route metadata access through
       it so metering is enforced instead of bypassed by cache hits. (M2)
-- [ ] Update `data_cache.rs` to request metadata via the loader and add regression tests for
+- [x] Update `data_cache.rs` to request metadata via the loader and add regression tests for
       metadata-dependent resource reads. (M2)
-- [ ] Introduce layout cache entries that track defining modules for re-metering on cache hits. (M2)
-- [ ] Implement a layout converter that resolves struct defs via the loader and threads
+- [x] Introduce layout cache entries that track defining modules for re-metering on cache hits. (M2)
+- [x] Implement a layout converter that resolves struct defs via the loader and threads
       `TraversalContext` + gas metering through layout construction. (M2)
-- [ ] Add tests for layout size/depth errors and cache hit semantics under lazy-style metering. (M2)
+- [x] Add tests for layout size/depth errors and cache hit semantics under lazy-style metering. (M2)
 
 ### Phase 3: Loader v2 architecture behind feature flags
 - Entry: Phase 2 done; metering + caches validated under eager flow.

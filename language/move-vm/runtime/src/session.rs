@@ -53,6 +53,27 @@ pub struct SerializedReturnValues {
 }
 
 impl<'r, 'l> Session<'r, 'l> {
+    fn collect_type_tag_module_ids(type_tag: &TypeTag, ids: &mut Vec<ModuleId>) {
+        match type_tag {
+            TypeTag::Struct(struct_tag) => {
+                ids.push(struct_tag.module_id());
+                for ty_arg in struct_tag.type_args.iter() {
+                    Self::collect_type_tag_module_ids(ty_arg, ids);
+                }
+            },
+            TypeTag::Vector(inner) => Self::collect_type_tag_module_ids(inner, ids),
+            TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U16
+            | TypeTag::U32
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::U256
+            | TypeTag::Address
+            | TypeTag::Signer => {}
+        }
+    }
+
     /// Execute a Move entry function.
     ///
     /// NOTE: There are NO checks on the `args` except that they can deserialize
@@ -396,6 +417,22 @@ impl<'r, 'l> Session<'r, 'l> {
         )
     }
 
+    /// Load a script and meter its dependencies before caching.
+    pub fn load_script_with_metering(
+        &mut self,
+        script: impl Borrow<[u8]>,
+        ty_args: &[TypeTag],
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<LoadedFunction> {
+        self.check_script_dependencies_and_check_gas(
+            gas_meter,
+            traversal_context,
+            script.borrow(),
+        )?;
+        self.load_script(script, ty_args)
+    }
+
     /// Load a module, a function, and all of its types into cache
     pub fn load_function_with_type_arg_inference(
         &mut self,
@@ -431,6 +468,23 @@ impl<'r, 'l> Session<'r, 'l> {
         )
     }
 
+    /// Load a module/function and meter its dependencies before caching.
+    pub fn load_function_with_metering(
+        &mut self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: &[TypeTag],
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<LoadedFunction> {
+        self.check_dependencies_and_charge_gas(
+            gas_meter,
+            traversal_context,
+            [(module_id.address(), module_id.name())],
+        )?;
+        self.load_function(module_id, function_name, ty_args)
+    }
+
     pub fn load_type(&mut self, type_tag: &TypeTag) -> VMResult<Type> {
         self.move_vm
             .runtime
@@ -438,11 +492,47 @@ impl<'r, 'l> Session<'r, 'l> {
             .load_type(type_tag, &mut self.data_cache, &self.module_store)
     }
 
+    /// Load a type and meter dependencies for its struct tags.
+    pub fn load_type_with_metering(
+        &mut self,
+        type_tag: &TypeTag,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<Type> {
+        let mut module_ids = Vec::new();
+        Self::collect_type_tag_module_ids(type_tag, &mut module_ids);
+        if !module_ids.is_empty() {
+            self.check_dependencies_and_charge_gas(
+                gas_meter,
+                traversal_context,
+                module_ids
+                    .iter()
+                    .map(|module_id| (module_id.address(), module_id.name())),
+            )?;
+        }
+        self.load_type(type_tag)
+    }
+
     pub fn get_type_layout(&mut self, type_tag: &TypeTag) -> VMResult<MoveTypeLayout> {
         self.move_vm.runtime.loader().get_type_layout(
             type_tag,
             &mut self.data_cache,
             &self.module_store,
+        )
+    }
+
+    pub fn get_type_layout_with_metering(
+        &mut self,
+        type_tag: &TypeTag,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<MoveTypeLayout> {
+        self.move_vm.runtime.loader().get_type_layout_with_metering(
+            type_tag,
+            &mut self.data_cache,
+            &self.module_store,
+            gas_meter,
+            traversal_context,
         )
     }
 
@@ -454,6 +544,24 @@ impl<'r, 'l> Session<'r, 'l> {
             .runtime
             .loader()
             .get_fully_annotated_type_layout(type_tag, &mut self.data_cache, &self.module_store)
+    }
+
+    pub fn get_fully_annotated_type_layout_with_metering(
+        &mut self,
+        type_tag: &TypeTag,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<MoveTypeLayout> {
+        self.move_vm
+            .runtime
+            .loader()
+            .get_fully_annotated_type_layout_with_metering(
+                type_tag,
+                &mut self.data_cache,
+                &self.module_store,
+                gas_meter,
+                traversal_context,
+            )
     }
 
     pub fn get_type_tag(&self, ty: &Type) -> VMResult<TypeTag> {

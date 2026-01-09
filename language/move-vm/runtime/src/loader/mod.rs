@@ -27,6 +27,7 @@ use move_core_types::{
     ident_str,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag, TypeTag},
+    metadata::Metadata,
     value::{IdentifierMappingKind, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     vm_status::StatusCode,
 };
@@ -199,6 +200,17 @@ pub(crate) struct Loader {
     module_cache_hits: RwLock<BTreeSet<ModuleId>>,
 
     vm_config: VMConfig,
+}
+
+pub(crate) trait ModuleMetadataLoader {
+    fn get_module_metadata<'a, M: GasMeter>(
+        &self,
+        module_id: &ModuleId,
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+    ) -> VMResult<Vec<Metadata>>;
 }
 
 impl Clone for Loader {
@@ -1453,6 +1465,27 @@ struct StructLayoutInfoCacheItem {
     struct_layout: MoveTypeLayout,
     node_count: u64,
     has_identifier_mappings: bool,
+    dependency_modules: Vec<ModuleId>,
+}
+
+#[derive(Default)]
+struct LayoutDependencies {
+    seen: BTreeSet<ModuleId>,
+    ordered: Vec<ModuleId>,
+}
+
+impl LayoutDependencies {
+    fn record(&mut self, module_id: &ModuleId) {
+        if self.seen.insert(module_id.clone()) {
+            self.ordered.push(module_id.clone());
+        }
+    }
+
+    fn extend(&mut self, modules: &[ModuleId]) {
+        for module_id in modules {
+            self.record(module_id);
+        }
+    }
 }
 
 //
@@ -1464,6 +1497,7 @@ struct StructInfoCache {
     struct_layout_info: Option<StructLayoutInfoCacheItem>,
     annotated_struct_layout: Option<MoveTypeLayout>,
     annotated_node_count: Option<u64>,
+    annotated_layout_dependencies: Option<Vec<ModuleId>>,
 }
 
 impl StructInfoCache {
@@ -1473,6 +1507,7 @@ impl StructInfoCache {
             struct_layout_info: None,
             annotated_struct_layout: None,
             annotated_node_count: None,
+            annotated_layout_dependencies: None,
         }
     }
 }
@@ -1676,9 +1711,147 @@ impl Loader {
             struct_layout: layout.clone(),
             node_count: field_node_count,
             has_identifier_mappings,
+            dependency_modules: Vec::new(),
         });
 
         Ok((layout, has_identifier_mappings))
+    }
+
+    fn meter_layout_dependencies<'a, M: GasMeter>(
+        &self,
+        dependencies: &[ModuleId],
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+    ) -> PartialVMResult<()> {
+        let ids = dependencies
+            .iter()
+            .map(|module_id| (module_id.address(), module_id.name()));
+        self.check_dependencies_and_charge_gas_non_recursive_optional(
+            module_store,
+            data_store,
+            gas_meter,
+            traversal_context,
+            ids,
+        )
+        .map_err(|err| err.to_partial())
+    }
+
+    fn struct_name_to_type_layout_with_metering<'a, M: GasMeter>(
+        &self,
+        struct_idx: StructNameIndex,
+        module_store: &ModuleStorageAdapter,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+        ty_args: &[Type],
+        count: &mut u64,
+        depth: u64,
+    ) -> PartialVMResult<(MoveTypeLayout, bool, Vec<ModuleId>)> {
+        let name = &*self.name_cache.idx_to_identifier(struct_idx);
+        if let Some(struct_map) = self.type_cache.read().structs.get(name) {
+            if let Some(struct_info) = struct_map.get(ty_args) {
+                if let Some(struct_layout_info) = &struct_info.struct_layout_info {
+                    if !struct_layout_info.dependency_modules.is_empty() {
+                        self.meter_layout_dependencies(
+                            &struct_layout_info.dependency_modules,
+                            data_store,
+                            module_store,
+                            gas_meter,
+                            traversal_context,
+                        )?;
+                        *count += struct_layout_info.node_count;
+                        return Ok((
+                            struct_layout_info.struct_layout.clone(),
+                            struct_layout_info.has_identifier_mappings,
+                            struct_layout_info.dependency_modules.clone(),
+                        ));
+                    }
+                }
+            }
+        }
+
+        let count_before = *count;
+        let mut layout_dependencies = LayoutDependencies::default();
+        layout_dependencies.record(&name.module);
+        self.meter_layout_dependencies(
+            &[name.module.clone()],
+            data_store,
+            module_store,
+            gas_meter,
+            traversal_context,
+        )?;
+
+        let struct_type = module_store.get_struct_type_by_identifier(&name.name, &name.module)?;
+
+        // Some types can have fields which are lifted at serialization or deserialization
+        // times. Right now these are Aggregator and AggregatorSnapshot.
+        let maybe_mapping = self.get_identifier_mapping_kind(name);
+
+        let field_tys = struct_type
+            .field_tys
+            .iter()
+            .map(|ty| {
+                self.ty_builder()
+                    .create_ty_with_subst_with_legacy_check(ty, ty_args)
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?;
+
+        let mut field_layouts = Vec::with_capacity(field_tys.len());
+        let mut field_has_identifier_mappings = Vec::with_capacity(field_tys.len());
+        for ty in &field_tys {
+            let (layout, has_identifier_mappings, deps) =
+                self.type_to_type_layout_impl_with_metering(
+                    ty,
+                    module_store,
+                    data_store,
+                    gas_meter,
+                    traversal_context,
+                    count,
+                    depth + 1,
+                )?;
+            layout_dependencies.extend(&deps);
+            field_layouts.push(layout);
+            field_has_identifier_mappings.push(has_identifier_mappings);
+        }
+
+        let has_identifier_mappings =
+            maybe_mapping.is_some() || field_has_identifier_mappings.into_iter().any(|b| b);
+
+        let field_node_count = *count - count_before;
+        let layout = if Some(IdentifierMappingKind::DerivedString) == maybe_mapping {
+            // For DerivedString, the whole object should be lifted.
+            MoveTypeLayout::Native(
+                IdentifierMappingKind::DerivedString,
+                Box::new(MoveTypeLayout::Struct(MoveStructLayout::new(field_layouts))),
+            )
+        } else {
+            // For aggregators / snapshots, the first field should be lifted.
+            if let Some(kind) = &maybe_mapping {
+                if let Some(l) = field_layouts.first_mut() {
+                    *l = MoveTypeLayout::Native(kind.clone(), Box::new(l.clone()));
+                }
+            }
+            MoveTypeLayout::Struct(MoveStructLayout::new(field_layouts))
+        };
+
+        let dependency_modules = layout_dependencies.ordered.clone();
+        let mut cache = self.type_cache.write();
+        let info = cache
+            .structs
+            .entry(name.clone())
+            .or_default()
+            .entry(ty_args.to_vec())
+            .or_insert_with(StructInfoCache::new);
+        info.struct_layout_info = Some(StructLayoutInfoCacheItem {
+            struct_layout: layout.clone(),
+            node_count: field_node_count,
+            has_identifier_mappings,
+            dependency_modules: dependency_modules.clone(),
+        });
+
+        Ok((layout, has_identifier_mappings, dependency_modules))
     }
 
     // TODO[agg_v2](cleanup):
@@ -1802,6 +1975,126 @@ impl Loader {
         })
     }
 
+    fn type_to_type_layout_impl_with_metering<'a, M: GasMeter>(
+        &self,
+        ty: &Type,
+        module_store: &ModuleStorageAdapter,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+        count: &mut u64,
+        depth: u64,
+    ) -> PartialVMResult<(MoveTypeLayout, bool, Vec<ModuleId>)> {
+        if *count > MAX_TYPE_TO_LAYOUT_NODES {
+            return Err(
+                PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).with_message(format!(
+                    "Number of type nodes when constructing type layout exceeded the maximum of {}",
+                    MAX_TYPE_TO_LAYOUT_NODES
+                )),
+            );
+        }
+        if depth > VALUE_DEPTH_MAX {
+            return Err(
+                PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED).with_message(format!(
+                    "Depth of a layout exceeded the maximum of {} during construction",
+                    VALUE_DEPTH_MAX
+                )),
+            );
+        }
+        Ok(match ty {
+            Type::Bool => {
+                *count += 1;
+                (MoveTypeLayout::Bool, false, Vec::new())
+            },
+            Type::U8 => {
+                *count += 1;
+                (MoveTypeLayout::U8, false, Vec::new())
+            },
+            Type::U16 => {
+                *count += 1;
+                (MoveTypeLayout::U16, false, Vec::new())
+            },
+            Type::U32 => {
+                *count += 1;
+                (MoveTypeLayout::U32, false, Vec::new())
+            },
+            Type::U64 => {
+                *count += 1;
+                (MoveTypeLayout::U64, false, Vec::new())
+            },
+            Type::U128 => {
+                *count += 1;
+                (MoveTypeLayout::U128, false, Vec::new())
+            },
+            Type::U256 => {
+                *count += 1;
+                (MoveTypeLayout::U256, false, Vec::new())
+            },
+            Type::Address => {
+                *count += 1;
+                (MoveTypeLayout::Address, false, Vec::new())
+            },
+            Type::Signer => {
+                *count += 1;
+                (MoveTypeLayout::Signer, false, Vec::new())
+            },
+            Type::Vector(ty) => {
+                *count += 1;
+                let (layout, has_identifier_mappings, deps) =
+                    self.type_to_type_layout_impl_with_metering(
+                        ty,
+                        module_store,
+                        data_store,
+                        gas_meter,
+                        traversal_context,
+                        count,
+                        depth + 1,
+                    )?;
+                (
+                    MoveTypeLayout::Vector(Box::new(layout)),
+                    has_identifier_mappings,
+                    deps,
+                )
+            },
+            Type::Struct { idx, .. } => {
+                *count += 1;
+                let (layout, has_identifier_mappings, deps) =
+                    self.struct_name_to_type_layout_with_metering(
+                        *idx,
+                        module_store,
+                        data_store,
+                        gas_meter,
+                        traversal_context,
+                        &[],
+                        count,
+                        depth + 1,
+                    )?;
+                (layout, has_identifier_mappings, deps)
+            },
+            Type::StructInstantiation { idx, ty_args, .. } => {
+                *count += 1;
+                let (layout, has_identifier_mappings, deps) =
+                    self.struct_name_to_type_layout_with_metering(
+                        *idx,
+                        module_store,
+                        data_store,
+                        gas_meter,
+                        traversal_context,
+                        ty_args,
+                        count,
+                        depth + 1,
+                    )?;
+                (layout, has_identifier_mappings, deps)
+            },
+            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!("No type layout for {:?}", ty)),
+                );
+            },
+        })
+    }
+
     fn struct_name_to_fully_annotated_layout(
         &self,
         struct_idx: StructNameIndex,
@@ -1873,6 +2166,110 @@ impl Loader {
         Ok(struct_layout)
     }
 
+    fn struct_name_to_fully_annotated_layout_with_metering<'a, M: GasMeter>(
+        &self,
+        struct_idx: StructNameIndex,
+        module_store: &ModuleStorageAdapter,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+        ty_args: &[Type],
+        count: &mut u64,
+        depth: u64,
+    ) -> PartialVMResult<(MoveTypeLayout, Vec<ModuleId>)> {
+        let name = &*self.name_cache.idx_to_identifier(struct_idx);
+        if let Some(struct_map) = self.type_cache.read().structs.get(name) {
+            if let Some(struct_info) = struct_map.get(ty_args) {
+                if let Some(annotated_node_count) = &struct_info.annotated_node_count {
+                    *count += *annotated_node_count
+                }
+                if let (Some(layout), Some(deps)) = (
+                    &struct_info.annotated_struct_layout,
+                    &struct_info.annotated_layout_dependencies,
+                ) {
+                    self.meter_layout_dependencies(
+                        deps,
+                        data_store,
+                        module_store,
+                        gas_meter,
+                        traversal_context,
+                    )?;
+                    return Ok((layout.clone(), deps.clone()));
+                }
+            }
+        }
+
+        let mut layout_dependencies = LayoutDependencies::default();
+        layout_dependencies.record(&name.module);
+        self.meter_layout_dependencies(
+            &[name.module.clone()],
+            data_store,
+            module_store,
+            gas_meter,
+            traversal_context,
+        )?;
+
+        let struct_type = module_store.get_struct_type_by_identifier(&name.name, &name.module)?;
+        if struct_type.field_tys.len() != struct_type.field_names.len() {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                    "Field types did not match the length of field names in loaded struct {}::{}",
+                    &name.module, &name.name
+                ),
+                ),
+            );
+        }
+
+        let count_before = *count;
+        let mut gas_context = PseudoGasContext {
+            cost: 0,
+            max_cost: self.vm_config.type_max_cost,
+            cost_base: self.vm_config.type_base_cost,
+            cost_per_byte: self.vm_config.type_byte_cost,
+        };
+        let struct_tag = self.struct_name_to_type_tag(struct_idx, ty_args, &mut gas_context)?;
+
+        let field_layouts = struct_type
+            .field_names
+            .iter()
+            .zip(&struct_type.field_tys)
+            .map(|(n, ty)| {
+                let ty = self
+                    .ty_builder()
+                    .create_ty_with_subst_with_legacy_check(ty, ty_args)?;
+                let (layout, deps) = self.type_to_fully_annotated_layout_impl_with_metering(
+                    &ty,
+                    module_store,
+                    data_store,
+                    gas_meter,
+                    traversal_context,
+                    count,
+                    depth,
+                )?;
+                layout_dependencies.extend(&deps);
+                Ok(MoveFieldLayout::new(n.clone(), layout))
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        let struct_layout =
+            MoveTypeLayout::Struct(MoveStructLayout::with_types(struct_tag, field_layouts));
+        let field_node_count = *count - count_before;
+
+        let dependency_modules = layout_dependencies.ordered.clone();
+        let mut cache = self.type_cache.write();
+        let info = cache
+            .structs
+            .entry(name.clone())
+            .or_default()
+            .entry(ty_args.to_vec())
+            .or_insert_with(StructInfoCache::new);
+        info.annotated_struct_layout = Some(struct_layout.clone());
+        info.annotated_node_count = Some(field_node_count);
+        info.annotated_layout_dependencies = Some(dependency_modules.clone());
+
+        Ok((struct_layout, dependency_modules))
+    }
+
     fn type_to_fully_annotated_layout_impl(
         &self,
         ty: &Type,
@@ -1924,6 +2321,85 @@ impl Loader {
                     count,
                     depth + 1,
                 )?,
+            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!("No type layout for {:?}", ty)),
+                );
+            },
+        })
+    }
+
+    fn type_to_fully_annotated_layout_impl_with_metering<'a, M: GasMeter>(
+        &self,
+        ty: &Type,
+        module_store: &ModuleStorageAdapter,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+        count: &mut u64,
+        depth: u64,
+    ) -> PartialVMResult<(MoveTypeLayout, Vec<ModuleId>)> {
+        if *count > MAX_TYPE_TO_LAYOUT_NODES {
+            return Err(
+                PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).with_message(format!(
+                    "Number of type nodes when constructing type layout exceeded the maximum of {}",
+                    MAX_TYPE_TO_LAYOUT_NODES
+                )),
+            );
+        }
+        if depth > VALUE_DEPTH_MAX {
+            return Err(
+                PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED).with_message(format!(
+                    "Depth of a layout exceeded the maximum of {} during construction",
+                    VALUE_DEPTH_MAX
+                )),
+            );
+        }
+        Ok(match ty {
+            Type::Bool => (MoveTypeLayout::Bool, Vec::new()),
+            Type::U8 => (MoveTypeLayout::U8, Vec::new()),
+            Type::U16 => (MoveTypeLayout::U16, Vec::new()),
+            Type::U32 => (MoveTypeLayout::U32, Vec::new()),
+            Type::U64 => (MoveTypeLayout::U64, Vec::new()),
+            Type::U128 => (MoveTypeLayout::U128, Vec::new()),
+            Type::U256 => (MoveTypeLayout::U256, Vec::new()),
+            Type::Address => (MoveTypeLayout::Address, Vec::new()),
+            Type::Signer => (MoveTypeLayout::Signer, Vec::new()),
+            Type::Vector(ty) => {
+                let (layout, deps) = self.type_to_fully_annotated_layout_impl_with_metering(
+                    ty,
+                    module_store,
+                    data_store,
+                    gas_meter,
+                    traversal_context,
+                    count,
+                    depth + 1,
+                )?;
+                (MoveTypeLayout::Vector(Box::new(layout)), deps)
+            },
+            Type::Struct { idx, .. } => self.struct_name_to_fully_annotated_layout_with_metering(
+                *idx,
+                module_store,
+                data_store,
+                gas_meter,
+                traversal_context,
+                &[],
+                count,
+                depth + 1,
+            ),
+            Type::StructInstantiation { idx, ty_args, .. } => {
+                self.struct_name_to_fully_annotated_layout_with_metering(
+                    *idx,
+                    module_store,
+                    data_store,
+                    gas_meter,
+                    traversal_context,
+                    ty_args,
+                    count,
+                    depth + 1,
+                )
+            },
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2045,6 +2521,27 @@ impl Loader {
         self.type_to_type_layout_impl(ty, module_store, &mut count, 1)
     }
 
+    pub(crate) fn type_to_type_layout_with_identifier_mappings_and_metering<'a, M: GasMeter>(
+        &self,
+        ty: &Type,
+        module_store: &ModuleStorageAdapter,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+    ) -> PartialVMResult<(MoveTypeLayout, bool)> {
+        let mut count = 0;
+        let (layout, has_identifier_mappings, _deps) = self.type_to_type_layout_impl_with_metering(
+            ty,
+            module_store,
+            data_store,
+            gas_meter,
+            traversal_context,
+            &mut count,
+            1,
+        )?;
+        Ok((layout, has_identifier_mappings))
+    }
+
     pub(crate) fn type_to_type_layout(
         &self,
         ty: &Type,
@@ -2064,6 +2561,27 @@ impl Loader {
         let mut count = 0;
         self.type_to_fully_annotated_layout_impl(ty, module_store, &mut count, 1)
     }
+
+    pub(crate) fn type_to_fully_annotated_layout_with_metering<'a, M: GasMeter>(
+        &self,
+        ty: &Type,
+        module_store: &ModuleStorageAdapter,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+    ) -> PartialVMResult<MoveTypeLayout> {
+        let mut count = 0;
+        let (layout, _deps) = self.type_to_fully_annotated_layout_impl_with_metering(
+            ty,
+            module_store,
+            data_store,
+            gas_meter,
+            traversal_context,
+            &mut count,
+            1,
+        )?;
+        Ok(layout)
+    }
 }
 
 // Public APIs for external uses.
@@ -2079,6 +2597,26 @@ impl Loader {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
+    pub(crate) fn get_type_layout_with_metering<'a, M: GasMeter>(
+        &self,
+        type_tag: &TypeTag,
+        move_storage: &mut TransactionDataCache,
+        module_storage: &ModuleStorageAdapter,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+    ) -> VMResult<MoveTypeLayout> {
+        let ty = self.load_type(type_tag, move_storage, module_storage)?;
+        self.type_to_type_layout_with_identifier_mappings_and_metering(
+            &ty,
+            module_storage,
+            move_storage,
+            gas_meter,
+            traversal_context,
+        )
+        .map(|(layout, _has_identifier_mappings)| layout)
+        .map_err(|e| e.finish(Location::Undefined))
+    }
+
     pub(crate) fn get_fully_annotated_type_layout(
         &self,
         type_tag: &TypeTag,
@@ -2090,11 +2628,59 @@ impl Loader {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
+    pub(crate) fn get_fully_annotated_type_layout_with_metering<'a, M: GasMeter>(
+        &self,
+        type_tag: &TypeTag,
+        move_storage: &mut TransactionDataCache,
+        module_storage: &ModuleStorageAdapter,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+    ) -> VMResult<MoveTypeLayout> {
+        let ty = self.load_type(type_tag, move_storage, module_storage)?;
+        self.type_to_fully_annotated_layout_with_metering(
+            &ty,
+            module_storage,
+            move_storage,
+            gas_meter,
+            traversal_context,
+        )
+        .map_err(|e| e.finish(Location::Undefined))
+    }
+
     pub(crate) fn update_native_functions(
         &mut self,
         natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
     ) -> PartialVMResult<()> {
         self.natives = NativeFunctions::new(natives)?;
         Ok(())
+    }
+}
+
+impl ModuleMetadataLoader for Loader {
+    fn get_module_metadata<'a, M: GasMeter>(
+        &self,
+        module_id: &ModuleId,
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
+    ) -> VMResult<Vec<Metadata>> {
+        self.check_dependencies_and_charge_gas_non_recursive_optional(
+            module_store,
+            data_store,
+            gas_meter,
+            traversal_context,
+            [(module_id.address(), module_id.name())],
+        )?;
+
+        if let Some(module) = module_store.module_at(module_id) {
+            return Ok(module.module().metadata.clone());
+        }
+
+        match data_store.load_compiled_module_to_cache(module_id.clone(), true) {
+            Ok((module, _size, _hash)) => Ok(module.metadata.clone()),
+            Err(err) if err.major_status() == StatusCode::LINKER_ERROR => Ok(Vec::new()),
+            Err(err) => Err(err),
+        }
     }
 }

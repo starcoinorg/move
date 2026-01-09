@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    loader::{Loader, ModuleStorageAdapter},
+    loader::{Loader, ModuleMetadataLoader, ModuleStorageAdapter},
     logging::expect_no_verification_errors,
+    module_traversal::{TraversalContext, TraversalStorage},
 };
 use bytes::Bytes;
 use move_binary_format::{
@@ -24,6 +25,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::{
+    gas::{GasMeter, UnmeteredGasMeter},
     loaded_data::runtime_types::Type,
     value_serde::deserialize_and_allow_delayed_values,
     values::{GlobalValue, Value},
@@ -197,12 +199,14 @@ impl<'r> TransactionDataCache<'r> {
     // Retrieves data from the local cache or loads it from the remote cache into the local cache.
     // All operations on the global data are based on this API and they all load the data
     // into the cache.
-    pub(crate) fn load_resource(
+    pub(crate) fn load_resource_with_metadata<'a, M: GasMeter>(
         &mut self,
         loader: &Loader,
         addr: AccountAddress,
         ty: &Type,
         module_store: &ModuleStorageAdapter,
+        gas_meter: &mut M,
+        traversal_context: &mut TraversalContext<'a>,
     ) -> PartialVMResult<(&mut GlobalValue, Option<NumBytes>)> {
         let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
             (addr, AccountDataCache::new())
@@ -220,13 +224,23 @@ impl<'r> TransactionDataCache<'r> {
             };
             // TODO(Gas): Shall we charge for this?
             let (ty_layout, has_aggregator_lifting) =
-                loader.type_to_type_layout_with_identifier_mappings(ty, module_store)?;
+                loader.type_to_type_layout_with_identifier_mappings_and_metering(
+                    ty,
+                    module_store,
+                    self,
+                    gas_meter,
+                    traversal_context,
+                )?;
 
-            let module = module_store.module_at(&ty_tag.module_id());
-            let metadata: &[Metadata] = match &module {
-                Some(module) => &module.module().metadata,
-                None => &[],
-            };
+            let metadata = ModuleMetadataLoader::get_module_metadata(
+                loader,
+                &ty_tag.module_id(),
+                self,
+                module_store,
+                gas_meter,
+                traversal_context,
+            )
+            .map_err(|err| err.to_partial())?;
 
             // If we need to process aggregator lifting, we pass type layout to remote.
             // Remote, in turn ensures that all aggregator values are lifted if the resolved
@@ -234,7 +248,7 @@ impl<'r> TransactionDataCache<'r> {
             let (data, bytes_loaded) = self.remote.get_resource_bytes_with_metadata_and_layout(
                 &addr,
                 &ty_tag,
-                metadata,
+                &metadata,
                 if has_aggregator_lifting {
                     Some(&ty_layout)
                 } else {
@@ -275,6 +289,26 @@ impl<'r> TransactionDataCache<'r> {
                 .expect("global value must exist"),
             load_res,
         ))
+    }
+
+    pub(crate) fn load_resource(
+        &mut self,
+        loader: &Loader,
+        addr: AccountAddress,
+        ty: &Type,
+        module_store: &ModuleStorageAdapter,
+    ) -> PartialVMResult<(&mut GlobalValue, Option<NumBytes>)> {
+        let mut gas_meter = UnmeteredGasMeter;
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        self.load_resource_with_metadata(
+            loader,
+            addr,
+            ty,
+            module_store,
+            &mut gas_meter,
+            &mut traversal_context,
+        )
     }
 
     pub(crate) fn load_module(&self, module_id: &ModuleId) -> PartialVMResult<Bytes> {
