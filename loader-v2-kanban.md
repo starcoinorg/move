@@ -17,18 +17,18 @@
 - Done: Config flags exist and are plumbed end-to-end with explicit defaults; dependency metering
   semantics are documented; traversal helpers + dependency charging helpers are in place with
   tests; loader-v1 behavior remains unchanged by default.
-- [ ] Add VMConfig/LoaderConfig flags to mirror loader-v2 needs: `enable_lazy_loading`,
+- [x] Add VMConfig/LoaderConfig flags to mirror loader-v2 needs: `enable_lazy_loading`,
       `enable_layout_caches`, and related toggles; default to v1 behavior. (M1)
-- [ ] Plumb new config flags through MoveVM/runtime/session construction paths and keep the
+- [x] Plumb new config flags through MoveVM/runtime/session construction paths and keep the
       loader-v1 path as the default flow. (M1)
-- [ ] Define dependency metering semantics (existing vs new, ordering guarantees, special address
+- [x] Define dependency metering semantics (existing vs new, ordering guarantees, special address
       handling) and document in the gas layer. (M1)
-- [ ] Extend `GasMeter` or add `DependencyGasMeter` with explicit dependency charging and update
+- [x] Extend `GasMeter` or add `DependencyGasMeter` with explicit dependency charging and update
       all in-tree meters + tests to compile and pass. (M1)
-- [ ] Extend `module_traversal::TraversalContext` with visit/check helpers used for lazy metering
+- [x] Extend `module_traversal::TraversalContext` with visit/check helpers used for lazy metering
       (e.g., `visit_if_not_special_address`, `visit_if_not_special_module_id`). (M1)
-- [ ] Add unit tests for new traversal helpers (special address behavior, double-visit, etc.). (M1)
-- [ ] Factor dependency charging helpers into a dedicated module (align with
+- [x] Add unit tests for new traversal helpers (special address behavior, double-visit, etc.). (M1)
+- [x] Factor dependency charging helpers into a dedicated module (align with
       `dependencies_gas_charging.rs`) to isolate traversal semantics. (M1)
 
 ### Phase 2: Metered access + caches while keeping eager loader flow
@@ -38,9 +38,9 @@
   cache-hit behavior; eager loader flow remains the default.
 - [ ] Thread dependency metering through current loader entrypoints (module load, type load,
       script load) without changing eager semantics. (M2)
-- [ ] Add script cache with deserialized/verified states; persist by script hash in transaction
+- [x] Add script cache with deserialized/verified states; persist by script hash in transaction
       cache and VM cache. (M2)
-- [ ] Ensure script verification meters immediate dependencies even on cache hits (align with
+- [x] Ensure script verification meters immediate dependencies even on cache hits (align with
       aptos-core lazy behavior); add tests for cache-hit metering. (M2)
 - [ ] Add `ModuleMetadataLoader` interface + eager implementation; route metadata access through
       it so metering is enforced instead of bypassed by cache hits. (M2)

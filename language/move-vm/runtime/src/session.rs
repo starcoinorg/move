@@ -76,6 +76,13 @@ impl<'r, 'l> Session<'r, 'l> {
                     .expect("Entry function always has module id"),
             )));
         }
+        if let Some(module_id) = func.module_id() {
+            self.check_dependencies_and_charge_gas(
+                gas_meter,
+                traversal_context,
+                [(module_id.address(), module_id.name())],
+            )?;
+        }
 
         self.move_vm.runtime.execute_function_instantiation(
             func,
@@ -99,6 +106,11 @@ impl<'r, 'l> Session<'r, 'l> {
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
     ) -> VMResult<SerializedReturnValues> {
+        self.check_dependencies_and_charge_gas(
+            gas_meter,
+            traversal_context,
+            [(module.address(), module.name())],
+        )?;
         let func = self.move_vm.runtime.loader().load_function(
             module,
             function_name,
@@ -125,6 +137,13 @@ impl<'r, 'l> Session<'r, 'l> {
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
     ) -> VMResult<SerializedReturnValues> {
+        if let Some(module_id) = func.module_id() {
+            self.check_dependencies_and_charge_gas(
+                gas_meter,
+                traversal_context,
+                [(module_id.address(), module_id.name())],
+            )?;
+        }
         self.move_vm.runtime.execute_function_instantiation(
             func,
             args,

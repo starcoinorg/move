@@ -452,10 +452,18 @@ impl VMRuntime {
         traversal_context: &mut TraversalContext,
         extensions: &mut NativeContextExtensions,
     ) -> VMResult<()> {
+        let script = script.borrow();
+        self.loader.check_script_dependencies_and_check_gas(
+            module_store,
+            data_store,
+            gas_meter,
+            traversal_context,
+            script,
+        )?;
         // Load the script first, verify it, and then execute the entry-point main function.
         let main = self
             .loader
-            .load_script(script.borrow(), &ty_args, data_store, module_store)?;
+            .load_script(script, &ty_args, data_store, module_store)?;
         self.execute_function_impl(
             main,
             serialized_args,
