@@ -11,12 +11,14 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
+    config::VMConfig,
     module_traversal::{TraversalContext, TraversalStorage},
     move_vm::MoveVM,
 };
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction, UnmeteredGasMeter},
+    loaded_data::runtime_types::TypeBuilder,
     views::{TypeView, ValueView},
 };
 
@@ -288,16 +290,22 @@ fn struct_type_tag(module_id: &ModuleId, struct_name: &str) -> TypeTag {
     }))
 }
 
+fn new_vm_with_type_limits() -> MoveVM {
+    let mut config = VMConfig::default();
+    config.ty_builder = TypeBuilder::with_limits(10_000, 10_000);
+    MoveVM::new_with_config(vec![], config).unwrap()
+}
+
 #[test]
 fn layout_dependency_metering_on_cache_hit() {
     let addr = AccountAddress::new([42; AccountAddress::LENGTH]);
     let code = format!(
         r#"
-        module 0x{}::M {{
+        module {}::M {{
             struct R has key {{ v: u64 }}
         }}
     "#,
-        addr.to_hex(),
+        addr.to_hex_literal(),
     );
     let module = compile_module(&code);
     let module_id = module.self_id();
@@ -336,11 +344,11 @@ fn layout_depth_limit_exceeded() {
     }
     let code = format!(
         r#"
-        module 0x{}::M {{
+        module {}::M {{
             struct Deep has key {{ v: {} }}
         }}
     "#,
-        addr.to_hex(),
+        addr.to_hex_literal(),
         nested,
     );
     let module = compile_module(&code);
@@ -349,7 +357,7 @@ fn layout_depth_limit_exceeded() {
     let mut storage = InMemoryStorage::new();
     publish_module(&mut storage, &module);
 
-    let vm = MoveVM::new(vec![]).unwrap();
+    let vm = new_vm_with_type_limits();
     let type_tag = struct_type_tag(&module_id, "Deep");
     let mut session = vm.new_session(&storage);
     let mut gas_meter = UnmeteredGasMeter;
@@ -365,20 +373,24 @@ fn layout_depth_limit_exceeded() {
 fn layout_node_limit_exceeded() {
     let addr = AccountAddress::new([2; AccountAddress::LENGTH]);
     let mut fields = String::new();
-    let field_count = 800usize;
+    let mut field_type = "u8".to_string();
+    for _ in 0..6 {
+        field_type = format!("vector<{}>", field_type);
+    }
+    let field_count = 255usize;
     for i in 0..field_count {
         if i > 0 {
             fields.push_str(", ");
         }
-        fields.push_str(&format!("f{}: vector<u8>", i));
+        fields.push_str(&format!("f{}: {}", i, field_type));
     }
     let code = format!(
         r#"
-        module 0x{}::M {{
+        module {}::M {{
             struct Big has key {{ {} }}
         }}
     "#,
-        addr.to_hex(),
+        addr.to_hex_literal(),
         fields,
     );
     let module = compile_module(&code);
@@ -387,7 +399,7 @@ fn layout_node_limit_exceeded() {
     let mut storage = InMemoryStorage::new();
     publish_module(&mut storage, &module);
 
-    let vm = MoveVM::new(vec![]).unwrap();
+    let vm = new_vm_with_type_limits();
     let type_tag = struct_type_tag(&module_id, "Big");
     let mut session = vm.new_session(&storage);
     let mut gas_meter = UnmeteredGasMeter;

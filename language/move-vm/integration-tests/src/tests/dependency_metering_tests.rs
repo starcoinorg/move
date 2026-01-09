@@ -317,7 +317,7 @@ fn script_dependency_metering_on_cache_hit() {
             .execute_script(
                 script_bytes.clone(),
                 vec![],
-                vec![],
+                Vec::<Vec<u8>>::new(),
                 meter,
                 &mut traversal_context,
             )

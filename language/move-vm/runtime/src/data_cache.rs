@@ -19,7 +19,6 @@ use move_core_types::{
     gas_algebra::NumBytes,
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
-    metadata::Metadata,
     resolver::MoveResolver,
     value::MoveTypeLayout,
     vm_status::StatusCode,
@@ -208,12 +207,14 @@ impl<'r> TransactionDataCache<'r> {
         gas_meter: &mut M,
         traversal_context: &mut TraversalContext<'a>,
     ) -> PartialVMResult<(&mut GlobalValue, Option<NumBytes>)> {
-        let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
-            (addr, AccountDataCache::new())
-        });
-
         let mut load_res = None;
-        if !account_cache.data_map.contains_key(ty) {
+        let needs_load = self
+            .account_map
+            .get(&addr)
+            .map(|account_cache| !account_cache.data_map.contains_key(ty))
+            .unwrap_or(true);
+
+        if needs_load {
             let ty_tag = match loader.type_to_type_tag(ty)? {
                 TypeTag::Struct(s_tag) => s_tag,
                 _ =>
@@ -276,11 +277,17 @@ impl<'r> TransactionDataCache<'r> {
                 None => GlobalValue::none(),
             };
 
+            let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
+                (addr, AccountDataCache::new())
+            });
             account_cache
                 .data_map
                 .insert(ty.clone(), (ty_layout, gv, has_aggregator_lifting));
         }
 
+        let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
+            (addr, AccountDataCache::new())
+        });
         Ok((
             account_cache
                 .data_map

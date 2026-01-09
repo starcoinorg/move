@@ -98,10 +98,13 @@ impl<'r, 'l> Session<'r, 'l> {
             )));
         }
         if let Some(module_id) = func.module_id() {
+            let arena_id = traversal_context
+                .referenced_module_ids
+                .alloc(module_id);
             self.check_dependencies_and_charge_gas(
                 gas_meter,
                 traversal_context,
-                [(module_id.address(), module_id.name())],
+                [(arena_id.address(), arena_id.name())],
             )?;
         }
 
@@ -127,10 +130,13 @@ impl<'r, 'l> Session<'r, 'l> {
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
     ) -> VMResult<SerializedReturnValues> {
+        let arena_id = traversal_context
+            .referenced_module_ids
+            .alloc(module.clone());
         self.check_dependencies_and_charge_gas(
             gas_meter,
             traversal_context,
-            [(module.address(), module.name())],
+            [(arena_id.address(), arena_id.name())],
         )?;
         let func = self.move_vm.runtime.loader().load_function(
             module,
@@ -159,10 +165,13 @@ impl<'r, 'l> Session<'r, 'l> {
         traversal_context: &mut TraversalContext,
     ) -> VMResult<SerializedReturnValues> {
         if let Some(module_id) = func.module_id() {
+            let arena_id = traversal_context
+                .referenced_module_ids
+                .alloc(module_id);
             self.check_dependencies_and_charge_gas(
                 gas_meter,
                 traversal_context,
-                [(module_id.address(), module_id.name())],
+                [(arena_id.address(), arena_id.name())],
             )?;
         }
         self.move_vm.runtime.execute_function_instantiation(
@@ -477,10 +486,13 @@ impl<'r, 'l> Session<'r, 'l> {
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
     ) -> VMResult<LoadedFunction> {
+        let arena_id = traversal_context
+            .referenced_module_ids
+            .alloc(module_id.clone());
         self.check_dependencies_and_charge_gas(
             gas_meter,
             traversal_context,
-            [(module_id.address(), module_id.name())],
+            [(arena_id.address(), arena_id.name())],
         )?;
         self.load_function(module_id, function_name, ty_args)
     }
@@ -502,12 +514,17 @@ impl<'r, 'l> Session<'r, 'l> {
         let mut module_ids = Vec::new();
         Self::collect_type_tag_module_ids(type_tag, &mut module_ids);
         if !module_ids.is_empty() {
+            let mut ids = Vec::with_capacity(module_ids.len());
+            for module_id in module_ids {
+                let arena_id = traversal_context
+                    .referenced_module_ids
+                    .alloc(module_id);
+                ids.push((arena_id.address(), arena_id.name()));
+            }
             self.check_dependencies_and_charge_gas(
                 gas_meter,
                 traversal_context,
-                module_ids
-                    .iter()
-                    .map(|module_id| (module_id.address(), module_id.name())),
+                ids,
             )?;
         }
         self.load_type(type_tag)

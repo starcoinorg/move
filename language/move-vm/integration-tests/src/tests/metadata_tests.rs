@@ -73,15 +73,15 @@ fn metadata_is_forwarded_for_resource_reads() {
     let addr = AccountAddress::new([9; AccountAddress::LENGTH]);
     let code = format!(
         r#"
-        module 0x{}::M {{
+        module {}::M {{
             struct R has key {{ }}
 
-            public fun has(addr: address): bool acquires R {{
+            public fun has(addr: address): bool {{
                 exists<R>(addr)
             }}
         }}
     "#,
-        addr.to_hex(),
+        addr.to_hex_literal(),
     );
 
     let mut module = compile_module(&code);

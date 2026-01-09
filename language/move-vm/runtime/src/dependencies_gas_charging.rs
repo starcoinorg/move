@@ -6,6 +6,7 @@ use crate::{
     module_traversal::TraversalContext,
 };
 use move_binary_format::{
+    access::ModuleAccess,
     errors::{Location, VMResult},
     CompiledModule,
 };

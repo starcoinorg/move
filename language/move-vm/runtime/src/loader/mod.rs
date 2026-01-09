@@ -44,7 +44,6 @@ use std::{
     hash::Hash,
     sync::Arc,
 };
-use typed_arena::Arena;
 
 mod access_specifier_loader;
 mod function;
@@ -1725,9 +1724,13 @@ impl Loader {
         gas_meter: &mut M,
         traversal_context: &mut TraversalContext<'a>,
     ) -> PartialVMResult<()> {
-        let ids = dependencies
-            .iter()
-            .map(|module_id| (module_id.address(), module_id.name()));
+        let mut ids = Vec::with_capacity(dependencies.len());
+        for module_id in dependencies {
+            let arena_id = traversal_context
+                .referenced_module_ids
+                .alloc(module_id.clone());
+            ids.push((arena_id.address(), arena_id.name()));
+        }
         self.check_dependencies_and_charge_gas_non_recursive_optional(
             module_store,
             data_store,
@@ -2378,16 +2381,18 @@ impl Loader {
                 )?;
                 (MoveTypeLayout::Vector(Box::new(layout)), deps)
             },
-            Type::Struct { idx, .. } => self.struct_name_to_fully_annotated_layout_with_metering(
-                *idx,
-                module_store,
-                data_store,
-                gas_meter,
-                traversal_context,
-                &[],
-                count,
-                depth + 1,
-            ),
+            Type::Struct { idx, .. } => {
+                self.struct_name_to_fully_annotated_layout_with_metering(
+                    *idx,
+                    module_store,
+                    data_store,
+                    gas_meter,
+                    traversal_context,
+                    &[],
+                    count,
+                    depth + 1,
+                )?
+            },
             Type::StructInstantiation { idx, ty_args, .. } => {
                 self.struct_name_to_fully_annotated_layout_with_metering(
                     *idx,
@@ -2398,7 +2403,7 @@ impl Loader {
                     ty_args,
                     count,
                     depth + 1,
-                )
+                )?
             },
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
@@ -2665,12 +2670,15 @@ impl ModuleMetadataLoader for Loader {
         gas_meter: &mut M,
         traversal_context: &mut TraversalContext<'a>,
     ) -> VMResult<Vec<Metadata>> {
+        let arena_id = traversal_context
+            .referenced_module_ids
+            .alloc(module_id.clone());
         self.check_dependencies_and_charge_gas_non_recursive_optional(
             module_store,
             data_store,
             gas_meter,
             traversal_context,
-            [(module_id.address(), module_id.name())],
+            [(arena_id.address(), arena_id.name())],
         )?;
 
         if let Some(module) = module_store.module_at(module_id) {
