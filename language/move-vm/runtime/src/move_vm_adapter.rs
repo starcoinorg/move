@@ -80,8 +80,8 @@ impl<'r, 'l> SessionAdapter<'r, 'l> {
             data_store.publish_module(&module.self_id(), blob, republish)?;
         }
         if clean_cache {
-            self.session.move_vm.runtime.loader.mark_as_invalid();
-            self.session.move_vm.runtime.loader.flush_if_invalidated();
+            self.session.move_vm.runtime.loader().mark_as_invalid();
+            self.session.move_vm.runtime.loader().flush_if_invalidated();
         }
         Ok(())
     }
@@ -179,7 +179,7 @@ impl<'r, 'l> SessionAdapter<'r, 'l> {
         // Perform bytecode and loading verification. Modules must be sorted in topological order.
         let data_store = &mut self.session.data_cache;
 
-        vm.runtime.loader.verify_module_bundle_for_publication(
+        vm.runtime.loader().verify_module_bundle_for_publication(
             &compiled_modules,
             data_store,
             &self.session.module_store,
@@ -240,11 +240,15 @@ impl<'r, 'l> SessionAdapter<'r, 'l> {
 
     /// Clear vm runtimer loader's cache to reload new modules from state cache
     pub fn empty_loader_cache(&self) -> VMResult<()> {
-        self.session.get_move_vm().runtime.loader.mark_as_invalid();
         self.session
             .get_move_vm()
             .runtime
-            .loader
+            .loader()
+            .mark_as_invalid();
+        self.session
+            .get_move_vm()
+            .runtime
+            .loader()
             .flush_if_invalidated();
         Ok(())
     }

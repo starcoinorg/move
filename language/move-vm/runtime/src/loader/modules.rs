@@ -9,6 +9,7 @@ use crate::{
         type_loader::intern_type,
         BinaryCache,
     },
+    module_storage_v2::{ModuleBytes, ModuleCode, ModuleStorageV2},
     native_functions::NativeFunctions,
 };
 use move_binary_format::{
@@ -183,6 +184,53 @@ impl ModuleStorageAdapter {
                         )
                     })
             },
+        }
+    }
+}
+
+impl ModuleStorageV2 for ModuleStorageAdapter {
+    fn module_bytes(&self, module_id: &ModuleId) -> PartialVMResult<Option<ModuleBytes>> {
+        let module = match self.module_at(module_id) {
+            Some(module) => module,
+            None => return Ok(None),
+        };
+        let mut bytes = vec![];
+        module
+            .module
+            .serialize(&mut bytes)
+            .map_err(|err| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Failed to serialize module {}: {:?}", module_id, err),
+                )
+            })?;
+        Ok(Some(ModuleBytes {
+            bytes: bytes.into(),
+            size: module.size,
+        }))
+    }
+
+    fn deserialized_module(
+        &mut self,
+        module_id: &ModuleId,
+    ) -> PartialVMResult<Option<ModuleCode>> {
+        match self.module_at(module_id) {
+            Some(module) => Ok(Some(ModuleCode {
+                module: module.module.clone(),
+                size: module.size,
+                hash: None,
+            })),
+            None => Ok(None),
+        }
+    }
+
+    fn verified_module(&self, module_id: &ModuleId) -> PartialVMResult<Option<ModuleCode>> {
+        match self.module_at(module_id) {
+            Some(module) => Ok(Some(ModuleCode {
+                module: module.module.clone(),
+                size: module.size,
+                hash: None,
+            })),
+            None => Ok(None),
         }
     }
 }

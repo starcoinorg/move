@@ -5,6 +5,7 @@
 use crate::{
     loader::{Loader, ModuleMetadataLoader, ModuleStorageAdapter},
     logging::expect_no_verification_errors,
+    module_storage_v2::{ModuleBytes, ModuleCode, ModuleStorageV2},
     module_traversal::{TraversalContext, TraversalStorage},
 };
 use bytes::Bytes;
@@ -420,5 +421,34 @@ impl<'r> TransactionDataCache<'r> {
             .get_module(module_id)
             .map_err(|e| e.finish(Location::Undefined))?
             .is_some())
+    }
+}
+
+impl<'r> ModuleStorageV2 for TransactionDataCache<'r> {
+    fn module_bytes(&self, module_id: &ModuleId) -> PartialVMResult<Option<ModuleBytes>> {
+        match self.load_module(module_id) {
+            Ok(bytes) => Ok(Some(ModuleBytes::new(bytes))),
+            Err(err) if err.major_status() == StatusCode::LINKER_ERROR => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn deserialized_module(
+        &mut self,
+        module_id: &ModuleId,
+    ) -> PartialVMResult<Option<ModuleCode>> {
+        match self.load_compiled_module_to_cache(module_id.clone(), true) {
+            Ok((module, size, hash)) => Ok(Some(ModuleCode {
+                module,
+                size,
+                hash: Some(hash),
+            })),
+            Err(err) if err.major_status() == StatusCode::LINKER_ERROR => Ok(None),
+            Err(err) => Err(err.to_partial()),
+        }
+    }
+
+    fn verified_module(&self, _module_id: &ModuleId) -> PartialVMResult<Option<ModuleCode>> {
+        Ok(None)
     }
 }

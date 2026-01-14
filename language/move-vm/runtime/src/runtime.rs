@@ -6,10 +6,11 @@ use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
     interpreter::Interpreter,
-    loader::{LoadedFunction, Loader, ModuleCache, ModuleStorage, ModuleStorageAdapter},
+    loader::{LoadedFunction, Loader, ModuleStorage, ModuleStorageAdapter},
     module_traversal::TraversalContext,
     native_extensions::NativeContextExtensions,
-    native_functions::{NativeFunction, NativeFunctions},
+    native_functions::NativeFunction,
+    runtime_environment::{RuntimeEnvironment, WithRuntimeEnvironment},
     session::SerializedReturnValues,
 };
 use move_binary_format::{
@@ -32,15 +33,13 @@ use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
 
 /// An instantiation of the MoveVM.
 pub(crate) struct VMRuntime {
-    pub(crate) loader: Loader,
-    pub(crate) module_cache: Arc<ModuleCache>,
+    environment: Arc<RuntimeEnvironment>,
 }
 
 impl Clone for VMRuntime {
     fn clone(&self) -> Self {
         Self {
-            loader: self.loader.clone(),
-            module_cache: Arc::new(ModuleCache::clone(&self.module_cache)),
+            environment: Arc::clone(&self.environment),
         }
     }
 }
@@ -51,9 +50,12 @@ impl VMRuntime {
         vm_config: VMConfig,
     ) -> PartialVMResult<Self> {
         Ok(VMRuntime {
-            loader: Loader::new(NativeFunctions::new(natives)?, vm_config),
-            module_cache: Arc::new(ModuleCache::new()),
+            environment: Arc::new(RuntimeEnvironment::new(natives, vm_config)?),
         })
+    }
+
+    pub(crate) fn new_with_runtime_environment(environment: Arc<RuntimeEnvironment>) -> Self {
+        Self { environment }
     }
 
     pub(crate) fn publish_module_bundle(
@@ -72,7 +74,7 @@ impl VMRuntime {
             .map(|blob| {
                 CompiledModule::deserialize_with_config(
                     blob,
-                    &self.loader.vm_config().deserializer_config,
+                    &self.loader().vm_config().deserializer_config,
                 )
             })
             .collect::<PartialVMResult<Vec<_>>>()
@@ -115,7 +117,7 @@ impl VMRuntime {
 
             if data_store.exists_module(&module_id)? && compat.need_check_compat() {
                 let old_module_ref =
-                    self.loader
+                    self.loader()
                         .load_module(&module_id, data_store, module_store)?;
                 let old_module = old_module_ref.module();
                 let old_m = normalized::Module::new(old_module);
@@ -131,7 +133,7 @@ impl VMRuntime {
         }
 
         // Perform bytecode and loading verification. Modules must be sorted in topological order.
-        self.loader.verify_module_bundle_for_publication(
+        self.loader().verify_module_bundle_for_publication(
             &compiled_modules,
             data_store,
             module_store,
@@ -196,7 +198,7 @@ impl VMRuntime {
             if is_republishing {
                 // This is an upgrade, so invalidate the loader cache, which still contains the
                 // old module.
-                self.loader.mark_as_invalid();
+                self.loader().mark_as_invalid();
             }
             data_store.publish_module(&module.self_id(), blob, is_republishing)?;
         }
@@ -210,7 +212,7 @@ impl VMRuntime {
         arg: impl Borrow<[u8]>,
     ) -> PartialVMResult<Value> {
         let (layout, has_identifier_mappings) = match self
-            .loader
+            .loader()
             .type_to_type_layout_with_identifier_mappings(ty, module_store)
         {
             Ok(layout) => layout,
@@ -271,7 +273,7 @@ impl VMRuntime {
                     dummy_locals.store_loc(
                         idx,
                         self.deserialize_arg(module_store, inner_t, arg_bytes)?,
-                        self.loader.vm_config().check_invariant_in_swap_loc,
+                        self.loader().vm_config().check_invariant_in_swap_loc,
                     )?;
                     dummy_locals.borrow_loc(idx)
                 }
@@ -297,7 +299,7 @@ impl VMRuntime {
         };
 
         let (layout, has_identifier_mappings) = self
-            .loader
+            .loader()
             .type_to_type_layout_with_identifier_mappings(ty, module_store)
             .map_err(|_err| {
                 // TODO: Should we use `err` instead of mapping?
@@ -393,7 +395,7 @@ impl VMRuntime {
             gas_meter,
             traversal_context,
             extensions,
-            &self.loader,
+            self.loader(),
         )?;
 
         let serialized_return_values = self
@@ -404,7 +406,7 @@ impl VMRuntime {
             .map(|(idx, ty)| {
                 // serialize return values first in the case that a value points into this local
                 let local_val = dummy_locals
-                    .move_loc(idx, self.loader.vm_config().check_invariant_in_swap_loc)?;
+                    .move_loc(idx, self.loader().vm_config().check_invariant_in_swap_loc)?;
                 let (bytes, layout) = self.serialize_return_value(module_store, &ty, local_val)?;
                 Ok((idx as LocalIndex, bytes, layout))
             })
@@ -453,7 +455,7 @@ impl VMRuntime {
         extensions: &mut NativeContextExtensions,
     ) -> VMResult<()> {
         let script = script.borrow();
-        self.loader.check_script_dependencies_and_check_gas(
+        self.loader().check_script_dependencies_and_check_gas(
             module_store,
             data_store,
             gas_meter,
@@ -462,7 +464,7 @@ impl VMRuntime {
         )?;
         // Load the script first, verify it, and then execute the entry-point main function.
         let main = self
-            .loader
+            .loader()
             .load_script(script, &ty_args, data_store, module_store)?;
         self.execute_function_impl(
             main,
@@ -477,10 +479,20 @@ impl VMRuntime {
     }
 
     pub(crate) fn loader(&self) -> &Loader {
-        &self.loader
+        self.environment.loader()
     }
 
     pub(crate) fn module_storage(&self) -> Arc<dyn ModuleStorage> {
-        self.module_cache.clone() as Arc<dyn ModuleStorage>
+        self.environment.module_storage()
+    }
+
+    pub(crate) fn module_cache(&self) -> &Arc<crate::loader::ModuleCache> {
+        self.environment.module_cache()
+    }
+}
+
+impl WithRuntimeEnvironment for VMRuntime {
+    fn runtime_environment(&self) -> &RuntimeEnvironment {
+        &self.environment
     }
 }

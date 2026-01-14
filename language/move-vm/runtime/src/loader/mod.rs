@@ -165,7 +165,7 @@ impl StructNameCache {
 pub(crate) struct Loader {
     scripts: RwLock<ScriptCache>,
     type_cache: RwLock<TypeCache>,
-    natives: NativeFunctions,
+    natives: RwLock<NativeFunctions>,
     pub(crate) name_cache: StructNameCache,
 
     // The below field supports a hack to workaround well-known issues with the
@@ -217,7 +217,7 @@ impl Clone for Loader {
         Self {
             scripts: RwLock::new(self.scripts.read().clone()),
             type_cache: RwLock::new(self.type_cache.read().clone()),
-            natives: self.natives.clone(),
+            natives: RwLock::new(self.natives.read().clone()),
             name_cache: self.name_cache.clone(),
             invalidated: RwLock::new(*self.invalidated.read()),
             module_cache_hits: RwLock::new(self.module_cache_hits.read().clone()),
@@ -232,7 +232,7 @@ impl Loader {
             scripts: RwLock::new(ScriptCache::new()),
             type_cache: RwLock::new(TypeCache::new()),
             name_cache: StructNameCache::new(),
-            natives,
+            natives: RwLock::new(natives),
             invalidated: RwLock::new(false),
             module_cache_hits: RwLock::new(BTreeSet::new()),
             vm_config,
@@ -932,8 +932,9 @@ impl Loader {
         )?;
 
         // if linking goes well, insert the module to the code cache
+        let natives = self.natives.read();
         let module_ref =
-            module_store.insert(&self.natives, id.clone(), size, module, &self.name_cache)?;
+            module_store.insert(&natives, id.clone(), size, module, &self.name_cache)?;
 
         Ok(module_ref)
     }
@@ -2653,10 +2654,10 @@ impl Loader {
     }
 
     pub(crate) fn update_native_functions(
-        &mut self,
+        &self,
         natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
     ) -> PartialVMResult<()> {
-        self.natives = NativeFunctions::new(natives)?;
+        *self.natives.write() = NativeFunctions::new(natives)?;
         Ok(())
     }
 }

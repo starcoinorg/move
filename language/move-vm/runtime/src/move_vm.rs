@@ -9,6 +9,7 @@ use crate::{
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunction,
     runtime::VMRuntime,
+    runtime_environment::{RuntimeEnvironment, WithRuntimeEnvironment},
     session::Session,
 };
 use move_binary_format::{
@@ -41,6 +42,12 @@ impl MoveVM {
             runtime: VMRuntime::new(natives, vm_config)
                 .map_err(|err| err.finish(Location::Undefined))?,
         })
+    }
+
+    pub fn new_with_runtime_environment(environment: Arc<RuntimeEnvironment>) -> Self {
+        Self {
+            runtime: VMRuntime::new_with_runtime_environment(environment),
+        }
     }
 
     /// Returns VM configuration used to initialize the VM.
@@ -160,7 +167,7 @@ impl MoveVM {
         // - If we can deprecate this session api, we will be able to get rid of this internal loaded cache and make the MoveVM "stateless" and
         //   invulnerable to module invalidation.
         if self.runtime.loader().is_invalidated() {
-            self.runtime.module_cache.flush();
+            self.runtime.module_cache().flush();
         };
         self.runtime.loader().flush_if_invalidated()
     }
@@ -184,7 +191,7 @@ impl MoveVM {
     {
         f(&self
             .runtime
-            .module_cache
+            .module_cache()
             .fetch_module(module)?
             .module()
             .metadata)
@@ -194,6 +201,12 @@ impl MoveVM {
         &mut self,
         natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
     ) -> PartialVMResult<()> {
-        self.runtime.loader.update_native_functions(natives)
+        self.runtime.loader().update_native_functions(natives)
+    }
+}
+
+impl WithRuntimeEnvironment for MoveVM {
+    fn runtime_environment(&self) -> &RuntimeEnvironment {
+        self.runtime.runtime_environment()
     }
 }
