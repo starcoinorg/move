@@ -9,7 +9,7 @@ use crate::{
         type_loader::intern_type,
         BinaryCache,
     },
-    module_storage_v2::{ModuleBytes, ModuleCode, ModuleStorageV2},
+    module_storage_v2::{ModuleBytes, ModuleCode, ModuleCodeBuilder, ModuleStorageV2},
     native_functions::NativeFunctions,
 };
 use move_binary_format::{
@@ -213,25 +213,15 @@ impl ModuleStorageV2 for ModuleStorageAdapter {
         &mut self,
         module_id: &ModuleId,
     ) -> PartialVMResult<Option<ModuleCode>> {
-        match self.module_at(module_id) {
-            Some(module) => Ok(Some(ModuleCode {
-                module: module.module.clone(),
-                size: module.size,
-                hash: None,
-            })),
-            None => Ok(None),
-        }
+        Ok(self.module_at(module_id).map(|module| {
+            ModuleCodeBuilder::deserialized(module.module.clone(), module.size).build()
+        }))
     }
 
     fn verified_module(&self, module_id: &ModuleId) -> PartialVMResult<Option<ModuleCode>> {
-        match self.module_at(module_id) {
-            Some(module) => Ok(Some(ModuleCode {
-                module: module.module.clone(),
-                size: module.size,
-                hash: None,
-            })),
-            None => Ok(None),
-        }
+        Ok(self.module_at(module_id).map(|module| {
+            ModuleCodeBuilder::verified(module.module.clone(), module.size).build()
+        }))
     }
 }
 

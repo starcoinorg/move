@@ -5,7 +5,7 @@
 use crate::{
     loader::{Loader, ModuleMetadataLoader, ModuleStorageAdapter},
     logging::expect_no_verification_errors,
-    module_storage_v2::{ModuleBytes, ModuleCode, ModuleStorageV2},
+    module_storage_v2::{ModuleBytes, ModuleCode, ModuleCodeBuilder, ModuleStorageV2},
     module_traversal::{TraversalContext, TraversalStorage},
 };
 use bytes::Bytes;
@@ -438,11 +438,11 @@ impl<'r> ModuleStorageV2 for TransactionDataCache<'r> {
         module_id: &ModuleId,
     ) -> PartialVMResult<Option<ModuleCode>> {
         match self.load_compiled_module_to_cache(module_id.clone(), true) {
-            Ok((module, size, hash)) => Ok(Some(ModuleCode {
-                module,
-                size,
-                hash: Some(hash),
-            })),
+            Ok((module, size, hash)) => Ok(Some(
+                ModuleCodeBuilder::deserialized(module, size)
+                    .with_hash(hash)
+                    .build(),
+            )),
             Err(err) if err.major_status() == StatusCode::LINKER_ERROR => Ok(None),
             Err(err) => Err(err.to_partial()),
         }

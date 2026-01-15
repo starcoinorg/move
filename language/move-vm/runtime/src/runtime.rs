@@ -7,6 +7,7 @@ use crate::{
     data_cache::TransactionDataCache,
     interpreter::Interpreter,
     loader::{LoadedFunction, Loader, ModuleStorage, ModuleStorageAdapter},
+    loader_v2::{LoaderV2, ScriptLoader},
     module_traversal::TraversalContext,
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunction,
@@ -463,9 +464,8 @@ impl VMRuntime {
             script,
         )?;
         // Load the script first, verify it, and then execute the entry-point main function.
-        let main = self
-            .loader()
-            .load_script(script, &ty_args, data_store, module_store)?;
+        let loader_v2 = LoaderV2::new(self.loader());
+        let main = loader_v2.load_script(script, &ty_args, data_store, module_store)?;
         self.execute_function_impl(
             main,
             serialized_args,

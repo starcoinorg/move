@@ -6,6 +6,7 @@ use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
     loader::{LoadedFunction, ModuleStorageAdapter},
+    loader_v2::{InstantiatedFunctionLoader, LoaderV2, ScriptLoader},
     module_traversal::TraversalContext,
     move_vm::MoveVM,
     native_extensions::NativeContextExtensions,
@@ -138,7 +139,8 @@ impl<'r, 'l> Session<'r, 'l> {
             traversal_context,
             [(arena_id.address(), arena_id.name())],
         )?;
-        let func = self.move_vm.runtime.loader().load_function(
+        let loader_v2 = LoaderV2::new(self.move_vm.runtime.loader());
+        let func = loader_v2.load_instantiated_function(
             module,
             function_name,
             &ty_args,
@@ -418,7 +420,8 @@ impl<'r, 'l> Session<'r, 'l> {
         script: impl Borrow<[u8]>,
         ty_args: &[TypeTag],
     ) -> VMResult<LoadedFunction> {
-        self.move_vm.runtime.loader().load_script(
+        let loader_v2 = LoaderV2::new(self.move_vm.runtime.loader());
+        loader_v2.load_script(
             script.borrow(),
             ty_args,
             &mut self.data_cache,
@@ -468,7 +471,8 @@ impl<'r, 'l> Session<'r, 'l> {
         function_name: &IdentStr,
         ty_args: &[TypeTag],
     ) -> VMResult<LoadedFunction> {
-        self.move_vm.runtime.loader().load_function(
+        let loader_v2 = LoaderV2::new(self.move_vm.runtime.loader());
+        loader_v2.load_instantiated_function(
             module_id,
             function_name,
             ty_args,
