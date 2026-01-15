@@ -55,12 +55,12 @@
 - Entry: Phase 2 done; metering + caches validated under eager flow.
 - Done: RuntimeEnvironment owns shared caches; ModuleStorage v2 exists; loader-v2 traits and
   Eager/Lazy loaders are wired behind feature flags; loader-v1 remains the default path.
-- [ ] Introduce `RuntimeEnvironment` + `WithRuntimeEnvironment` to centralize VM config and shared
-      caches (type pool, module cache, script cache, layout cache) across sessions. (M3)
+- [~] Introduce `RuntimeEnvironment` + `WithRuntimeEnvironment` to centralize VM config and shared
+      caches (type pool, module cache, script cache, layout cache) across sessions. (M3, partial: env + module cache only)
 - [ ] Rework loader cache ownership to live in the runtime environment and remove the current
       invalidation workaround in `loader/mod.rs`. (M3)
-- [ ] Implement `ModuleStorage` v2 abstraction (unmetered access to bytes/size/deserialized/
-      verified modules) and adapt `TransactionDataCache` + `ModuleStorageAdapter` to implement it. (M3)
+- [~] Implement `ModuleStorage` v2 abstraction (unmetered access to bytes/size/deserialized/
+      verified modules) and adapt `TransactionDataCache` + `ModuleStorageAdapter` to implement it. (M3, partial: trait + adapters only)
 - [ ] Add module code/cache builders to support verified/deserialized states and versioning. (M3)
 - [ ] Implement loader v2 traits (`StructDefinitionLoader`, `FunctionDefinitionLoader`,
       `ModuleMetadataLoader`, `NativeModuleLoader`, `ScriptLoader`, `InstantiatedFunctionLoader`)
