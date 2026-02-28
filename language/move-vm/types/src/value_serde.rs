@@ -338,7 +338,7 @@ impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> CustomDeserializer
 pub fn deserialize_and_replace_values_with_ids<I: From<u64> + ExtractWidth + ExtractUniqueIndex>(
     bytes: &[u8],
     layout: &MoveTypeLayout,
-    mapping: &impl ValueToIdentifierMapping<Identifier = I>,
+    mapping: &dyn ValueToIdentifierMapping<Identifier = I>,
 ) -> Option<Value> {
     let custom_deserializer = CustomSerDeWithExchange::new(mapping);
     let seed = DeserializationSeed {
@@ -355,7 +355,7 @@ pub fn deserialize_and_replace_values_with_ids<I: From<u64> + ExtractWidth + Ext
 pub fn serialize_and_replace_ids_with_values<I: From<u64> + ExtractWidth + ExtractUniqueIndex>(
     value: &Value,
     layout: &MoveTypeLayout,
-    mapping: &impl ValueToIdentifierMapping<Identifier = I>,
+    mapping: &dyn ValueToIdentifierMapping<Identifier = I>,
 ) -> Option<Vec<u8>> {
     let custom_serializer = CustomSerDeWithExchange::new(mapping);
     let value = SerializationReadyValue {
