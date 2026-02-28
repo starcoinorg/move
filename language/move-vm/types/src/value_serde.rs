@@ -22,7 +22,7 @@ use std::cell::RefCell;
 /// An extension to (de)serialize information about function values.
 ///
 /// Starcoin's current Move revision does not serialize function values yet, but this trait and the
-/// context method are kept to align call sites with Aptos style APIs.
+/// context method are kept to align call sites with the unified serde APIs.
 pub trait FunctionValueExtension {
     fn max_value_nest_depth(&self) -> Option<u64>;
 }
@@ -186,7 +186,7 @@ enum DelayedFieldsMode<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> {
     Replacement(&'a dyn ValueToIdentifierMapping<Identifier = I>),
 }
 
-/// Aptos-style serde context that keeps delayed-field behavior explicit at call sites.
+/// Serde context that keeps delayed-field behavior explicit at call sites.
 pub struct ValueSerDeContext<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex = DelayedFieldID>
 {
     delayed_fields_mode: DelayedFieldsMode<'a, I>,
@@ -202,7 +202,7 @@ impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> ValueSerDeContext<'a,
         }
     }
 
-    /// Keep API compatibility with Aptos-style call chains.
+    /// Keep API compatibility with the serde context call chains.
     pub fn with_func_args_deserialization(
         mut self,
         extension: &'a dyn FunctionValueExtension,
