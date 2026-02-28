@@ -19,6 +19,14 @@ use serde::{
 };
 use std::cell::RefCell;
 
+/// An extension to (de)serialize information about function values.
+///
+/// Starcoin's current Move revision does not serialize function values yet, but this trait and the
+/// context method are kept to align call sites with Aptos style APIs.
+pub trait FunctionValueExtension {
+    fn max_value_nest_depth(&self) -> Option<u64>;
+}
+
 pub trait CustomDeserializer {
     fn custom_deserialize<'d, D: Deserializer<'d>>(
         &self,
@@ -170,6 +178,91 @@ pub trait ValueToIdentifierMapping {
         layout: &MoveTypeLayout,
         identifier: Self::Identifier,
     ) -> PartialVMResult<Value>;
+}
+
+enum DelayedFieldsMode<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> {
+    Disabled,
+    Serde,
+    Replacement(&'a dyn ValueToIdentifierMapping<Identifier = I>),
+}
+
+/// Aptos-style serde context that keeps delayed-field behavior explicit at call sites.
+pub struct ValueSerDeContext<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex = DelayedFieldID>
+{
+    delayed_fields_mode: DelayedFieldsMode<'a, I>,
+    max_value_nested_depth: Option<u64>,
+}
+
+impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> ValueSerDeContext<'a, I> {
+    /// Default (de)serializer that disallows delayed fields.
+    pub fn new(max_value_nested_depth: Option<u64>) -> Self {
+        Self {
+            delayed_fields_mode: DelayedFieldsMode::Disabled,
+            max_value_nested_depth,
+        }
+    }
+
+    /// Keep API compatibility with Aptos-style call chains.
+    pub fn with_func_args_deserialization(
+        mut self,
+        extension: &'a dyn FunctionValueExtension,
+    ) -> Self {
+        if self.max_value_nested_depth.is_none() {
+            self.max_value_nested_depth = extension.max_value_nest_depth();
+        }
+        self
+    }
+
+    /// Allow delayed values to be (de)serialized as delayed ids.
+    pub fn with_delayed_fields_serde(mut self) -> Self {
+        self.delayed_fields_mode = DelayedFieldsMode::Serde;
+        self
+    }
+
+    /// Replace delayed ids with values on serialization, and values with delayed ids on
+    /// deserialization.
+    pub fn with_delayed_fields_replacement(
+        mut self,
+        mapping: &'a dyn ValueToIdentifierMapping<Identifier = I>,
+    ) -> Self {
+        self.delayed_fields_mode = DelayedFieldsMode::Replacement(mapping);
+        self
+    }
+
+    pub fn serialize(self, value: &Value, layout: &MoveTypeLayout) -> PartialVMResult<Option<Vec<u8>>> {
+        let _ = self.max_value_nested_depth;
+        match self.delayed_fields_mode {
+            DelayedFieldsMode::Disabled => {
+                let ready = SerializationReadyValue {
+                    custom_serializer: None::<&RelaxedCustomSerDe>,
+                    layout,
+                    value: &value.0,
+                };
+                Ok(bcs::to_bytes(&ready).ok())
+            }
+            DelayedFieldsMode::Serde => serialize_and_allow_delayed_values(value, layout),
+            DelayedFieldsMode::Replacement(mapping) => {
+                Ok(serialize_and_replace_ids_with_values(value, layout, mapping))
+            }
+        }
+    }
+
+    pub fn deserialize(self, bytes: &[u8], layout: &MoveTypeLayout) -> Option<Value> {
+        let _ = self.max_value_nested_depth;
+        match self.delayed_fields_mode {
+            DelayedFieldsMode::Disabled => {
+                let seed = DeserializationSeed {
+                    custom_deserializer: None::<&RelaxedCustomSerDe>,
+                    layout,
+                };
+                bcs::from_bytes_seed(seed, bytes).ok()
+            }
+            DelayedFieldsMode::Serde => deserialize_and_allow_delayed_values(bytes, layout),
+            DelayedFieldsMode::Replacement(mapping) => {
+                deserialize_and_replace_values_with_ids(bytes, layout, mapping)
+            }
+        }
+    }
 }
 
 /// Custom (de)serializer such that:
