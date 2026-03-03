@@ -112,6 +112,8 @@ impl CustomSerializer for RelaxedCustomSerDe {
             custom_serializer: None::<&RelaxedCustomSerDe>,
             layout,
             value: &value.0,
+            max_value_nest_depth: None,
+            depth: 1,
         }
         .serialize(serializer)
     }
@@ -137,11 +139,21 @@ pub fn serialize_and_allow_delayed_values(
     value: &Value,
     layout: &MoveTypeLayout,
 ) -> PartialVMResult<Option<Vec<u8>>> {
+    serialize_and_allow_delayed_values_with_limit(value, layout, None)
+}
+
+fn serialize_and_allow_delayed_values_with_limit(
+    value: &Value,
+    layout: &MoveTypeLayout,
+    max_value_nest_depth: Option<u64>,
+) -> PartialVMResult<Option<Vec<u8>>> {
     let native_serializer = RelaxedCustomSerDe::new();
     let value = SerializationReadyValue {
         custom_serializer: Some(&native_serializer),
         layout,
         value: &value.0,
+        max_value_nest_depth,
+        depth: 1,
     };
     bcs::to_bytes(&value)
         .ok()
@@ -180,16 +192,18 @@ pub trait ValueToIdentifierMapping {
     ) -> PartialVMResult<Value>;
 }
 
-enum DelayedFieldsMode<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> {
-    Disabled,
-    Serde,
-    Replacement(&'a dyn ValueToIdentifierMapping<Identifier = I>),
+/// Aptos-style delayed fields extension:
+/// - `None`: delayed fields are disabled.
+/// - `Some { mapping: None }`: delayed values are (de)serialized as ids.
+/// - `Some { mapping: Some(..) }`: delayed ids are exchanged with values.
+struct DelayedFieldsExtension<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> {
+    mapping: Option<&'a dyn ValueToIdentifierMapping<Identifier = I>>,
 }
 
 /// Serde context that keeps delayed-field behavior explicit at call sites.
 pub struct ValueSerDeContext<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex = DelayedFieldID>
 {
-    delayed_fields_mode: DelayedFieldsMode<'a, I>,
+    delayed_fields_extension: Option<DelayedFieldsExtension<'a, I>>,
     max_value_nested_depth: Option<u64>,
 }
 
@@ -197,7 +211,7 @@ impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> ValueSerDeContext<'a,
     /// Default (de)serializer that disallows delayed fields.
     pub fn new(max_value_nested_depth: Option<u64>) -> Self {
         Self {
-            delayed_fields_mode: DelayedFieldsMode::Disabled,
+            delayed_fields_extension: None,
             max_value_nested_depth,
         }
     }
@@ -215,7 +229,7 @@ impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> ValueSerDeContext<'a,
 
     /// Allow delayed values to be (de)serialized as delayed ids.
     pub fn with_delayed_fields_serde(mut self) -> Self {
-        self.delayed_fields_mode = DelayedFieldsMode::Serde;
+        self.delayed_fields_extension = Some(DelayedFieldsExtension { mapping: None });
         self
     }
 
@@ -225,42 +239,62 @@ impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> ValueSerDeContext<'a,
         mut self,
         mapping: &'a dyn ValueToIdentifierMapping<Identifier = I>,
     ) -> Self {
-        self.delayed_fields_mode = DelayedFieldsMode::Replacement(mapping);
+        self.delayed_fields_extension = Some(DelayedFieldsExtension {
+            mapping: Some(mapping),
+        });
         self
     }
 
-    pub fn serialize(self, value: &Value, layout: &MoveTypeLayout) -> PartialVMResult<Option<Vec<u8>>> {
-        let _ = self.max_value_nested_depth;
-        match self.delayed_fields_mode {
-            DelayedFieldsMode::Disabled => {
+    pub fn serialize(
+        self,
+        value: &Value,
+        layout: &MoveTypeLayout,
+    ) -> PartialVMResult<Option<Vec<u8>>> {
+        match self.delayed_fields_extension {
+            None => {
                 let ready = SerializationReadyValue {
                     custom_serializer: None::<&RelaxedCustomSerDe>,
                     layout,
                     value: &value.0,
+                    max_value_nest_depth: self.max_value_nested_depth,
+                    depth: 1,
                 };
                 Ok(bcs::to_bytes(&ready).ok())
             }
-            DelayedFieldsMode::Serde => serialize_and_allow_delayed_values(value, layout),
-            DelayedFieldsMode::Replacement(mapping) => {
-                Ok(serialize_and_replace_ids_with_values(value, layout, mapping))
+            Some(DelayedFieldsExtension { mapping: None }) => {
+                serialize_and_allow_delayed_values_with_limit(
+                    value,
+                    layout,
+                    self.max_value_nested_depth,
+                )
             }
+            Some(DelayedFieldsExtension {
+                mapping: Some(mapping),
+            }) => Ok(serialize_and_replace_ids_with_values_with_limit(
+                value,
+                layout,
+                mapping,
+                self.max_value_nested_depth,
+            )),
         }
     }
 
     pub fn deserialize(self, bytes: &[u8], layout: &MoveTypeLayout) -> Option<Value> {
         let _ = self.max_value_nested_depth;
-        match self.delayed_fields_mode {
-            DelayedFieldsMode::Disabled => {
+        match self.delayed_fields_extension {
+            None => {
                 let seed = DeserializationSeed {
                     custom_deserializer: None::<&RelaxedCustomSerDe>,
                     layout,
                 };
                 bcs::from_bytes_seed(seed, bytes).ok()
             }
-            DelayedFieldsMode::Serde => deserialize_and_allow_delayed_values(bytes, layout),
-            DelayedFieldsMode::Replacement(mapping) => {
-                deserialize_and_replace_values_with_ids(bytes, layout, mapping)
+            Some(DelayedFieldsExtension { mapping: None }) => {
+                deserialize_and_allow_delayed_values(bytes, layout)
             }
+            Some(DelayedFieldsExtension {
+                mapping: Some(mapping),
+            }) => deserialize_and_replace_values_with_ids(bytes, layout, mapping),
         }
     }
 }
@@ -303,6 +337,8 @@ impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> CustomSerializer
             custom_serializer: None::<&RelaxedCustomSerDe>,
             layout,
             value: &value.0,
+            max_value_nest_depth: None,
+            depth: 1,
         }
         .serialize(serializer)
     }
@@ -357,11 +393,24 @@ pub fn serialize_and_replace_ids_with_values<I: From<u64> + ExtractWidth + Extra
     layout: &MoveTypeLayout,
     mapping: &dyn ValueToIdentifierMapping<Identifier = I>,
 ) -> Option<Vec<u8>> {
+    serialize_and_replace_ids_with_values_with_limit(value, layout, mapping, None)
+}
+
+fn serialize_and_replace_ids_with_values_with_limit<
+    I: From<u64> + ExtractWidth + ExtractUniqueIndex,
+>(
+    value: &Value,
+    layout: &MoveTypeLayout,
+    mapping: &dyn ValueToIdentifierMapping<Identifier = I>,
+    max_value_nest_depth: Option<u64>,
+) -> Option<Vec<u8>> {
     let custom_serializer = CustomSerDeWithExchange::new(mapping);
     let value = SerializationReadyValue {
         custom_serializer: Some(&custom_serializer),
         layout,
         value: &value.0,
+        max_value_nest_depth,
+        depth: 1,
     };
     bcs::to_bytes(&value).ok().filter(|_| {
         // Should never happen, it should always fail first in serialize_and_allow_delayed_values

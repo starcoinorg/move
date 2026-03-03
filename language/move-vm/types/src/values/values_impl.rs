@@ -3144,6 +3144,8 @@ impl Value {
             custom_serializer: None::<&RelaxedCustomSerDe>,
             layout,
             value: &self.0,
+            max_value_nest_depth: None,
+            depth: 1,
         })
         .ok()
     }
@@ -3163,6 +3165,8 @@ impl Struct {
             custom_serializer: None::<&RelaxedCustomSerDe>,
             layout,
             value: &self.fields,
+            max_value_nest_depth: None,
+            depth: 1,
         })
         .ok()
     }
@@ -3177,6 +3181,10 @@ pub(crate) struct SerializationReadyValue<'c, 'l, 'v, L, V, C> {
     pub(crate) layout: &'l L,
     // Value to serialize.
     pub(crate) value: &'v V,
+    // Maximum allowed depth of the value graph.
+    pub(crate) max_value_nest_depth: Option<u64>,
+    // Current depth for this node.
+    pub(crate) depth: u64,
 }
 
 fn invariant_violation<S: serde::Serializer>(message: String) -> S::Error {
@@ -3185,11 +3193,19 @@ fn invariant_violation<S: serde::Serializer>(message: String) -> S::Error {
     )
 }
 
+fn check_depth(depth: u64, max_depth: Option<u64>) -> PartialVMResult<()> {
+    if max_depth.is_some_and(|limit| depth > limit) {
+        return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+    }
+    Ok(())
+}
+
 impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
     for SerializationReadyValue<'c, 'l, 'v, MoveTypeLayout, ValueImpl, C>
 {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use MoveTypeLayout as L;
+        check_depth(self.depth, self.max_value_nest_depth).map_err(S::Error::custom)?;
 
         match (self.layout, self.value) {
             // Primitive types.
@@ -3208,6 +3224,8 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
                     custom_serializer: self.custom_serializer,
                     layout: struct_layout,
                     value: &*r.borrow(),
+                    max_value_nest_depth: self.max_value_nest_depth,
+                    depth: self.depth,
                 })
                 .serialize(serializer)
             }
@@ -3232,6 +3250,8 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
                                 custom_serializer: self.custom_serializer,
                                 layout,
                                 value,
+                                max_value_nest_depth: self.max_value_nest_depth,
+                                depth: self.depth + 1,
                             })?;
                         }
                         t.end()
@@ -3256,6 +3276,8 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
                     custom_serializer: self.custom_serializer,
                     layout: &L::Address,
                     value: &v[0],
+                    max_value_nest_depth: self.max_value_nest_depth,
+                    depth: self.depth,
                 })
                 .serialize(serializer)
             }
@@ -3306,6 +3328,8 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
                 custom_serializer: self.custom_serializer,
                 layout: *field_layout,
                 value,
+                max_value_nest_depth: self.max_value_nest_depth,
+                depth: self.depth + 1,
             })?;
         }
         t.end()
@@ -3474,9 +3498,7 @@ fn struct_field_layout_refs(layout: &MoveStructLayout) -> Vec<&MoveTypeLayout> {
     match layout {
         MoveStructLayout::Runtime(fields) => fields.iter().collect(),
         MoveStructLayout::WithFields(fields) => fields.iter().map(|f| &f.layout).collect(),
-        MoveStructLayout::WithTypes { fields, .. } => {
-            fields.iter().map(|f| &f.layout).collect()
-        }
+        MoveStructLayout::WithTypes { fields, .. } => fields.iter().map(|f| &f.layout).collect(),
     }
 }
 
