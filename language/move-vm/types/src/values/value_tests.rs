@@ -357,14 +357,12 @@ mod native_values {
     }
 
     impl ValueToIdentifierMapping for Mapping {
-        type Identifier = DelayedFieldID;
-
         fn value_to_identifier(
             &self,
             kind: &IdentifierMappingKind,
             layout: &MoveTypeLayout,
             value: Value,
-        ) -> PartialVMResult<Self::Identifier> {
+        ) -> PartialVMResult<DelayedFieldID> {
             assert_eq!(layout, &MoveTypeLayout::U64);
             assert!(matches!(
                 kind,
@@ -377,7 +375,7 @@ mod native_values {
         fn identifier_to_value(
             &self,
             _layout: &MoveTypeLayout,
-            _identifier: Self::Identifier,
+            _identifier: DelayedFieldID,
         ) -> PartialVMResult<Value> {
             unreachable!("tests only need value_to_identifier path")
         }

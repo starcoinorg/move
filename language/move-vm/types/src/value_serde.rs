@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    delayed_values::delayed_field_id::{
-        DelayedFieldID, ExtractUniqueIndex, ExtractWidth, TryFromMoveValue, TryIntoMoveValue,
-    },
+    delayed_values::delayed_field_id::{DelayedFieldID, ExtractUniqueIndex, ExtractWidth},
     values::{DeserializationSeed, SerializationReadyValue, Struct, Value},
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -12,110 +10,184 @@ use move_core_types::{
     value::{IdentifierMappingKind, MoveStructLayout, MoveTypeLayout},
     vm_status::StatusCode,
 };
-use serde::{
-    de::{DeserializeSeed, Error as DeError},
-    ser::Error as SerError,
-    Deserializer, Serialize, Serializer,
-};
 use std::cell::RefCell;
 
 /// An extension to (de)serialize information about function values.
 ///
-/// Starcoin's current Move revision does not serialize function values yet, but this trait and the
-/// context method are kept to align call sites with the unified serde APIs.
+/// The current Starcoin Move revision does not serialize function values yet, but this trait and
+/// context method are kept so call sites can stay aligned with the unified Aptos-style serde API.
 pub trait FunctionValueExtension {
     fn max_value_nest_depth(&self) -> Option<u64>;
 }
 
-pub trait CustomDeserializer {
-    fn custom_deserialize<'d, D: Deserializer<'d>>(
-        &self,
-        deserializer: D,
-        kind: &IdentifierMappingKind,
-        layout: &MoveTypeLayout,
-    ) -> Result<Value, D::Error>;
+/// An extension to (de)serializer to lookup information about delayed fields.
+pub(crate) struct DelayedFieldsExtension<'a> {
+    /// Number of delayed fields (de)serialized, capped.
+    pub(crate) delayed_fields_count: RefCell<usize>,
+    /// Optional mapping to ids/values. The mapping is used to replace ids with values at
+    /// serialization time and values with ids at deserialization time. If [None], ids and values
+    /// are serialized as is.
+    pub(crate) mapping: Option<&'a dyn ValueToIdentifierMapping>,
 }
 
-pub trait CustomSerializer {
-    fn custom_serialize<S: Serializer>(
-        &self,
-        serializer: S,
-        kind: &IdentifierMappingKind,
-        layout: &MoveTypeLayout,
-        id: DelayedFieldID,
-    ) -> Result<S::Ok, S::Error>;
+impl DelayedFieldsExtension<'_> {
+    // Temporarily limit the number of delayed fields per resource, until proper charges are
+    // implemented.
+    // TODO[agg_v2](clean): propagate up, so this value is controlled by the gas schedule version.
+    pub(crate) const MAX_DELAYED_FIELDS_PER_RESOURCE: usize = 10;
+
+    /// Increments delayed-field count and checks the cap.
+    pub(crate) fn inc_and_check_delayed_fields_count(&self) -> PartialVMResult<()> {
+        *self.delayed_fields_count.borrow_mut() += 1;
+        if *self.delayed_fields_count.borrow() > Self::MAX_DELAYED_FIELDS_PER_RESOURCE {
+            return Err(PartialVMError::new(StatusCode::TOO_MANY_DELAYED_FIELDS)
+                .with_message("Too many Delayed fields in a single resource.".to_string()));
+        }
+        Ok(())
+    }
 }
 
-/// Custom (de)serializer which allows delayed values to be (de)serialized as
-/// is. This means that when a delayed value is serialized, the deserialization
-/// must construct the delayed value back.
-pub struct RelaxedCustomSerDe {
-    delayed_fields_count: RefCell<usize>,
+/// A (de)serializer context for a single Move [Value], containing optional extensions.
+pub struct ValueSerDeContext<'a> {
+    pub(crate) delayed_fields_extension: Option<DelayedFieldsExtension<'a>>,
+    pub(crate) legacy_signer: bool,
+    /// Maximum allowed depth of a VM value.
+    pub(crate) max_value_nested_depth: Option<u64>,
 }
 
-impl RelaxedCustomSerDe {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+impl<'a> ValueSerDeContext<'a> {
+    /// Default (de)serializer that disallows delayed fields.
+    pub fn new(max_value_nested_depth: Option<u64>) -> Self {
         Self {
+            delayed_fields_extension: None,
+            legacy_signer: false,
+            max_value_nested_depth,
+        }
+    }
+
+    /// Serialize signer with legacy format to maintain backwards compatibility.
+    pub fn with_legacy_signer(mut self) -> Self {
+        self.legacy_signer = true;
+        self
+    }
+
+    /// Keep API compatibility with the serde context call chains.
+    pub fn with_func_args_deserialization(
+        mut self,
+        extension: &'a dyn FunctionValueExtension,
+    ) -> Self {
+        if self.max_value_nested_depth.is_none() {
+            self.max_value_nested_depth = extension.max_value_nest_depth();
+        }
+        self
+    }
+
+    /// Returns the same context but with delayed fields disabled.
+    pub(crate) fn clone_without_delayed_fields(&self) -> Self {
+        Self {
+            delayed_fields_extension: None,
+            legacy_signer: self.legacy_signer,
+            max_value_nested_depth: self.max_value_nested_depth,
+        }
+    }
+
+    pub(crate) fn check_depth(&self, depth: u64) -> PartialVMResult<()> {
+        if self
+            .max_value_nested_depth
+            .is_some_and(|max_depth| depth > max_depth)
+        {
+            return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+        }
+        Ok(())
+    }
+
+    /// Custom (de)serializer that allows delayed values to be (de)serialized as ids.
+    pub fn with_delayed_fields_serde(mut self) -> Self {
+        self.delayed_fields_extension = Some(DelayedFieldsExtension {
             delayed_fields_count: RefCell::new(0),
-        }
+            mapping: None,
+        });
+        self
     }
-}
 
-// TODO[agg_v2](clean): propagate up, so this value is controlled by the gas schedule version.
-// Temporarily limit the number of delayed fields per resource,
-// until proper charges are implemented.
-pub const MAX_DELAYED_FIELDS_PER_RESOURCE: usize = 10;
-
-impl CustomDeserializer for RelaxedCustomSerDe {
-    fn custom_deserialize<'d, D: Deserializer<'d>>(
-        &self,
-        deserializer: D,
-        kind: &IdentifierMappingKind,
-        layout: &MoveTypeLayout,
-    ) -> Result<Value, D::Error> {
-        *self.delayed_fields_count.borrow_mut() += 1;
-
-        let value = DeserializationSeed {
-            custom_deserializer: None::<&RelaxedCustomSerDe>,
-            layout,
-        }
-        .deserialize(deserializer)?;
-        let (id, _width) =
-            DelayedFieldID::try_from_move_value(layout, value, &()).map_err(|_| {
-                D::Error::custom(format!(
-                    "Custom deserialization failed for {:?} with layout {}",
-                    kind, layout
-                ))
-            })?;
-        Ok(Value::delayed_value(id))
+    /// Custom (de)serializer that replaces delayed ids with values on serialization and values
+    /// with ids on deserialization.
+    pub fn with_delayed_fields_replacement(
+        mut self,
+        mapping: &'a dyn ValueToIdentifierMapping,
+    ) -> Self {
+        self.delayed_fields_extension = Some(DelayedFieldsExtension {
+            delayed_fields_count: RefCell::new(0),
+            mapping: Some(mapping),
+        });
+        self
     }
-}
 
-impl CustomSerializer for RelaxedCustomSerDe {
-    fn custom_serialize<S: Serializer>(
-        &self,
-        serializer: S,
-        kind: &IdentifierMappingKind,
+    /// Serializes a [Value] based on the provided layout.
+    pub fn serialize(
+        self,
+        value: &Value,
         layout: &MoveTypeLayout,
-        id: DelayedFieldID,
-    ) -> Result<S::Ok, S::Error> {
-        *self.delayed_fields_count.borrow_mut() += 1;
-
-        let value = id.try_into_move_value(layout).map_err(|_| {
-            S::Error::custom(format!(
-                "Custom serialization failed for {:?} with layout {}",
-                kind, layout
-            ))
-        })?;
-        SerializationReadyValue {
-            custom_serializer: None::<&RelaxedCustomSerDe>,
+    ) -> PartialVMResult<Option<Vec<u8>>> {
+        let value = SerializationReadyValue {
+            ctx: &self,
             layout,
             value: &value.0,
-            max_value_nest_depth: None,
             depth: 1,
+        };
+
+        match bcs::to_bytes(&value).ok() {
+            Some(bytes) => Ok(Some(bytes)),
+            None => {
+                // Preserve legacy behavior: only surface the delayed-fields cap as an error.
+                if let Some(delayed_fields_extension) = self.delayed_fields_extension {
+                    if delayed_fields_extension.delayed_fields_count.into_inner()
+                        > DelayedFieldsExtension::MAX_DELAYED_FIELDS_PER_RESOURCE
+                    {
+                        return Err(PartialVMError::new(StatusCode::TOO_MANY_DELAYED_FIELDS)
+                            .with_message(
+                                "Too many Delayed fields in a single resource.".to_string(),
+                            ));
+                    }
+                }
+                Ok(None)
+            }
         }
-        .serialize(serializer)
+    }
+
+    /// Returns serialized size of a [Value].
+    pub fn serialized_size(self, value: &Value, layout: &MoveTypeLayout) -> PartialVMResult<usize> {
+        let value = SerializationReadyValue {
+            ctx: &self,
+            layout,
+            value: &value.0,
+            depth: 1,
+        };
+        bcs::serialized_size(&value).map_err(|e| {
+            PartialVMError::new(StatusCode::VALUE_SERIALIZATION_ERROR).with_message(format!(
+                "failed to compute serialized size of a value: {:?}",
+                e
+            ))
+        })
+    }
+
+    /// Deserializes bytes into a Move [Value].
+    pub fn deserialize(self, bytes: &[u8], layout: &MoveTypeLayout) -> Option<Value> {
+        let seed = DeserializationSeed { ctx: &self, layout };
+        bcs::from_bytes_seed(seed, bytes).ok()
+    }
+
+    /// Deserializes bytes into a Move [Value], returning the underlying error.
+    pub fn deserialize_or_err(
+        self,
+        bytes: &[u8],
+        layout: &MoveTypeLayout,
+    ) -> PartialVMResult<Value> {
+        let seed = DeserializationSeed { ctx: &self, layout };
+        bcs::from_bytes_seed(seed, bytes).map_err(|e| {
+            PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE)
+                .with_message(format!("deserializer error: {}", e))
+        })
     }
 }
 
@@ -123,59 +195,24 @@ pub fn deserialize_and_allow_delayed_values(
     bytes: &[u8],
     layout: &MoveTypeLayout,
 ) -> Option<Value> {
-    let native_deserializer = RelaxedCustomSerDe::new();
-    let seed = DeserializationSeed {
-        custom_deserializer: Some(&native_deserializer),
-        layout,
-    };
-    bcs::from_bytes_seed(seed, bytes).ok().filter(|_| {
-        // Should never happen, it should always fail first in serialize_and_allow_delayed_values
-        // so we can treat it as regular deserialization error.
-        native_deserializer.delayed_fields_count.into_inner() <= MAX_DELAYED_FIELDS_PER_RESOURCE
-    })
+    ValueSerDeContext::new(None)
+        .with_delayed_fields_serde()
+        .deserialize(bytes, layout)
 }
 
 pub fn serialize_and_allow_delayed_values(
     value: &Value,
     layout: &MoveTypeLayout,
 ) -> PartialVMResult<Option<Vec<u8>>> {
-    serialize_and_allow_delayed_values_with_limit(value, layout, None)
-}
-
-fn serialize_and_allow_delayed_values_with_limit(
-    value: &Value,
-    layout: &MoveTypeLayout,
-    max_value_nest_depth: Option<u64>,
-) -> PartialVMResult<Option<Vec<u8>>> {
-    let native_serializer = RelaxedCustomSerDe::new();
-    let value = SerializationReadyValue {
-        custom_serializer: Some(&native_serializer),
-        layout,
-        value: &value.0,
-        max_value_nest_depth,
-        depth: 1,
-    };
-    bcs::to_bytes(&value)
-        .ok()
-        .map(|v| {
-            if native_serializer.delayed_fields_count.into_inner()
-                <= MAX_DELAYED_FIELDS_PER_RESOURCE
-            {
-                Ok(v)
-            } else {
-                Err(PartialVMError::new(StatusCode::TOO_MANY_DELAYED_FIELDS)
-                    .with_message("Too many Delayed fields in a single resource.".to_string()))
-            }
-        })
-        .transpose()
+    ValueSerDeContext::new(None)
+        .with_delayed_fields_serde()
+        .serialize(value, layout)
 }
 
 /// Allow conversion between values and identifiers (delayed values). For example,
 /// this trait can be implemented to fetch a concrete Move value from the global
 /// state based on the identifier stored inside a delayed value.
 pub trait ValueToIdentifierMapping {
-    type Identifier;
-
     fn value_to_identifier(
         &self,
         // We need kind to distinguish between aggregators and snapshots
@@ -183,12 +220,12 @@ pub trait ValueToIdentifierMapping {
         kind: &IdentifierMappingKind,
         layout: &MoveTypeLayout,
         value: Value,
-    ) -> PartialVMResult<Self::Identifier>;
+    ) -> PartialVMResult<DelayedFieldID>;
 
     fn identifier_to_value(
         &self,
         layout: &MoveTypeLayout,
-        identifier: Self::Identifier,
+        identifier: DelayedFieldID,
     ) -> PartialVMResult<Value>;
 }
 
@@ -244,12 +281,10 @@ fn nested_native_integer_exchange_info(
     }
 }
 
-fn try_deserialize_nested_native_integer_with_exchange<
-    I: From<u64> + ExtractWidth + ExtractUniqueIndex,
->(
+fn try_deserialize_nested_native_integer_with_exchange(
     bytes: &[u8],
     layout: &MoveTypeLayout,
-    mapping: &dyn ValueToIdentifierMapping<Identifier = I>,
+    mapping: &dyn ValueToIdentifierMapping,
 ) -> Option<PartialVMResult<Value>> {
     let (kind, inner_layout, expected_width) = nested_native_integer_exchange_info(layout)?;
     let width = usize::try_from(expected_width).ok()?;
@@ -303,237 +338,33 @@ fn try_deserialize_nested_native_integer_with_exchange<
     Some(Ok(Value::struct_(Struct::pack([inner]))))
 }
 
-/// Aptos-style delayed fields extension:
-/// - `None`: delayed fields are disabled.
-/// - `Some { mapping: None }`: delayed values are (de)serialized as ids.
-/// - `Some { mapping: Some(..) }`: delayed ids are exchanged with values.
-struct DelayedFieldsExtension<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> {
-    mapping: Option<&'a dyn ValueToIdentifierMapping<Identifier = I>>,
-}
-
-/// Serde context that keeps delayed-field behavior explicit at call sites.
-pub struct ValueSerDeContext<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex = DelayedFieldID>
-{
-    delayed_fields_extension: Option<DelayedFieldsExtension<'a, I>>,
-    max_value_nested_depth: Option<u64>,
-}
-
-impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> ValueSerDeContext<'a, I> {
-    /// Default (de)serializer that disallows delayed fields.
-    pub fn new(max_value_nested_depth: Option<u64>) -> Self {
-        Self {
-            delayed_fields_extension: None,
-            max_value_nested_depth,
-        }
-    }
-
-    /// Keep API compatibility with the serde context call chains.
-    pub fn with_func_args_deserialization(
-        mut self,
-        extension: &'a dyn FunctionValueExtension,
-    ) -> Self {
-        if self.max_value_nested_depth.is_none() {
-            self.max_value_nested_depth = extension.max_value_nest_depth();
-        }
-        self
-    }
-
-    /// Allow delayed values to be (de)serialized as delayed ids.
-    pub fn with_delayed_fields_serde(mut self) -> Self {
-        self.delayed_fields_extension = Some(DelayedFieldsExtension { mapping: None });
-        self
-    }
-
-    /// Replace delayed ids with values on serialization, and values with delayed ids on
-    /// deserialization.
-    pub fn with_delayed_fields_replacement(
-        mut self,
-        mapping: &'a dyn ValueToIdentifierMapping<Identifier = I>,
-    ) -> Self {
-        self.delayed_fields_extension = Some(DelayedFieldsExtension {
-            mapping: Some(mapping),
-        });
-        self
-    }
-
-    pub fn serialize(
-        self,
-        value: &Value,
-        layout: &MoveTypeLayout,
-    ) -> PartialVMResult<Option<Vec<u8>>> {
-        match self.delayed_fields_extension {
-            None => {
-                let ready = SerializationReadyValue {
-                    custom_serializer: None::<&RelaxedCustomSerDe>,
-                    layout,
-                    value: &value.0,
-                    max_value_nest_depth: self.max_value_nested_depth,
-                    depth: 1,
-                };
-                Ok(bcs::to_bytes(&ready).ok())
-            }
-            Some(DelayedFieldsExtension { mapping: None }) => {
-                serialize_and_allow_delayed_values_with_limit(
-                    value,
-                    layout,
-                    self.max_value_nested_depth,
-                )
-            }
-            Some(DelayedFieldsExtension {
-                mapping: Some(mapping),
-            }) => Ok(serialize_and_replace_ids_with_values_with_limit(
-                value,
-                layout,
-                mapping,
-                self.max_value_nested_depth,
-            )),
-        }
-    }
-
-    pub fn deserialize(self, bytes: &[u8], layout: &MoveTypeLayout) -> Option<Value> {
-        let _ = self.max_value_nested_depth;
-        match self.delayed_fields_extension {
-            None => {
-                let seed = DeserializationSeed {
-                    custom_deserializer: None::<&RelaxedCustomSerDe>,
-                    layout,
-                };
-                bcs::from_bytes_seed(seed, bytes).ok()
-            }
-            Some(DelayedFieldsExtension { mapping: None }) => {
-                deserialize_and_allow_delayed_values(bytes, layout)
-            }
-            Some(DelayedFieldsExtension {
-                mapping: Some(mapping),
-            }) => deserialize_and_replace_values_with_ids(bytes, layout, mapping),
-        }
-    }
-}
-
-/// Custom (de)serializer such that:
-///   1. when encountering a delayed value, ir uses its id to replace it with a concrete
-///      value instance and serialize it instead;
-///   2. when deserializing, the concrete value instance is replaced with a delayed value.
-pub struct CustomSerDeWithExchange<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> {
-    mapping: &'a dyn ValueToIdentifierMapping<Identifier = I>,
-    delayed_fields_count: RefCell<usize>,
-}
-
-impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> CustomSerDeWithExchange<'a, I> {
-    pub fn new(mapping: &'a dyn ValueToIdentifierMapping<Identifier = I>) -> Self {
-        Self {
-            mapping,
-            delayed_fields_count: RefCell::new(0),
-        }
-    }
-}
-
-impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> CustomSerializer
-    for CustomSerDeWithExchange<'a, I>
-{
-    fn custom_serialize<S: Serializer>(
-        &self,
-        serializer: S,
-        _kind: &IdentifierMappingKind,
-        layout: &MoveTypeLayout,
-        sized_id: DelayedFieldID,
-    ) -> Result<S::Ok, S::Error> {
-        *self.delayed_fields_count.borrow_mut() += 1;
-
-        let value = self
-            .mapping
-            .identifier_to_value(layout, sized_id.as_u64().into())
-            .map_err(|e| S::Error::custom(format!("{}", e)))?;
-        SerializationReadyValue {
-            custom_serializer: None::<&RelaxedCustomSerDe>,
-            layout,
-            value: &value.0,
-            max_value_nest_depth: None,
-            depth: 1,
-        }
-        .serialize(serializer)
-    }
-}
-
-impl<'a, I: From<u64> + ExtractWidth + ExtractUniqueIndex> CustomDeserializer
-    for CustomSerDeWithExchange<'a, I>
-{
-    fn custom_deserialize<'d, D: Deserializer<'d>>(
-        &self,
-        deserializer: D,
-        kind: &IdentifierMappingKind,
-        layout: &MoveTypeLayout,
-    ) -> Result<Value, D::Error> {
-        *self.delayed_fields_count.borrow_mut() += 1;
-
-        let value = DeserializationSeed {
-            custom_deserializer: None::<&RelaxedCustomSerDe>,
-            layout,
-        }
-        .deserialize(deserializer)?;
-        let id = self
-            .mapping
-            .value_to_identifier(kind, layout, value)
-            .map_err(|e| D::Error::custom(format!("{}", e)))?;
-        Ok(Value::delayed_value(DelayedFieldID::new_with_width(
-            id.extract_unique_index(),
-            id.extract_width(),
-        )))
-    }
-}
-
-pub fn deserialize_and_replace_values_with_ids<I: From<u64> + ExtractWidth + ExtractUniqueIndex>(
+pub fn deserialize_and_replace_values_with_ids(
     bytes: &[u8],
     layout: &MoveTypeLayout,
-    mapping: &dyn ValueToIdentifierMapping<Identifier = I>,
+    mapping: &dyn ValueToIdentifierMapping,
 ) -> Option<Value> {
+    // Keep the current high-value fast path for nested native integers.
     if let Some(result) =
         try_deserialize_nested_native_integer_with_exchange(bytes, layout, mapping)
     {
         return result.ok();
     }
 
-    let custom_deserializer = CustomSerDeWithExchange::new(mapping);
-    let seed = DeserializationSeed {
-        custom_deserializer: Some(&custom_deserializer),
-        layout,
-    };
-    bcs::from_bytes_seed(seed, bytes).ok().filter(|_| {
-        // Should never happen, it should always fail first in serialize_and_allow_delayed_values
-        // so we can treat it as regular deserialization error.
-        custom_deserializer.delayed_fields_count.into_inner() <= MAX_DELAYED_FIELDS_PER_RESOURCE
-    })
+    ValueSerDeContext::new(None)
+        .with_delayed_fields_replacement(mapping)
+        .deserialize(bytes, layout)
 }
 
-pub fn serialize_and_replace_ids_with_values<I: From<u64> + ExtractWidth + ExtractUniqueIndex>(
+pub fn serialize_and_replace_ids_with_values(
     value: &Value,
     layout: &MoveTypeLayout,
-    mapping: &dyn ValueToIdentifierMapping<Identifier = I>,
+    mapping: &dyn ValueToIdentifierMapping,
 ) -> Option<Vec<u8>> {
-    serialize_and_replace_ids_with_values_with_limit(value, layout, mapping, None)
-}
-
-fn serialize_and_replace_ids_with_values_with_limit<
-    I: From<u64> + ExtractWidth + ExtractUniqueIndex,
->(
-    value: &Value,
-    layout: &MoveTypeLayout,
-    mapping: &dyn ValueToIdentifierMapping<Identifier = I>,
-    max_value_nest_depth: Option<u64>,
-) -> Option<Vec<u8>> {
-    let custom_serializer = CustomSerDeWithExchange::new(mapping);
-    let value = SerializationReadyValue {
-        custom_serializer: Some(&custom_serializer),
-        layout,
-        value: &value.0,
-        max_value_nest_depth,
-        depth: 1,
-    };
-    bcs::to_bytes(&value).ok().filter(|_| {
-        // Should never happen, it should always fail first in serialize_and_allow_delayed_values
-        // so we can treat it as regular deserialization error.
-        custom_serializer.delayed_fields_count.into_inner() <= MAX_DELAYED_FIELDS_PER_RESOURCE
-    })
+    ValueSerDeContext::new(None)
+        .with_delayed_fields_replacement(mapping)
+        .serialize(value, layout)
+        .ok()
+        .flatten()
 }
 
 #[cfg(test)]
@@ -549,14 +380,12 @@ mod tests {
     }
 
     impl ValueToIdentifierMapping for RecordingMapping {
-        type Identifier = DelayedFieldID;
-
         fn value_to_identifier(
             &self,
             kind: &IdentifierMappingKind,
             layout: &MoveTypeLayout,
             value: Value,
-        ) -> PartialVMResult<Self::Identifier> {
+        ) -> PartialVMResult<DelayedFieldID> {
             assert_eq!(kind, &self.expected_kind);
             assert_eq!(layout, &self.expected_layout);
             let v = match layout {
@@ -571,7 +400,7 @@ mod tests {
         fn identifier_to_value(
             &self,
             _layout: &MoveTypeLayout,
-            _identifier: Self::Identifier,
+            _identifier: DelayedFieldID,
         ) -> PartialVMResult<Value> {
             unreachable!()
         }
@@ -584,6 +413,154 @@ mod tests {
                 inner,
             ]),
         )]))
+    }
+
+    fn native_layout(kind: IdentifierMappingKind, inner: MoveTypeLayout) -> MoveTypeLayout {
+        MoveTypeLayout::Native(kind, Box::new(inner))
+    }
+
+    #[test]
+    fn allow_delayed_values_helper_matches_context() {
+        let layout = native_layout(IdentifierMappingKind::Aggregator, MoveTypeLayout::U64);
+        let delayed = Value::delayed_value(DelayedFieldID::new_with_width(13, 8));
+
+        let helper_bytes = serialize_and_allow_delayed_values(&delayed, &layout)
+            .unwrap()
+            .expect("helper serialization should succeed");
+        let ctx_bytes = ValueSerDeContext::new(None)
+            .with_delayed_fields_serde()
+            .serialize(&delayed, &layout)
+            .unwrap()
+            .expect("context serialization should succeed");
+        assert_eq!(helper_bytes, ctx_bytes);
+
+        let helper_value = deserialize_and_allow_delayed_values(&helper_bytes, &layout)
+            .expect("helper deserialization should succeed");
+        let ctx_value = ValueSerDeContext::new(None)
+            .with_delayed_fields_serde()
+            .deserialize(&helper_bytes, &layout)
+            .expect("context deserialization should succeed");
+
+        let helper_roundtrip = serialize_and_allow_delayed_values(&helper_value, &layout)
+            .unwrap()
+            .expect("helper roundtrip serialization should succeed");
+        let ctx_roundtrip = serialize_and_allow_delayed_values(&ctx_value, &layout)
+            .unwrap()
+            .expect("context roundtrip serialization should succeed");
+        assert_eq!(helper_roundtrip, ctx_roundtrip);
+        assert_eq!(helper_roundtrip, helper_bytes);
+    }
+
+    #[test]
+    fn replace_values_with_ids_non_nested_helper_matches_context() {
+        let layout = native_layout(IdentifierMappingKind::Aggregator, MoveTypeLayout::U64);
+        let id = DelayedFieldID::new_with_width(31, 8);
+        let helper_mapping = RecordingMapping {
+            expected_kind: IdentifierMappingKind::Aggregator,
+            expected_layout: MoveTypeLayout::U64,
+            returned_id: id,
+            seen_values: RefCell::new(Vec::new()),
+        };
+        let ctx_mapping = RecordingMapping {
+            expected_kind: IdentifierMappingKind::Aggregator,
+            expected_layout: MoveTypeLayout::U64,
+            returned_id: id,
+            seen_values: RefCell::new(Vec::new()),
+        };
+        let input = 777u64.to_le_bytes();
+
+        let helper_value =
+            deserialize_and_replace_values_with_ids(&input, &layout, &helper_mapping)
+                .expect("helper replace should succeed");
+        let ctx_value = ValueSerDeContext::new(None)
+            .with_delayed_fields_replacement(&ctx_mapping)
+            .deserialize(&input, &layout)
+            .expect("context replace should succeed");
+
+        let helper_output = serialize_and_allow_delayed_values(&helper_value, &layout)
+            .unwrap()
+            .expect("helper output should serialize");
+        let ctx_output = serialize_and_allow_delayed_values(&ctx_value, &layout)
+            .unwrap()
+            .expect("context output should serialize");
+        assert_eq!(helper_output, ctx_output);
+        assert_eq!(
+            helper_mapping.seen_values.borrow().as_slice(),
+            ctx_mapping.seen_values.borrow().as_slice()
+        );
+    }
+
+    #[test]
+    fn replace_values_with_ids_nested_helper_matches_context() {
+        let cases = vec![
+            (
+                IdentifierMappingKind::Aggregator,
+                MoveTypeLayout::U64,
+                DelayedFieldID::new_with_width(42, 8),
+                123u128,
+                999u128,
+            ),
+            (
+                IdentifierMappingKind::Snapshot,
+                MoveTypeLayout::U128,
+                DelayedFieldID::new_with_width(77, 16),
+                123456u128,
+                789012u128,
+            ),
+        ];
+
+        for (kind, inner_layout, id, base, max) in cases {
+            let layout = nested_layout(kind.clone(), inner_layout.clone());
+            let helper_mapping = RecordingMapping {
+                expected_kind: kind.clone(),
+                expected_layout: inner_layout.clone(),
+                returned_id: id,
+                seen_values: RefCell::new(Vec::new()),
+            };
+            let ctx_mapping = RecordingMapping {
+                expected_kind: kind,
+                expected_layout: inner_layout.clone(),
+                returned_id: id,
+                seen_values: RefCell::new(Vec::new()),
+            };
+
+            let input = match inner_layout {
+                MoveTypeLayout::U64 => {
+                    let mut bytes = Vec::new();
+                    bytes.extend_from_slice(&(base as u64).to_le_bytes());
+                    bytes.extend_from_slice(&(max as u64).to_le_bytes());
+                    bytes
+                }
+                MoveTypeLayout::U128 => {
+                    let mut bytes = Vec::new();
+                    bytes.extend_from_slice(&base.to_le_bytes());
+                    bytes.extend_from_slice(&max.to_le_bytes());
+                    bytes
+                }
+                _ => unreachable!(),
+            };
+
+            let helper_value =
+                deserialize_and_replace_values_with_ids(&input, &layout, &helper_mapping)
+                    .expect("helper replace should succeed");
+            let ctx_value = ValueSerDeContext::new(None)
+                .with_delayed_fields_replacement(&ctx_mapping)
+                .deserialize(&input, &layout)
+                .expect("context replace should succeed");
+
+            let helper_output = serialize_and_allow_delayed_values(&helper_value, &layout)
+                .unwrap()
+                .expect("helper output should serialize");
+            let ctx_output = serialize_and_allow_delayed_values(&ctx_value, &layout)
+                .unwrap()
+                .expect("context output should serialize");
+
+            assert_eq!(helper_output, ctx_output);
+            assert_eq!(
+                helper_mapping.seen_values.borrow().as_slice(),
+                ctx_mapping.seen_values.borrow().as_slice()
+            );
+        }
     }
 
     #[test]
@@ -602,9 +579,8 @@ mod tests {
         bytes.extend_from_slice(&base.to_le_bytes());
         bytes.extend_from_slice(&max.to_le_bytes());
 
-        let value =
-            deserialize_and_replace_values_with_ids::<DelayedFieldID>(&bytes, &layout, &mapping)
-                .expect("replace should succeed");
+        let value = deserialize_and_replace_values_with_ids(&bytes, &layout, &mapping)
+            .expect("replace should succeed");
         let serialized = serialize_and_allow_delayed_values(&value, &layout)
             .unwrap()
             .expect("serialize should succeed");
@@ -633,9 +609,8 @@ mod tests {
         bytes.extend_from_slice(&base.to_le_bytes());
         bytes.extend_from_slice(&max.to_le_bytes());
 
-        let value =
-            deserialize_and_replace_values_with_ids::<DelayedFieldID>(&bytes, &layout, &mapping)
-                .expect("replace should succeed");
+        let value = deserialize_and_replace_values_with_ids(&bytes, &layout, &mapping)
+            .expect("replace should succeed");
         let serialized = serialize_and_allow_delayed_values(&value, &layout)
             .unwrap()
             .expect("serialize should succeed");
