@@ -3828,6 +3828,145 @@ impl GlobalValue {
     }
 }
 
+struct DepthCheckingVisitor {
+    max_depth: u64,
+    error: Option<PartialVMError>,
+}
+
+impl DepthCheckingVisitor {
+    fn new(max_depth: u64) -> Self {
+        Self {
+            max_depth,
+            error: None,
+        }
+    }
+
+    fn check(&mut self, depth: usize) -> bool {
+        let exceeds = match u64::try_from(depth) {
+            Ok(depth) => depth > self.max_depth,
+            Err(_) => true,
+        };
+        if exceeds {
+            if self.error.is_none() {
+                self.error = Some(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+            }
+            return false;
+        }
+        true
+    }
+
+    fn check_typed_vec(&mut self, depth: usize, len: usize) {
+        if !self.check(depth) || len == 0 {
+            return;
+        }
+        let child_depth = depth.saturating_add(1);
+        if child_depth == depth {
+            if self.error.is_none() {
+                self.error = Some(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+            }
+            return;
+        }
+        let _ = self.check(child_depth);
+    }
+
+    fn finish(self) -> PartialVMResult<()> {
+        match self.error {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    }
+}
+
+impl ValueVisitor for DepthCheckingVisitor {
+    fn visit_delayed(&mut self, depth: usize, _id: DelayedFieldID) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u8(&mut self, depth: usize, _val: u8) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u16(&mut self, depth: usize, _val: u16) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u32(&mut self, depth: usize, _val: u32) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u64(&mut self, depth: usize, _val: u64) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u128(&mut self, depth: usize, _val: u128) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u256(&mut self, depth: usize, _val: u256::U256) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_bool(&mut self, depth: usize, _val: bool) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_address(&mut self, depth: usize, _val: AccountAddress) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_struct(&mut self, depth: usize, _len: usize) -> bool {
+        self.check(depth)
+    }
+
+    fn visit_vec(&mut self, depth: usize, _len: usize) -> bool {
+        self.check(depth)
+    }
+
+    fn visit_ref(&mut self, depth: usize, _is_global: bool) -> bool {
+        self.check(depth)
+    }
+
+    fn visit_vec_u8(&mut self, depth: usize, vals: &[u8]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u16(&mut self, depth: usize, vals: &[u16]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u32(&mut self, depth: usize, vals: &[u32]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u64(&mut self, depth: usize, vals: &[u64]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u128(&mut self, depth: usize, vals: &[u128]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u256(&mut self, depth: usize, vals: &[u256::U256]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_bool(&mut self, depth: usize, vals: &[bool]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_address(&mut self, depth: usize, vals: &[AccountAddress]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+}
+
+impl Value {
+    pub fn check_depth_of_value(&self, max_depth: u64) -> PartialVMResult<()> {
+        let mut visitor = DepthCheckingVisitor::new(max_depth);
+        self.visit(&mut visitor);
+        visitor.finish()
+    }
+}
+
 /***************************************************************************************
  *
  * Prop Testing

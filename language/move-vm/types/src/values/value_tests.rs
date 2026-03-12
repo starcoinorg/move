@@ -4,7 +4,7 @@
 
 use crate::{loaded_data::runtime_types::TypeBuilder, values::*, views::*};
 use move_binary_format::errors::*;
-use move_core_types::{account_address::AccountAddress, u256::U256};
+use move_core_types::{account_address::AccountAddress, u256::U256, vm_status::StatusCode};
 
 #[test]
 fn locals() -> PartialVMResult<()> {
@@ -227,6 +227,22 @@ fn test_vm_value_vector_u64_casting() {
         vec![1, 2, 3],
         Value::vector_u64([1, 2, 3]).value_as::<Vec<u64>>().unwrap()
     );
+}
+
+#[test]
+fn test_check_depth_of_value_struct() {
+    let value = Value::struct_(Struct::pack([Value::u64(7)]));
+    assert!(value.check_depth_of_value(1).is_ok());
+    let err = value.check_depth_of_value(0).unwrap_err();
+    assert_eq!(err.major_status(), StatusCode::VM_MAX_VALUE_DEPTH_REACHED);
+}
+
+#[test]
+fn test_check_depth_of_value_typed_vector() {
+    let value = Value::vector_u64([1, 2, 3]);
+    assert!(value.check_depth_of_value(1).is_ok());
+    let err = value.check_depth_of_value(0).unwrap_err();
+    assert_eq!(err.major_status(), StatusCode::VM_MAX_VALUE_DEPTH_REACHED);
 }
 
 #[cfg(test)]
