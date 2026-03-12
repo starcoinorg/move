@@ -420,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn allow_delayed_values_helper_matches_context() {
+    fn test_allow_delayed_values_helper_matches_context() {
         let layout = native_layout(IdentifierMappingKind::Aggregator, MoveTypeLayout::U64);
         let delayed = Value::delayed_value(DelayedFieldID::new_with_width(13, 8));
 
@@ -452,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn replace_values_with_ids_non_nested_helper_matches_context() {
+    fn test_replace_values_with_ids_non_nested_helper_matches_context() {
         let layout = native_layout(IdentifierMappingKind::Aggregator, MoveTypeLayout::U64);
         let id = DelayedFieldID::new_with_width(31, 8);
         let helper_mapping = RecordingMapping {
@@ -491,7 +491,7 @@ mod tests {
     }
 
     #[test]
-    fn replace_values_with_ids_nested_helper_matches_context() {
+    fn test_replace_values_with_ids_nested_helper_matches_context() {
         let cases = vec![
             (
                 IdentifierMappingKind::Aggregator,
@@ -564,7 +564,7 @@ mod tests {
     }
 
     #[test]
-    fn replace_values_with_ids_nested_native_u64() {
+    fn test_replace_values_with_ids_nested_native_u64() {
         let layout = nested_layout(IdentifierMappingKind::Aggregator, MoveTypeLayout::U64);
         let mapping = RecordingMapping {
             expected_kind: IdentifierMappingKind::Aggregator,
@@ -594,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn replace_values_with_ids_nested_native_u128() {
+    fn test_replace_values_with_ids_nested_native_u128() {
         let layout = nested_layout(IdentifierMappingKind::Snapshot, MoveTypeLayout::U128);
         let mapping = RecordingMapping {
             expected_kind: IdentifierMappingKind::Snapshot,
