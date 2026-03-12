@@ -10,7 +10,7 @@ use move_core_types::{
     value::{IdentifierMappingKind, MoveStructLayout, MoveTypeLayout},
     vm_status::StatusCode,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::OnceLock};
 
 /// An extension to (de)serialize information about function values.
 ///
@@ -229,6 +229,30 @@ pub trait ValueToIdentifierMapping {
     ) -> PartialVMResult<Value>;
 }
 
+/// Internal switch for delayed-field exchange mode.
+/// Default is legacy path (manual nested exchange).
+/// Set to true-ish value (`1`, `true`, `yes`, `on`, `new`, `context`) to force
+/// context-based replacement path for local validation.
+pub const VALUE_SERDE_CONTEXT_REPLACEMENT_ENV: &str = "MOVE_VM_ENABLE_NEW_VALUE_SERDE_REPLACEMENT";
+
+fn parse_context_replacement_flag(raw: &str) -> bool {
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on" | "new" | "context"
+    )
+}
+
+fn enable_context_replacement_for_nested_native_exchange() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var(VALUE_SERDE_CONTEXT_REPLACEMENT_ENV)
+            .ok()
+            .as_deref()
+            .map(parse_context_replacement_flag)
+            .unwrap_or(false)
+    })
+}
+
 fn struct_field_layouts(struct_layout: &MoveStructLayout) -> Vec<&MoveTypeLayout> {
     match struct_layout {
         MoveStructLayout::Runtime(fields) => fields.iter().collect(),
@@ -343,11 +367,13 @@ pub fn deserialize_and_replace_values_with_ids(
     layout: &MoveTypeLayout,
     mapping: &dyn ValueToIdentifierMapping,
 ) -> Option<Value> {
-    // Keep the current high-value fast path for nested native integers.
-    if let Some(result) =
-        try_deserialize_nested_native_integer_with_exchange(bytes, layout, mapping)
-    {
-        return result.ok();
+    // Default to legacy path; only enable pure context replacement via env switch.
+    if !enable_context_replacement_for_nested_native_exchange() {
+        if let Some(result) =
+            try_deserialize_nested_native_integer_with_exchange(bytes, layout, mapping)
+        {
+            return result.ok();
+        }
     }
 
     ValueSerDeContext::new(None)
@@ -621,5 +647,15 @@ mod tests {
             &(mapping.returned_id.as_u64() as u128).to_le_bytes()
         );
         assert_eq!(&serialized[16..], &max.to_le_bytes());
+    }
+
+    #[test]
+    fn test_parse_context_replacement_flag() {
+        for raw in ["1", "true", "TRUE", "yes", "on", "new", "context"] {
+            assert!(parse_context_replacement_flag(raw));
+        }
+        for raw in ["", "0", "false", "off", "legacy", "random"] {
+            assert!(!parse_context_replacement_flag(raw));
+        }
     }
 }
