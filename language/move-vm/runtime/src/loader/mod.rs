@@ -31,11 +31,12 @@ use move_core_types::{
 };
 use move_vm_types::{
     gas::GasMeter,
-    loaded_data::runtime_types::{
-        AbilityInfo, DepthFormula, StructIdentifier, StructNameIndex, StructType, Type,
+    loaded_data::{
+        runtime_types::{AbilityInfo, DepthFormula, StructIdentifier, StructNameIndex, StructType, Type},
+        struct_name_indexing::StructNameIndexMap,
     },
 };
-use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
+use parking_lot::{Mutex, RwLock};
 use sha3::{Digest, Sha3_256};
 use std::{
     collections::{btree_map, BTreeMap, BTreeSet},
@@ -111,47 +112,7 @@ lazy_static! {
         Mutex::new(lru::LruCache::new(VERIFIED_CACHE_SIZE));
 }
 
-pub(crate) struct StructNameCache {
-    data: RwLock<(
-        BTreeMap<StructIdentifier, StructNameIndex>,
-        Vec<StructIdentifier>,
-    )>,
-}
-
-impl Clone for StructNameCache {
-    fn clone(&self) -> Self {
-        let inner = self.data.read();
-        Self {
-            data: RwLock::new((inner.0.clone(), inner.1.clone())),
-        }
-    }
-}
-
-impl StructNameCache {
-    pub(crate) fn new() -> Self {
-        Self {
-            data: RwLock::new((BTreeMap::new(), vec![])),
-        }
-    }
-
-    pub(crate) fn insert_or_get(&self, name: StructIdentifier) -> StructNameIndex {
-        if let Some(idx) = self.data.read().0.get(&name) {
-            return *idx;
-        }
-        let mut inner_data = self.data.write();
-        let idx = StructNameIndex(inner_data.1.len());
-        inner_data.0.insert(name.clone(), idx);
-        inner_data.1.push(name);
-        idx
-    }
-
-    pub(crate) fn idx_to_identifier(
-        &self,
-        idx: StructNameIndex,
-    ) -> MappedRwLockReadGuard<StructIdentifier> {
-        RwLockReadGuard::map(self.data.read(), |inner| &inner.1[idx.0])
-    }
-}
+pub(crate) type StructNameCache = StructNameIndexMap;
 
 //
 // Loader
@@ -165,7 +126,7 @@ pub(crate) struct Loader {
     scripts: RwLock<ScriptCache>,
     type_cache: RwLock<TypeCache>,
     natives: NativeFunctions,
-    pub(crate) name_cache: StructNameCache,
+    pub(crate) name_cache: Arc<StructNameCache>,
 
     // The below field supports a hack to workaround well-known issues with the
     // loader cache. This cache is not designed to support module upgrade or deletion.
@@ -219,7 +180,7 @@ impl Loader {
         Self {
             scripts: RwLock::new(ScriptCache::new()),
             type_cache: RwLock::new(TypeCache::new()),
-            name_cache: StructNameCache::new(),
+            name_cache: Arc::new(StructNameCache::empty()),
             natives,
             invalidated: RwLock::new(false),
             module_cache_hits: RwLock::new(BTreeSet::new()),
@@ -1596,8 +1557,8 @@ impl Loader {
         ty_args: &[Type],
         gas_context: &mut PseudoGasContext,
     ) -> PartialVMResult<StructTag> {
-        let name = &*self.name_cache.idx_to_identifier(struct_idx);
-        if let Some(struct_map) = self.type_cache.read().structs.get(name) {
+        let name = self.name_cache.idx_to_struct_name_ref(struct_idx)?;
+        if let Some(struct_map) = self.type_cache.read().structs.get(name.as_ref()) {
             if let Some(struct_info) = struct_map.get(ty_args) {
                 if let Some((struct_tag, gas)) = &struct_info.struct_tag {
                     gas_context.charge(*gas)?;
@@ -1625,7 +1586,7 @@ impl Loader {
         self.type_cache
             .write()
             .structs
-            .entry(name.clone())
+            .entry(name.as_ref().clone())
             .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfoCache::new)
@@ -1676,8 +1637,8 @@ impl Loader {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<(MoveTypeLayout, bool)> {
-        let name = &*self.name_cache.idx_to_identifier(struct_idx);
-        if let Some(struct_map) = self.type_cache.read().structs.get(name) {
+        let name = self.name_cache.idx_to_struct_name_ref(struct_idx)?;
+        if let Some(struct_map) = self.type_cache.read().structs.get(name.as_ref()) {
             if let Some(struct_info) = struct_map.get(ty_args) {
                 if let Some(struct_layout_info) = &struct_info.struct_layout_info {
                     *count += struct_layout_info.node_count;
@@ -1694,7 +1655,7 @@ impl Loader {
 
         // Some types can have fields which are lifted at serialization or deserialization
         // times. Right now these are Aggregator and AggregatorSnapshot.
-        let maybe_mapping = self.get_identifier_mapping_kind(name);
+        let maybe_mapping = self.get_identifier_mapping_kind(name.as_ref());
 
         let field_tys = struct_type
             .field_tys
@@ -1735,7 +1696,7 @@ impl Loader {
         let mut cache = self.type_cache.write();
         let info = cache
             .structs
-            .entry(name.clone())
+            .entry(name.as_ref().clone())
             .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfoCache::new);
@@ -1877,8 +1838,8 @@ impl Loader {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<MoveTypeLayout> {
-        let name = &*self.name_cache.idx_to_identifier(struct_idx);
-        if let Some(struct_map) = self.type_cache.read().structs.get(name) {
+        let name = self.name_cache.idx_to_struct_name_ref(struct_idx)?;
+        if let Some(struct_map) = self.type_cache.read().structs.get(name.as_ref()) {
             if let Some(struct_info) = struct_map.get(ty_args) {
                 if let Some(annotated_node_count) = &struct_info.annotated_node_count {
                     *count += *annotated_node_count
@@ -1930,7 +1891,7 @@ impl Loader {
         let mut cache = self.type_cache.write();
         let info = cache
             .structs
-            .entry(name.clone())
+            .entry(name.as_ref().clone())
             .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfoCache::new);
@@ -2005,8 +1966,8 @@ impl Loader {
         struct_idx: StructNameIndex,
         module_store: &ModuleStorageAdapter,
     ) -> PartialVMResult<DepthFormula> {
-        let name = &*self.name_cache.idx_to_identifier(struct_idx);
-        if let Some(depth_formula) = self.type_cache.read().depth_formula.get(name) {
+        let name = self.name_cache.idx_to_struct_name_ref(struct_idx)?;
+        if let Some(depth_formula) = self.type_cache.read().depth_formula.get(name.as_ref()) {
             return Ok(depth_formula.clone());
         }
 
@@ -2022,7 +1983,7 @@ impl Loader {
             .type_cache
             .write()
             .depth_formula
-            .insert(name.clone(), formula.clone());
+            .insert(name.as_ref().clone(), formula.clone());
         if let Some(f) = prev {
             // TODO: If the VM is not shared across threads, this error means that there is a
             //       recursive type. But in case it is shared, the current implementation is not

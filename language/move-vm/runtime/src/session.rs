@@ -473,7 +473,8 @@ impl<'r, 'l> Session<'r, 'l> {
             .runtime
             .loader()
             .name_cache
-            .idx_to_identifier(index);
+            .idx_to_struct_name_ref(index)
+            .ok()?;
         self.module_store
             .get_struct_type_by_identifier(&name.name, &name.module)
             .ok()

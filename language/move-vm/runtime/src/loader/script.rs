@@ -57,10 +57,14 @@ impl Script {
                 .check_compatibility(struct_handle)
                 .map_err(|err| err.finish(Location::Script))?;
 
-            struct_names.push(name_cache.insert_or_get(StructIdentifier {
-                module: module_id,
-                name: struct_name.to_owned(),
-            }));
+            struct_names.push(
+                name_cache
+                    .struct_name_to_idx(&StructIdentifier {
+                        module: module_id,
+                        name: struct_name.to_owned(),
+                    })
+                    .map_err(|err| err.finish(Location::Script))?,
+            );
         }
 
         let mut function_refs = vec![];

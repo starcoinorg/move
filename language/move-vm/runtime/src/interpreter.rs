@@ -823,8 +823,13 @@ impl Interpreter {
                 )
             },
         };
-        let struct_name = &*loader.name_cache.idx_to_identifier(struct_idx);
-        if let Some(access) = AccessInstance::new(kind, struct_name, instance, addr) {
+        let struct_name = loader
+            .name_cache
+            .idx_to_struct_name_ref(struct_idx)
+            .map_err(|err| {
+                err.with_message("failed to resolve struct name for access control".to_owned())
+            })?;
+        if let Some(access) = AccessInstance::new(kind, &struct_name, instance, addr) {
             self.access_control.check_access(access)?
         }
         Ok(())

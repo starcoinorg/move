@@ -308,7 +308,7 @@ impl Module {
                     module: module_id,
                     name: struct_name.to_owned(),
                 };
-                struct_idxs.push(name_cache.insert_or_get(name.clone()));
+                struct_idxs.push(name_cache.struct_name_to_idx(&name)?);
                 struct_names.push(name)
             }
 
