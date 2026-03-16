@@ -27,6 +27,12 @@ pub struct VMConfig {
     pub type_byte_cost: u64,
     pub aggregator_v2_type_tagging: bool,
     pub ty_builder: TypeBuilder,
+    pub layout_max_size: u64,
+    pub layout_max_depth: u64,
+    pub enable_function_caches: bool,
+    pub enable_lazy_loading: bool,
+    pub enable_depth_checks: bool,
+    pub enable_layout_caches: bool,
 }
 
 impl Default for VMConfig {
@@ -42,6 +48,12 @@ impl Default for VMConfig {
             type_byte_cost: 0,
             aggregator_v2_type_tagging: false,
             ty_builder: TypeBuilder::Legacy,
+            layout_max_size: 512,
+            layout_max_depth: 128,
+            enable_function_caches: true,
+            enable_lazy_loading: false,
+            enable_depth_checks: true,
+            enable_layout_caches: true,
         }
     }
 }
