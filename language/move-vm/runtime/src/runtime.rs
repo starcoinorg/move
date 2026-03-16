@@ -55,10 +55,16 @@ impl VMRuntime {
     ) -> PartialVMResult<Self> {
         let native_table: Vec<_> = natives.into_iter().collect();
         let native_functions = NativeFunctions::new(native_table.clone())?;
+        let runtime_environment =
+            RuntimeEnvironment::new_with_config(native_table, vm_config.clone());
         Ok(VMRuntime {
-            loader: Loader::new(native_functions.clone(), vm_config.clone()),
+            loader: Loader::new_with_name_cache(
+                native_functions.clone(),
+                vm_config.clone(),
+                runtime_environment.struct_name_index_map_arc(),
+            ),
             module_cache: Arc::new(ModuleCache::new()),
-            runtime_environment: RuntimeEnvironment::new_with_config(native_table, vm_config),
+            runtime_environment,
         })
     }
 

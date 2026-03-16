@@ -76,6 +76,10 @@ impl RuntimeEnvironment {
         &self.struct_name_index_map
     }
 
+    pub(crate) fn struct_name_index_map_arc(&self) -> Arc<StructNameIndexMap> {
+        self.struct_name_index_map.clone()
+    }
+
     pub fn ty_pool(&self) -> &InternedTypePool {
         &self.ty_pool
     }
@@ -141,6 +145,7 @@ impl RuntimeEnvironment {
         .map_err(|err| err.finish(Location::Undefined))
     }
 
+    #[cfg(fuzzing)]
     pub(crate) fn build_verified_module_unchecked(
         &self,
         compiled_module: Arc<CompiledModule>,

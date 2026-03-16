@@ -176,11 +176,15 @@ impl Clone for Loader {
 }
 
 impl Loader {
-    pub(crate) fn new(natives: NativeFunctions, vm_config: VMConfig) -> Self {
+    pub(crate) fn new_with_name_cache(
+        natives: NativeFunctions,
+        vm_config: VMConfig,
+        name_cache: Arc<StructNameCache>,
+    ) -> Self {
         Self {
             scripts: RwLock::new(ScriptCache::new()),
             type_cache: RwLock::new(TypeCache::new()),
-            name_cache: Arc::new(StructNameCache::empty()),
+            name_cache,
             natives,
             invalidated: RwLock::new(false),
             module_cache_hits: RwLock::new(BTreeSet::new()),
