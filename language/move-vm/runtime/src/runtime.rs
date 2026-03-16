@@ -11,6 +11,7 @@ use crate::{
     native_extensions::NativeContextExtensions,
     native_functions::{NativeFunction, NativeFunctions},
     session::SerializedReturnValues,
+    RuntimeEnvironment,
 };
 use move_binary_format::{
     access::ModuleAccess,
@@ -34,6 +35,7 @@ use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
 pub(crate) struct VMRuntime {
     pub(crate) loader: Loader,
     pub(crate) module_cache: Arc<ModuleCache>,
+    pub(crate) runtime_environment: RuntimeEnvironment,
 }
 
 impl Clone for VMRuntime {
@@ -41,6 +43,7 @@ impl Clone for VMRuntime {
         Self {
             loader: self.loader.clone(),
             module_cache: Arc::new(ModuleCache::clone(&self.module_cache)),
+            runtime_environment: self.runtime_environment.clone(),
         }
     }
 }
@@ -50,10 +53,17 @@ impl VMRuntime {
         natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
         vm_config: VMConfig,
     ) -> PartialVMResult<Self> {
+        let native_table: Vec<_> = natives.into_iter().collect();
+        let native_functions = NativeFunctions::new(native_table.clone())?;
         Ok(VMRuntime {
-            loader: Loader::new(NativeFunctions::new(natives)?, vm_config),
+            loader: Loader::new(native_functions.clone(), vm_config.clone()),
             module_cache: Arc::new(ModuleCache::new()),
+            runtime_environment: RuntimeEnvironment::new_with_config(native_table, vm_config),
         })
+    }
+
+    pub(crate) fn runtime_environment(&self) -> &RuntimeEnvironment {
+        &self.runtime_environment
     }
 
     pub(crate) fn publish_module_bundle(
@@ -474,5 +484,16 @@ impl VMRuntime {
 
     pub(crate) fn module_storage(&self) -> Arc<dyn ModuleStorage> {
         self.module_cache.clone() as Arc<dyn ModuleStorage>
+    }
+
+    pub(crate) fn update_native_functions(
+        &mut self,
+        natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
+    ) -> PartialVMResult<()> {
+        let native_table: Vec<_> = natives.into_iter().collect();
+        let native_functions = NativeFunctions::new(native_table.clone())?;
+        self.loader.update_native_functions(native_table)?;
+        self.runtime_environment.set_natives(native_functions);
+        Ok(())
     }
 }

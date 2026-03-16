@@ -68,6 +68,10 @@ impl RuntimeEnvironment {
         &self.natives
     }
 
+    pub(crate) fn set_natives(&mut self, natives: NativeFunctions) {
+        self.natives = natives;
+    }
+
     pub fn struct_name_index_map(&self) -> &StructNameIndexMap {
         &self.struct_name_index_map
     }

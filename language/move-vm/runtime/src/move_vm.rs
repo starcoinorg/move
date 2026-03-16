@@ -45,7 +45,7 @@ impl MoveVM {
 
     /// Returns VM configuration used to initialize the VM.
     pub fn vm_config(&self) -> &VMConfig {
-        self.runtime.loader().vm_config()
+        self.runtime.runtime_environment().vm_config()
     }
 
     /// Create a new Session backed by the given storage.
@@ -194,6 +194,6 @@ impl MoveVM {
         &mut self,
         natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
     ) -> PartialVMResult<()> {
-        self.runtime.loader.update_native_functions(natives)
+        self.runtime.update_native_functions(natives)
     }
 }

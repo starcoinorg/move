@@ -16,7 +16,7 @@ use move_core_types::{
     account_address::AccountAddress,
     effects::{AccountChanges, ChangeSet, Changes, Op},
     gas_algebra::NumBytes,
-    identifier::Identifier,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     metadata::Metadata,
     resolver::MoveResolver,
@@ -24,6 +24,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::{
+    code::ModuleBytesStorage,
     loaded_data::runtime_types::Type,
     value_serde::deserialize_and_allow_delayed_values,
     values::{GlobalValue, Value},
@@ -379,5 +380,25 @@ impl<'r> TransactionDataCache<'r> {
             .get_module(module_id)
             .map_err(|e| e.finish(Location::Undefined))?
             .is_some())
+    }
+}
+
+impl ModuleBytesStorage for TransactionDataCache<'_> {
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        let module_id = ModuleId::new(*address, module_name.to_owned());
+        self.load_module(&module_id)
+            .map(Some)
+            .map_err(|err| err.finish(Location::Undefined))
+            .or_else(|err| {
+                if err.major_status() == StatusCode::LINKER_ERROR {
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            })
     }
 }
