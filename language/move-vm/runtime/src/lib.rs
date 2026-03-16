@@ -24,6 +24,7 @@ pub mod tracing;
 pub mod config;
 pub mod move_vm_adapter;
 pub mod module_traversal;
+mod storage;
 
 // Only include debugging functionality in debug builds
 #[cfg(any(debug_assertions, feature = "debugging"))]
@@ -32,3 +33,9 @@ mod debug;
 mod access_control;
 
 pub use loader::LoadedFunction;
+pub use storage::{
+    environment::{
+        ambassador_impl_WithRuntimeEnvironment, RuntimeEnvironment, WithRuntimeEnvironment,
+    },
+    layout_cache::{LayoutCache, LayoutCacheEntry, NoOpLayoutCache, StructKey},
+};
