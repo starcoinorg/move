@@ -6,4 +6,5 @@ pub mod environment;
 pub mod implementations;
 pub mod layout_cache;
 pub mod module_storage;
+pub mod publishing;
 mod verified_module_cache;

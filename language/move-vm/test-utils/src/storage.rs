@@ -5,7 +5,7 @@
 use bytes::Bytes;
 use move_binary_format::{
     deserializer::DeserializerConfig,
-    errors::{PartialVMError, PartialVMResult},
+    errors::{PartialVMError, PartialVMResult, VMResult},
     file_format_common::{IDENTIFIER_SIZE_MAX, VERSION_MAX},
     CompiledModule,
 };
@@ -13,7 +13,7 @@ use move_bytecode_utils::compiled_module_viewer::CompiledModuleView;
 use move_core_types::{
     account_address::AccountAddress,
     effects::{AccountChangeSet, ChangeSet, Op},
-    identifier::Identifier,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag},
     metadata::Metadata,
     resolver::{resource_size, ModuleResolver, MoveResolver, ResourceResolver},
@@ -22,6 +22,8 @@ use move_core_types::{
 };
 #[cfg(feature = "table-extension")]
 use move_table_extension::{TableChangeSet, TableHandle, TableResolver};
+use move_vm_runtime::{RuntimeEnvironment, WithRuntimeEnvironment};
+use move_vm_types::code::ModuleBytesStorage;
 use std::{
     collections::{btree_map, BTreeMap},
     fmt::Debug,
@@ -34,6 +36,24 @@ pub struct BlankStorage;
 impl BlankStorage {
     pub fn new() -> Self {
         Self
+    }
+}
+
+impl ModuleBytesStorage for BlankStorage {
+    fn fetch_module_bytes(
+        &self,
+        _address: &AccountAddress,
+        _module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        Ok(None)
+    }
+}
+
+impl WithRuntimeEnvironment for BlankStorage {
+    fn runtime_environment(&self) -> &RuntimeEnvironment {
+        static RUNTIME_ENVIRONMENT: once_cell::sync::Lazy<RuntimeEnvironment> =
+            once_cell::sync::Lazy::new(|| RuntimeEnvironment::new(vec![]));
+        &RUNTIME_ENVIRONMENT
     }
 }
 
@@ -154,18 +174,38 @@ struct InMemoryAccountStorage {
 }
 
 /// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct InMemoryStorage {
+    runtime_environment: RuntimeEnvironment,
     accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
     #[cfg(feature = "table-extension")]
     tables: BTreeMap<TableHandle, BTreeMap<Vec<u8>, Bytes>>,
+}
+
+impl ModuleBytesStorage for InMemoryStorage {
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        Ok(self
+            .accounts
+            .get(address)
+            .and_then(|account_storage| account_storage.modules.get(module_name).cloned()))
+    }
+}
+
+impl WithRuntimeEnvironment for InMemoryStorage {
+    fn runtime_environment(&self) -> &RuntimeEnvironment {
+        &self.runtime_environment
+    }
 }
 
 impl CompiledModuleView for InMemoryStorage {
     type Item = CompiledModule;
 
     fn view_compiled_module(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>> {
-        Ok(match self.get_module(id)? {
+        Ok(match self.fetch_module_bytes(id.address(), id.name())? {
             Some(bytes) => {
                 let config = DeserializerConfig::new(VERSION_MAX, IDENTIFIER_SIZE_MAX);
                 Some(CompiledModule::deserialize_with_config(&bytes, &config)?)
@@ -302,6 +342,16 @@ impl InMemoryStorage {
 
     pub fn new() -> Self {
         Self {
+            runtime_environment: RuntimeEnvironment::new(vec![]),
+            accounts: BTreeMap::new(),
+            #[cfg(feature = "table-extension")]
+            tables: BTreeMap::new(),
+        }
+    }
+
+    pub fn new_with_runtime_environment(runtime_environment: RuntimeEnvironment) -> Self {
+        Self {
+            runtime_environment,
             accounts: BTreeMap::new(),
             #[cfg(feature = "table-extension")]
             tables: BTreeMap::new(),

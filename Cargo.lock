@@ -3713,6 +3713,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-table-extension",
+ "move-vm-runtime",
  "move-vm-types",
  "once_cell",
  "serde",

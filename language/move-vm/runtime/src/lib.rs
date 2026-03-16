@@ -47,4 +47,5 @@ pub use storage::{
         ambassador_impl_ModuleStorage, AsFunctionValueExtension, FunctionValueExtensionAdapter,
         ModuleStorage,
     },
+    publishing::{StagingModuleStorage, VerifiedModuleBundle},
 };

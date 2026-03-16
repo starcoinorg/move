@@ -27,6 +27,7 @@ use move_vm_types::{
 use std::sync::Arc;
 
 /// Shared runtime environment for loader-v2 style storage and caches.
+#[derive(Clone)]
 pub struct RuntimeEnvironment {
     vm_config: VMConfig,
     #[allow(dead_code)]
