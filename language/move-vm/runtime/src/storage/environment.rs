@@ -9,8 +9,9 @@ use crate::{
 use ambassador::delegatable_trait;
 use bytes::Bytes;
 use move_binary_format::{
-    access::ModuleAccess,
+    access::{ModuleAccess, ScriptAccess},
     errors::{Location, PartialVMError, VMResult},
+    file_format::CompiledScript,
     CompiledModule,
 };
 use move_bytecode_verifier::dependencies;
@@ -59,6 +60,20 @@ impl RuntimeEnvironment {
         }
     }
 
+    pub(crate) fn new_with_shared_name_cache(
+        natives: NativeFunctions,
+        vm_config: VMConfig,
+        struct_name_index_map: Arc<StructNameIndexMap>,
+    ) -> Self {
+        Self {
+            vm_config,
+            natives,
+            struct_name_index_map,
+            ty_pool: Arc::new(InternedTypePool::new()),
+            module_id_pool: Arc::new(InternedModuleIdPool::new()),
+        }
+    }
+
     pub fn vm_config(&self) -> &VMConfig {
         &self.vm_config
     }
@@ -96,6 +111,47 @@ impl RuntimeEnvironment {
                     .with_message(msg)
                     .finish(Location::Undefined)
             })
+    }
+
+    pub fn deserialize_into_script(&self, serialized_script: &[u8]) -> VMResult<CompiledScript> {
+        CompiledScript::deserialize_with_config(
+            serialized_script,
+            &self.vm_config.deserializer_config,
+        )
+        .map_err(|err| {
+            let msg = format!("[VM] deserializer for script returned error: {:?}", err);
+            PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
+                .with_message(msg)
+                .finish(Location::Script)
+        })
+    }
+
+    pub(crate) fn build_locally_verified_script(
+        &self,
+        compiled_script: Arc<CompiledScript>,
+    ) -> VMResult<LocallyVerifiedScript> {
+        move_bytecode_verifier::verify_script_with_config(
+            &self.vm_config.verifier_config,
+            compiled_script.as_ref(),
+        )?;
+        Ok(LocallyVerifiedScript(compiled_script))
+    }
+
+    pub(crate) fn build_verified_script(
+        &self,
+        locally_verified_script: LocallyVerifiedScript,
+        immediate_dependencies: &[Arc<crate::loader::Module>],
+        script_hash: &[u8; 32],
+    ) -> VMResult<crate::loader::Script> {
+        dependencies::verify_script(
+            locally_verified_script.0.as_ref(),
+            immediate_dependencies.iter().map(|module| module.as_ref().module()),
+        )?;
+        crate::loader::Script::new(
+            locally_verified_script.0,
+            script_hash,
+            self.struct_name_index_map(),
+        )
     }
 
     pub(crate) fn build_locally_verified_module(
@@ -199,6 +255,16 @@ impl WithRuntimeEnvironment for RuntimeEnvironment {
 pub(crate) struct LocallyVerifiedModule(Arc<CompiledModule>, usize);
 
 impl LocallyVerifiedModule {
+    pub(crate) fn immediate_dependencies_iter(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = (&AccountAddress, &IdentStr)> {
+        self.0.immediate_dependencies_iter()
+    }
+}
+
+pub(crate) struct LocallyVerifiedScript(Arc<CompiledScript>);
+
+impl LocallyVerifiedScript {
     pub(crate) fn immediate_dependencies_iter(
         &self,
     ) -> impl DoubleEndedIterator<Item = (&AccountAddress, &IdentStr)> {

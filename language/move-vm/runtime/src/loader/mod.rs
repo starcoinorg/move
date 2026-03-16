@@ -333,21 +333,29 @@ impl Loader {
         module_store: &ModuleStorageAdapter,
     ) -> VMResult<Arc<CompiledScript>> {
         let script = data_store.load_compiled_script_to_cache(script, hash_value)?;
-
-        // Verification:
-        //   - Local, using a bytecode verifier.
-        //   - Global, loading & verifying module dependencies.
-        move_bytecode_verifier::verify_script_with_config(
-            &self.vm_config.verifier_config,
-            script.as_ref(),
-        )?;
-        let loaded_deps = script
-            .immediate_dependencies()
+        let runtime_environment = &self.runtime_environment();
+        let locally_verified_script =
+            runtime_environment.build_locally_verified_script(script.clone())?;
+        let loaded_deps = locally_verified_script
+            .immediate_dependencies_iter()
+            .map(|(addr, name)| ModuleId::new(*addr, name.to_owned()))
             .into_iter()
             .map(|module_id| self.load_module(&module_id, data_store, module_store))
             .collect::<VMResult<Vec<_>>>()?;
-        dependencies::verify_script(&script, loaded_deps.iter().map(|m| m.module()))?;
+        runtime_environment.build_verified_script(
+            locally_verified_script,
+            &loaded_deps,
+            &hash_value,
+        )?;
         Ok(script)
+    }
+
+    fn runtime_environment(&self) -> crate::RuntimeEnvironment {
+        crate::RuntimeEnvironment::new_with_shared_name_cache(
+            self.natives.clone(),
+            self.vm_config.clone(),
+            self.name_cache.clone(),
+        )
     }
 
     //
