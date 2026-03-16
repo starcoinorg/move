@@ -7,9 +7,68 @@ use move_binary_format::{
     file_format_common::{IDENTIFIER_SIZE_MAX, VERSION_MAX},
 };
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
-use move_vm_runtime::{config::VMConfig, module_traversal::*, move_vm::MoveVM};
+use move_vm_runtime::{
+    config::VMConfig, module_traversal::*, move_vm::MoveVM, AsUnsyncModuleStorage,
+    RuntimeEnvironment, StagingModuleStorage,
+};
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
+
+fn initialize_storage_with_binary_format_version(binary_format_version: u32) -> InMemoryStorage {
+    let vm_config = VMConfig {
+        deserializer_config: DeserializerConfig::new(binary_format_version, IDENTIFIER_SIZE_MAX),
+        ..Default::default()
+    };
+    let runtime_environment = RuntimeEnvironment::new_with_config(
+        move_stdlib::natives::all_natives(
+            AccountAddress::from_hex_literal("0x1").unwrap(),
+            move_stdlib::natives::GasParameters::zeros(),
+        ),
+        vm_config,
+    );
+    InMemoryStorage::new_with_runtime_environment(runtime_environment)
+}
+
+#[test]
+fn test_staging_publish_module_with_custom_max_binary_format_version() {
+    let m = basic_test_module();
+    let mut b_new = vec![];
+    let mut b_old = vec![];
+    m.serialize_for_version(Some(VERSION_MAX), &mut b_new)
+        .unwrap();
+    m.serialize_for_version(Some(VERSION_MAX.checked_sub(1).unwrap()), &mut b_old)
+        .unwrap();
+
+    {
+        let storage = initialize_storage_with_binary_format_version(VERSION_MAX);
+        let module_storage = storage.as_unsync_module_storage();
+
+        let staged_storage =
+            StagingModuleStorage::create(m.self_addr(), &module_storage, vec![b_new.clone().into()])
+                .expect("new module should be publishable");
+        StagingModuleStorage::create(m.self_addr(), &staged_storage, vec![b_old.clone().into()])
+            .expect("old module should be publishable");
+    }
+
+    {
+        let storage = initialize_storage_with_binary_format_version(
+            VERSION_MAX.checked_sub(1).unwrap(),
+        );
+        let module_storage = storage.as_unsync_module_storage();
+
+        let err = match StagingModuleStorage::create(
+            m.self_addr(),
+            &module_storage,
+            vec![b_new.into()],
+        ) {
+            Ok(_) => panic!("new module should not be publishable"),
+            Err(err) => err,
+        };
+        assert_eq!(err.major_status(), StatusCode::UNKNOWN_VERSION);
+        StagingModuleStorage::create(m.self_addr(), &module_storage, vec![b_old.into()])
+            .expect("old module should be publishable");
+    }
+}
 
 #[test]
 fn test_publish_module_with_custom_max_binary_format_version() {
