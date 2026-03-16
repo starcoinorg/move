@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    intern_type, BinaryCache, Function, FunctionHandle, FunctionInstantiation,
-    ModuleStorageAdapter, Scope, ScriptHash, StructNameCache,
+    intern_type, BinaryCache, Function, FunctionHandle, FunctionInstantiation, Scope, ScriptHash,
+    StructNameCache,
 };
 use move_binary_format::{
     access::ScriptAccess,
@@ -16,14 +16,14 @@ use move_vm_types::loaded_data::{
     runtime_access_specifier::AccessSpecifier,
     runtime_types::{StructIdentifier, Type},
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
 // A Script is very similar to a `CompiledScript` but data is "transformed" to a representation
 // more appropriate to execution.
 // When code executes, indices in instructions are resolved against runtime structures
 // (rather than "compiled") to make available data needed for execution.
 #[derive(Clone, Debug)]
-pub(crate) struct Script {
+pub struct Script {
     // primitive pools
     pub(crate) script: Arc<CompiledScript>,
 
@@ -43,7 +43,6 @@ impl Script {
     pub(crate) fn new(
         script: Arc<CompiledScript>,
         script_hash: &ScriptHash,
-        cache: &ModuleStorageAdapter,
         name_cache: &StructNameCache,
     ) -> VMResult<Self> {
         let mut struct_names = vec![];
@@ -51,12 +50,6 @@ impl Script {
             let struct_name = script.identifier_at(struct_handle.name);
             let module_handle = script.module_handle_at(struct_handle.module);
             let module_id = script.module_id_for_handle(module_handle);
-            cache
-                .get_struct_type_by_identifier(struct_name, &module_id)
-                .map_err(|err| err.finish(Location::Script))?
-                .check_compatibility(struct_handle)
-                .map_err(|err| err.finish(Location::Script))?;
-
             struct_names.push(
                 name_cache
                     .struct_name_to_idx(&StructIdentifier {
@@ -204,6 +197,14 @@ impl Script {
 
     pub(crate) fn single_type_at(&self, idx: SignatureIndex) -> &Type {
         self.single_signature_token_map.get(&idx).unwrap()
+    }
+}
+
+impl Deref for Script {
+    type Target = Arc<CompiledScript>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.script
     }
 }
 

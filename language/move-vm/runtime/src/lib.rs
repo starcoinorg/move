@@ -34,8 +34,17 @@ mod access_control;
 
 pub use loader::LoadedFunction;
 pub use storage::{
+    code_storage::CodeStorage,
     environment::{
         ambassador_impl_WithRuntimeEnvironment, RuntimeEnvironment, WithRuntimeEnvironment,
     },
+    implementations::{
+        unsync_code_storage::{AsUnsyncCodeStorage, UnsyncCodeStorage},
+        unsync_module_storage::{AsUnsyncModuleStorage, BorrowedOrOwned, UnsyncModuleStorage},
+    },
     layout_cache::{LayoutCache, LayoutCacheEntry, NoOpLayoutCache, StructKey},
+    module_storage::{
+        ambassador_impl_ModuleStorage, AsFunctionValueExtension, FunctionValueExtensionAdapter,
+        ModuleStorage,
+    },
 };

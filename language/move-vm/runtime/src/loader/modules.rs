@@ -34,6 +34,7 @@ use parking_lot::RwLock;
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
+    ops::Deref,
     sync::Arc,
 };
 
@@ -115,10 +116,9 @@ impl ModuleStorageAdapter {
             return Ok(cached);
         }
 
-        match Module::new(natives, module_size, module, self, name_cache) {
-            Ok(module) => Ok(self.modules.store_module(&id, module)),
-            Err((err, _)) => Err(err.finish(Location::Undefined)),
-        }
+        let module = Module::new(natives, module_size, module, name_cache)
+            .map_err(|err| err.finish(Location::Undefined))?;
+        Ok(self.modules.store_module(&id, module))
     }
 
     pub(crate) fn has_module(&self, module_id: &ModuleId) -> bool {
@@ -273,9 +273,8 @@ impl Module {
         natives: &NativeFunctions,
         size: usize,
         module: Arc<CompiledModule>,
-        cache: &ModuleStorageAdapter,
         name_cache: &StructNameCache,
-    ) -> Result<Self, (PartialVMError, Arc<CompiledModule>)> {
+    ) -> PartialVMResult<Self> {
         let id = module.self_id();
 
         let mut structs = vec![];
@@ -293,17 +292,10 @@ impl Module {
         let mut create = || {
             let mut struct_idxs = vec![];
             let mut struct_names = vec![];
-            // validate the correctness of struct handle references.
             for struct_handle in module.struct_handles() {
                 let struct_name = module.identifier_at(struct_handle.name);
                 let module_handle = module.module_handle_at(struct_handle.module);
                 let module_id = module.module_id_for_handle(module_handle);
-
-                if module_handle != module.self_handle() {
-                    cache
-                        .get_struct_type_by_identifier(struct_name, &module_id)?
-                        .check_compatibility(struct_handle)?;
-                }
                 let name = StructIdentifier {
                     module: module_id,
                     name: struct_name.to_owned(),
@@ -457,24 +449,22 @@ impl Module {
             Ok(())
         };
 
-        match create() {
-            Ok(_) => Ok(Self {
-                id,
-                size,
-                module,
-                structs,
-                struct_instantiations,
-                function_refs,
-                function_defs,
-                function_instantiations,
-                field_handles,
-                field_instantiations,
-                function_map,
-                struct_map,
-                single_signature_token_map,
-            }),
-            Err(err) => Err((err, module)),
-        }
+        create()?;
+        Ok(Self {
+            id,
+            size,
+            module,
+            structs,
+            struct_instantiations,
+            function_refs,
+            function_defs,
+            function_instantiations,
+            field_handles,
+            field_instantiations,
+            function_map,
+            struct_map,
+            single_signature_token_map,
+        })
     }
 
     fn make_struct_type(
@@ -567,5 +557,13 @@ impl Module {
 
     pub(crate) fn single_type_at(&self, idx: SignatureIndex) -> &Type {
         self.single_signature_token_map.get(&idx).unwrap()
+    }
+}
+
+impl Deref for Module {
+    type Target = Arc<CompiledModule>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.module
     }
 }

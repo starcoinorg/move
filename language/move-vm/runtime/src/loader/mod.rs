@@ -279,7 +279,7 @@ impl Loader {
                     data_store,
                     module_store,
                 )?;
-                let script = Script::new(ver_script, &hash_value, module_store, &self.name_cache)?;
+                let script = Script::new(ver_script, &hash_value, &self.name_cache)?;
                 scripts.insert(hash_value, script)
             },
         };

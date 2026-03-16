@@ -4,13 +4,16 @@
 use crate::{
     config::VMConfig,
     native_functions::{NativeFunction, NativeFunctions},
+    storage::verified_module_cache::VERIFIED_MODULES_CACHE,
 };
 use ambassador::delegatable_trait;
 use bytes::Bytes;
 use move_binary_format::{
+    access::ModuleAccess,
     errors::{Location, PartialVMError, VMResult},
     CompiledModule,
 };
+use move_bytecode_verifier::dependencies;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{Identifier, IdentStr},
@@ -86,6 +89,67 @@ impl RuntimeEnvironment {
             })
     }
 
+    pub(crate) fn build_locally_verified_module(
+        &self,
+        compiled_module: Arc<CompiledModule>,
+        module_size: usize,
+        module_hash: &[u8; 32],
+    ) -> VMResult<LocallyVerifiedModule> {
+        if !VERIFIED_MODULES_CACHE.contains(module_hash) {
+            move_bytecode_verifier::verify_module_with_config(
+                &self.vm_config.verifier_config,
+                compiled_module.as_ref(),
+            )?;
+            VERIFIED_MODULES_CACHE.put(*module_hash);
+        }
+        Ok(LocallyVerifiedModule(compiled_module, module_size))
+    }
+
+    pub(crate) fn build_verified_module_with_linking_checks(
+        &self,
+        locally_verified_module: LocallyVerifiedModule,
+        immediate_dependencies: &[Arc<crate::loader::Module>],
+    ) -> VMResult<crate::loader::Module> {
+        dependencies::verify_module(
+            locally_verified_module.0.as_ref(),
+            immediate_dependencies.iter().map(|module| module.as_ref().module()),
+        )?;
+        crate::loader::Module::new(
+            self.natives(),
+            locally_verified_module.1,
+            locally_verified_module.0,
+            self.struct_name_index_map(),
+        )
+        .map_err(|err| err.finish(Location::Undefined))
+    }
+
+    pub(crate) fn build_verified_module_skip_linking_checks(
+        &self,
+        locally_verified_module: LocallyVerifiedModule,
+    ) -> VMResult<crate::loader::Module> {
+        crate::loader::Module::new(
+            self.natives(),
+            locally_verified_module.1,
+            locally_verified_module.0,
+            self.struct_name_index_map(),
+        )
+        .map_err(|err| err.finish(Location::Undefined))
+    }
+
+    pub(crate) fn build_verified_module_unchecked(
+        &self,
+        compiled_module: Arc<CompiledModule>,
+        module_size: usize,
+    ) -> VMResult<crate::loader::Module> {
+        crate::loader::Module::new(
+            self.natives(),
+            module_size,
+            compiled_module,
+            self.struct_name_index_map(),
+        )
+        .map_err(|err| err.finish(Location::Undefined))
+    }
+
     pub fn paranoid_check_module_address_and_name(
         &self,
         module: &CompiledModule,
@@ -119,5 +183,15 @@ pub trait WithRuntimeEnvironment {
 impl WithRuntimeEnvironment for RuntimeEnvironment {
     fn runtime_environment(&self) -> &RuntimeEnvironment {
         self
+    }
+}
+
+pub(crate) struct LocallyVerifiedModule(Arc<CompiledModule>, usize);
+
+impl LocallyVerifiedModule {
+    pub(crate) fn immediate_dependencies_iter(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = (&AccountAddress, &IdentStr)> {
+        self.0.immediate_dependencies_iter()
     }
 }
