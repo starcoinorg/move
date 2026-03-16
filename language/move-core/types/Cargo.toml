@@ -26,7 +26,7 @@ ethnum = "1.0.4"
 arbitrary = { version = "1.1.7", features = [ "derive_arbitrary"], optional = true }
 bcs.workspace = true
 bech32 = "0.9"
-openrpc-schema = {git = "https://github.com/starcoinorg/openrpc-rs",rev = "1f2f7d3495e3bd3ef3b6fcf7c4e0602cad090d5e"}
+openrpc-schema = {git = "https://github.com/starcoinorg/openrpc-rs",rev = "ede68cb6bd9cee80225ac978a9b982c2c5617d0f"}
 
 
 [dev-dependencies]
