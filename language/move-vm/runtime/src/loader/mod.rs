@@ -3,8 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::VMConfig, data_cache::TransactionDataCache, logging::expect_no_verification_errors,
-    module_traversal::TraversalContext, native_functions::NativeFunctions,
+    config::VMConfig,
+    data_cache::TransactionDataCache,
+    logging::{expect_no_verification_errors, expect_no_verification_errors_unless_bogus_storage},
+    module_traversal::{TraversalContext, TraversalStorage}, native_functions::NativeFunctions,
+    dispatch_loader, AsUnsyncCodeStorage, AsUnsyncModuleStorage, LegacyLoaderConfig,
+    FunctionDefinitionLoader, InstantiatedFunctionLoader, ModuleMetadataLoader, NativeModuleLoader,
+    ScriptLoader, StructDefinitionLoader, WithRuntimeEnvironment,
+    ModuleStorage as LoaderV2ModuleStorage,
 };
 use hashbrown::Equivalent;
 use lazy_static::lazy_static;
@@ -15,7 +21,6 @@ use move_binary_format::{
         CompiledModule, CompiledScript, Constant, ConstantPoolIndex, FieldHandleIndex,
         FieldInstantiationIndex, FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex,
         StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
-        TypeParameterIndex,
     },
     IndexKind,
 };
@@ -23,19 +28,21 @@ use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
     account_address::AccountAddress,
     gas_algebra::{NumBytes, NumTypeNodes},
-    ident_str,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag, TypeTag},
-    value::{IdentifierMappingKind, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    value::MoveTypeLayout,
     vm_status::StatusCode,
 };
 use move_vm_types::{
+    code::ModuleBytesStorage,
     gas::GasMeter,
+    gas::UnmeteredGasMeter,
     loaded_data::{
-        runtime_types::{AbilityInfo, DepthFormula, StructIdentifier, StructNameIndex, StructType, Type},
+        runtime_types::{AbilityInfo, StructNameIndex, StructType, Type},
         struct_name_indexing::StructNameIndexMap,
     },
 };
+use crate::storage::ty_layout_converter::LayoutConverter;
 use parking_lot::{Mutex, RwLock};
 use sha3::{Digest, Sha3_256};
 use std::{
@@ -61,6 +68,36 @@ use type_loader::intern_type;
 use crate::native_functions::NativeFunction;
 
 type ScriptHash = [u8; 32];
+
+struct LoaderV2DataStore<'a, T> {
+    runtime_environment: crate::RuntimeEnvironment,
+    storage: &'a T,
+}
+
+impl<'a, T> LoaderV2DataStore<'a, T> {
+    fn new(runtime_environment: crate::RuntimeEnvironment, storage: &'a T) -> Self {
+        Self {
+            runtime_environment,
+            storage,
+        }
+    }
+}
+
+impl<T: ModuleBytesStorage> ModuleBytesStorage for LoaderV2DataStore<'_, T> {
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<bytes::Bytes>> {
+        self.storage.fetch_module_bytes(address, module_name)
+    }
+}
+
+impl<T> crate::WithRuntimeEnvironment for LoaderV2DataStore<'_, T> {
+    fn runtime_environment(&self) -> &crate::RuntimeEnvironment {
+        &self.runtime_environment
+    }
+}
 
 // A simple cache that offers both a HashMap and a Vector lookup.
 // Values are forced into a `Arc` so they can be used from multiple thread.
@@ -124,7 +161,6 @@ pub(crate) type StructNameCache = StructNameIndexMap;
 // The `pub(crate)` API is what a Loader offers to the runtime.
 pub(crate) struct Loader {
     scripts: RwLock<ScriptCache>,
-    type_cache: RwLock<TypeCache>,
     natives: NativeFunctions,
     pub(crate) name_cache: Arc<StructNameCache>,
 
@@ -165,7 +201,6 @@ impl Clone for Loader {
     fn clone(&self) -> Self {
         Self {
             scripts: RwLock::new(self.scripts.read().clone()),
-            type_cache: RwLock::new(self.type_cache.read().clone()),
             natives: self.natives.clone(),
             name_cache: self.name_cache.clone(),
             invalidated: RwLock::new(*self.invalidated.read()),
@@ -183,7 +218,6 @@ impl Loader {
     ) -> Self {
         Self {
             scripts: RwLock::new(ScriptCache::new()),
-            type_cache: RwLock::new(TypeCache::new()),
             name_cache,
             natives,
             invalidated: RwLock::new(false),
@@ -196,6 +230,298 @@ impl Loader {
         &self.vm_config
     }
 
+    fn with_module_storage<'a, T, R>(
+        &self,
+        data_store: &'a T,
+        f: impl FnOnce(&crate::UnsyncModuleStorage<'a, LoaderV2DataStore<'a, T>>) -> VMResult<R>,
+    ) -> VMResult<(R, Vec<(ModuleId, Arc<Module>)>)>
+    where
+        T: ModuleBytesStorage,
+    {
+        let runtime_environment = self.runtime_environment();
+        let base_storage = LoaderV2DataStore::new(runtime_environment, data_store);
+        let module_storage = base_storage.into_unsync_module_storage();
+        let result = f(&module_storage)?;
+        let (_ctx, verified_modules_iter) = module_storage.unpack_into_verified_modules_iter();
+        Ok((result, verified_modules_iter.collect()))
+    }
+
+    fn with_code_storage<'a, T, R>(
+        &self,
+        data_store: &'a T,
+        f: impl FnOnce(
+            &crate::UnsyncCodeStorage<crate::UnsyncModuleStorage<'a, LoaderV2DataStore<'a, T>>>,
+        ) -> VMResult<R>,
+    ) -> VMResult<(R, Vec<(ModuleId, Arc<Module>)>)>
+    where
+        T: ModuleBytesStorage,
+    {
+        let runtime_environment = self.runtime_environment();
+        let base_storage = LoaderV2DataStore::new(runtime_environment, data_store);
+        let code_storage = base_storage.into_unsync_code_storage();
+        let result = f(&code_storage)?;
+        let (_ctx, verified_modules_iter) = code_storage
+            .into_module_storage()
+            .unpack_into_verified_modules_iter();
+        Ok((result, verified_modules_iter.collect()))
+    }
+
+    fn sync_verified_modules(
+        &self,
+        module_store: &ModuleStorageAdapter,
+        verified_modules: Vec<(ModuleId, Arc<Module>)>,
+    ) {
+        for (_module_id, module) in verified_modules {
+            module_store.store_verified_module(module);
+        }
+    }
+
+    fn sync_verified_script(
+        &self,
+        data_store: &mut TransactionDataCache,
+        script_blob: &[u8],
+    ) -> VMResult<()> {
+        let mut sha3_256 = Sha3_256::new();
+        sha3_256.update(script_blob);
+        let hash_value: [u8; 32] = sha3_256.finalize().into();
+
+        let script = data_store.load_compiled_script_to_cache(script_blob, hash_value)?;
+        let script = Script::new(script, &hash_value, &self.name_cache)?;
+        self.scripts.write().insert(hash_value, script);
+        Ok(())
+    }
+
+    fn normalize_module_loading_error(
+        &self,
+        module_id: &ModuleId,
+        data_store: &TransactionDataCache,
+        err: move_binary_format::errors::VMError,
+    ) -> move_binary_format::errors::VMError {
+        match data_store.exists_module(module_id) {
+            Ok(true) => expect_no_verification_errors_unless_bogus_storage(err),
+            _ => err,
+        }
+    }
+
+    pub(crate) fn load_function_v2(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: &[TypeTag],
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<LoadedFunction> {
+        let config = LegacyLoaderConfig {
+            charge_for_dependencies: true,
+            charge_for_ty_tag_dependencies: true,
+        };
+        let result = self
+            .with_module_storage(data_store, |storage| {
+            dispatch_loader!(storage, loader, {
+                loader.load_instantiated_function(
+                    &config,
+                    gas_meter,
+                    traversal_context,
+                    module_id,
+                    function_name,
+                    ty_args,
+                )
+            })
+        });
+        let (result, verified_modules) = result
+            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
+        self.sync_verified_modules(module_store, verified_modules);
+        Ok(result)
+    }
+
+    pub(crate) fn load_function_v2_unmetered(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: &[TypeTag],
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+    ) -> VMResult<LoadedFunction> {
+        let mut gas_meter = UnmeteredGasMeter;
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        let config = LegacyLoaderConfig::unmetered();
+        let result = self
+            .with_module_storage(data_store, |storage| {
+            dispatch_loader!(storage, loader, {
+                loader.load_instantiated_function(
+                    &config,
+                    &mut gas_meter,
+                    &mut traversal_context,
+                    module_id,
+                    function_name,
+                    ty_args,
+                )
+            })
+        });
+        let (result, verified_modules) = result
+            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
+        self.sync_verified_modules(module_store, verified_modules);
+        Ok(result)
+    }
+
+    pub(crate) fn load_script_v2(
+        &self,
+        script_blob: &[u8],
+        ty_args: &[TypeTag],
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<LoadedFunction> {
+        let config = LegacyLoaderConfig {
+            charge_for_dependencies: true,
+            charge_for_ty_tag_dependencies: true,
+        };
+        let mut sha3_256 = Sha3_256::new();
+        sha3_256.update(script_blob);
+        let hash_value: [u8; 32] = sha3_256.finalize().into();
+
+        let runtime_environment = self.runtime_environment();
+        let base_storage = LoaderV2DataStore::new(runtime_environment, data_store);
+        let code_storage = base_storage.into_unsync_code_storage();
+        let result = dispatch_loader!(&code_storage, loader, {
+            loader.load_script(
+                &config,
+                gas_meter,
+                traversal_context,
+                script_blob,
+                ty_args,
+            )
+        })?;
+        if let Some(script) = code_storage.get_verified_script(&hash_value) {
+            self.scripts
+                .write()
+                .scripts
+                .insert(hash_value, script.as_ref().clone());
+        }
+        let (_ctx, verified_modules_iter) = code_storage
+            .into_module_storage()
+            .unpack_into_verified_modules_iter();
+        let verified_modules = verified_modules_iter.collect();
+        self.sync_verified_modules(module_store, verified_modules);
+        Ok(result)
+    }
+
+    pub(crate) fn load_script_v2_unmetered(
+        &self,
+        script_blob: &[u8],
+        ty_args: &[TypeTag],
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+    ) -> VMResult<LoadedFunction> {
+        let mut gas_meter = UnmeteredGasMeter;
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        self.load_script_v2(
+            script_blob,
+            ty_args,
+            data_store,
+            module_store,
+            &mut gas_meter,
+            &mut traversal_context,
+        )
+    }
+
+    pub(crate) fn ensure_function_loaded_v2(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<()> {
+        if module_store.module_at(module_id).is_some() {
+            return Ok(());
+        }
+
+        let result = self
+            .with_module_storage(data_store, |storage| {
+            dispatch_loader!(storage, loader, {
+                loader
+                    .load_function_definition(
+                        gas_meter,
+                        traversal_context,
+                        module_id,
+                        function_name,
+                    )
+                    .map(|_| ())
+            })
+        });
+        let (result, verified_modules) = result
+            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
+        self.sync_verified_modules(module_store, verified_modules);
+        Ok(result)
+    }
+
+    pub(crate) fn load_module_v2(
+        &self,
+        module_id: &ModuleId,
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<()> {
+        if module_store.module_at(module_id).is_some() {
+            return Ok(());
+        }
+
+        let result = self
+            .with_module_storage(data_store, |storage| {
+            dispatch_loader!(storage, loader, {
+                loader
+                    .charge_native_result_load_module(gas_meter, traversal_context, module_id)
+                    .map_err(|err| err.finish(Location::Undefined))?;
+                if self.vm_config.enable_lazy_loading {
+                    storage
+                        .unmetered_get_existing_lazily_verified_module(module_id)
+                        .map(|_| ())
+                } else {
+                    storage
+                        .unmetered_get_existing_eagerly_verified_module(
+                            module_id.address(),
+                            module_id.name(),
+                        )
+                        .map(|_| ())
+                }
+            })
+        });
+        let (result, verified_modules) = result
+            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
+        self.sync_verified_modules(module_store, verified_modules);
+        Ok(result)
+    }
+
+    pub(crate) fn load_module_for_metadata_v2(
+        &self,
+        module_id: &ModuleId,
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<Arc<CompiledModule>> {
+        let result = self
+            .with_module_storage(data_store, |storage| {
+            dispatch_loader!(storage, loader, {
+                loader
+                    .load_module_for_metadata(gas_meter, traversal_context, module_id)
+                    .map_err(|err| err.finish(Location::Undefined))
+            })
+        });
+        let (result, verified_modules) = result
+            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
+        self.sync_verified_modules(module_store, verified_modules);
+        Ok(result)
+    }
+
     pub(crate) fn ty_builder(&self) -> &TypeBuilder {
         &self.vm_config.ty_builder
     }
@@ -206,7 +532,6 @@ impl Loader {
         let mut invalidated = self.invalidated.write();
         if *invalidated {
             *self.scripts.write() = ScriptCache::new();
-            *self.type_cache.write() = TypeCache::new();
             *invalidated = false;
         }
     }
@@ -350,7 +675,7 @@ impl Loader {
         Ok(script)
     }
 
-    fn runtime_environment(&self) -> crate::RuntimeEnvironment {
+    pub(crate) fn runtime_environment(&self) -> crate::RuntimeEnvironment {
         crate::RuntimeEnvironment::new_with_shared_name_cache(
             self.natives.clone(),
             self.vm_config.clone(),
@@ -371,7 +696,20 @@ impl Loader {
         module_store: &ModuleStorageAdapter,
     ) -> VMResult<Arc<Function>> {
         // Need to load the module first, before resolving the function.
-        self.load_module(module_id, data_store, module_store)?;
+        if self.vm_config.enable_lazy_loading {
+            let mut gas_meter = UnmeteredGasMeter;
+            let traversal_storage = TraversalStorage::new();
+            let mut traversal_context = TraversalContext::new(&traversal_storage);
+            self.load_module_v2(
+                module_id,
+                data_store,
+                module_store,
+                &mut gas_meter,
+                &mut traversal_context,
+            )?;
+        } else {
+            self.load_module(module_id, data_store, module_store)?;
+        }
         module_store
             .resolve_function_by_name(function_name, module_id)
             .map_err(|err| err.finish(Location::Undefined))
@@ -867,6 +1205,15 @@ impl Loader {
             return Ok(cached);
         }
 
+        if self.vm_config.enable_lazy_loading {
+            return self.load_module_shallow(
+                id,
+                data_store,
+                module_store,
+                /* allow_loading_failure */ true,
+            );
+        }
+
         // otherwise, load the transitive closure of the target module
         let module_ref = self.load_and_verify_module_and_dependencies_and_friends(
             id,
@@ -886,6 +1233,22 @@ impl Loader {
         )
         .map_err(expect_no_verification_errors)?;
         Ok(module_ref)
+    }
+
+    fn load_module_shallow(
+        &self,
+        id: &ModuleId,
+        data_store: &mut TransactionDataCache,
+        module_store: &ModuleStorageAdapter,
+        allow_loading_failure: bool,
+    ) -> VMResult<Arc<Module>> {
+        if let Some(cached) = module_store.module_at(id) {
+            self.module_cache_hits.write().insert(id.clone());
+            return Ok(cached);
+        }
+
+        let (module, size) = self.load_and_verify_module(id, data_store, allow_loading_failure)?;
+        module_store.insert(&self.natives, id.clone(), size, module, &self.name_cache)
     }
 
     // Load, deserialize, and check the module with the bytecode verifier, without linking
@@ -1142,6 +1505,51 @@ pub(crate) struct Resolver<'a> {
     binary: BinaryType,
 }
 
+struct LoadedStructDefinitionLoader<'a> {
+    runtime_environment: crate::RuntimeEnvironment,
+    loader: &'a Loader,
+    module_store: &'a ModuleStorageAdapter,
+}
+
+impl WithRuntimeEnvironment for LoadedStructDefinitionLoader<'_> {
+    fn runtime_environment(&self) -> &crate::RuntimeEnvironment {
+        &self.runtime_environment
+    }
+}
+
+impl StructDefinitionLoader for LoadedStructDefinitionLoader<'_> {
+    fn is_lazy_loading_enabled(&self) -> bool {
+        self.loader.vm_config().enable_lazy_loading
+    }
+
+    fn load_struct_definition(
+        &self,
+        _gas_meter: &mut impl GasMeter,
+        _traversal_context: &mut TraversalContext,
+        idx: &StructNameIndex,
+    ) -> PartialVMResult<Arc<StructType>> {
+        let struct_name = self
+            .loader
+            .runtime_environment()
+            .struct_name_index_map()
+            .idx_to_struct_name_ref(*idx)?;
+        let module = self
+            .module_store
+            .module_at(&struct_name.module)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "Module {} not loaded while resolving layout for {}::{}",
+                        struct_name.module, struct_name.module, struct_name.name
+                    ),
+                )
+            })?;
+        module
+            .get_struct(struct_name.name.as_ident_str())
+            .map_err(|err| err.to_partial())
+    }
+}
+
 impl<'a> Resolver<'a> {
     fn for_module(
         loader: &'a Loader,
@@ -1195,6 +1603,51 @@ impl<'a> Resolver<'a> {
         self.module_store.function_at(idx)
     }
 
+    fn maybe_charge_and_load_module(
+        &self,
+        module_id: &ModuleId,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<()> {
+        self.loader
+            .load_module_v2(
+                module_id,
+                data_store,
+                self.module_store,
+                gas_meter,
+                traversal_context,
+            )
+    }
+
+    pub(crate) fn function_from_handle_with_context(
+        &self,
+        idx: FunctionHandleIndex,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<Arc<Function>> {
+        let handle = match &self.binary {
+            BinaryType::Module(module) => module.function_at(idx.0),
+            BinaryType::Script(script) => script.function_at(idx.0),
+        };
+
+        match handle {
+            FunctionHandle::Local(func) => Ok(func.clone()),
+            FunctionHandle::Remote { module, name } => {
+                self.maybe_charge_and_load_module(
+                    module,
+                    data_store,
+                    gas_meter,
+                    traversal_context,
+                )?;
+                self.module_store
+                    .resolve_function_by_name(name.as_ident_str(), module)
+                    .map_err(|err| err.finish(Location::Undefined))
+            },
+        }
+    }
+
     pub(crate) fn function_from_instantiation(
         &self,
         idx: FunctionInstantiationIndex,
@@ -1206,6 +1659,34 @@ impl<'a> Resolver<'a> {
         self.module_store.function_at(&func_inst.handle)
     }
 
+    pub(crate) fn function_from_instantiation_with_context(
+        &self,
+        idx: FunctionInstantiationIndex,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<Arc<Function>> {
+        let handle = match &self.binary {
+            BinaryType::Module(module) => &module.function_instantiation_at(idx.0).handle,
+            BinaryType::Script(script) => &script.function_instantiation_at(idx.0).handle,
+        };
+
+        match handle {
+            FunctionHandle::Local(func) => Ok(func.clone()),
+            FunctionHandle::Remote { module, name } => {
+                self.maybe_charge_and_load_module(
+                    module,
+                    data_store,
+                    gas_meter,
+                    traversal_context,
+                )?;
+                self.module_store
+                    .resolve_function_by_name(name.as_ident_str(), module)
+                    .map_err(|err| err.finish(Location::Undefined))
+            },
+        }
+    }
+
     pub(crate) fn function_from_name(
         &self,
         module_id: &ModuleId,
@@ -1213,6 +1694,20 @@ impl<'a> Resolver<'a> {
     ) -> PartialVMResult<Arc<Function>> {
         self.module_store
             .resolve_function_by_name(func_name, module_id)
+    }
+
+    pub(crate) fn function_from_name_with_context(
+        &self,
+        module_id: &ModuleId,
+        func_name: &IdentStr,
+        data_store: &mut TransactionDataCache,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+    ) -> VMResult<Arc<Function>> {
+        self.maybe_charge_and_load_module(module_id, data_store, gas_meter, traversal_context)?;
+        self.module_store
+            .resolve_function_by_name(func_name, module_id)
+            .map_err(|err| err.finish(Location::Undefined))
     }
 
     pub(crate) fn instantiate_generic_function(
@@ -1458,23 +1953,57 @@ impl<'a> Resolver<'a> {
     }
 
     pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
-        self.loader.type_to_type_layout(ty, self.module_store)
+        let loader = LoadedStructDefinitionLoader {
+            runtime_environment: self.loader.runtime_environment(),
+            loader: self.loader,
+            module_store: self.module_store,
+        };
+        let mut gas_meter = UnmeteredGasMeter;
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        LayoutConverter::new(&loader).type_to_type_layout(
+            &mut gas_meter,
+            &mut traversal_context,
+            ty,
+        )
     }
 
     pub(crate) fn type_to_type_layout_with_identifier_mappings(
         &self,
         ty: &Type,
     ) -> PartialVMResult<(MoveTypeLayout, bool)> {
-        self.loader
-            .type_to_type_layout_with_identifier_mappings(ty, self.module_store)
+        let loader = LoadedStructDefinitionLoader {
+            runtime_environment: self.loader.runtime_environment(),
+            loader: self.loader,
+            module_store: self.module_store,
+        };
+        let mut gas_meter = UnmeteredGasMeter;
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        LayoutConverter::new(&loader).type_to_type_layout_with_identifier_mappings(
+            &mut gas_meter,
+            &mut traversal_context,
+            ty,
+        )
     }
 
     pub(crate) fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
     ) -> PartialVMResult<MoveTypeLayout> {
-        self.loader
-            .type_to_fully_annotated_layout(ty, self.module_store)
+        let loader = LoadedStructDefinitionLoader {
+            runtime_environment: self.loader.runtime_environment(),
+            loader: self.loader,
+            module_store: self.module_store,
+        };
+        let mut gas_meter = UnmeteredGasMeter;
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        LayoutConverter::new(&loader).type_to_fully_annotated_layout(
+            &mut gas_meter,
+            &mut traversal_context,
+            ty,
+        )
     }
 
     // get the loader
@@ -1488,624 +2017,6 @@ impl<'a> Resolver<'a> {
     }
 }
 
-#[derive(Clone)]
-struct StructLayoutInfoCacheItem {
-    struct_layout: MoveTypeLayout,
-    node_count: u64,
-    has_identifier_mappings: bool,
-}
-
-//
-// Cache for data associated to a Struct, used for de/serialization and more
-//
-#[derive(Clone)]
-struct StructInfoCache {
-    struct_tag: Option<(StructTag, u64)>,
-    struct_layout_info: Option<StructLayoutInfoCacheItem>,
-    annotated_struct_layout: Option<MoveTypeLayout>,
-    annotated_node_count: Option<u64>,
-}
-
-impl StructInfoCache {
-    fn new() -> Self {
-        Self {
-            struct_tag: None,
-            struct_layout_info: None,
-            annotated_struct_layout: None,
-            annotated_node_count: None,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct TypeCache {
-    structs: hashbrown::HashMap<StructIdentifier, hashbrown::HashMap<Vec<Type>, StructInfoCache>>,
-    depth_formula: hashbrown::HashMap<StructIdentifier, DepthFormula>,
-}
-
-impl TypeCache {
-    fn new() -> Self {
-        Self {
-            structs: hashbrown::HashMap::new(),
-            depth_formula: hashbrown::HashMap::new(),
-        }
-    }
-}
-
-/// Maximal depth of a value in terms of type depth.
-pub const VALUE_DEPTH_MAX: u64 = 128;
-
-/// Maximal nodes which are allowed when converting to layout. This includes the types of
-/// fields for struct types.
-const MAX_TYPE_TO_LAYOUT_NODES: u64 = 1536;
-
-struct PseudoGasContext {
-    max_cost: u64,
-    cost: u64,
-    cost_base: u64,
-    cost_per_byte: u64,
-}
-
-impl PseudoGasContext {
-    fn charge(&mut self, amount: u64) -> PartialVMResult<()> {
-        self.cost += amount;
-        if self.cost > self.max_cost {
-            Err(
-                PartialVMError::new(StatusCode::TYPE_TAG_LIMIT_EXCEEDED).with_message(format!(
-                    "Exceeded maximum type tag limit of {}",
-                    self.max_cost
-                )),
-            )
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl Loader {
-    fn struct_name_to_type_tag(
-        &self,
-        struct_idx: StructNameIndex,
-        ty_args: &[Type],
-        gas_context: &mut PseudoGasContext,
-    ) -> PartialVMResult<StructTag> {
-        let name = self.name_cache.idx_to_struct_name_ref(struct_idx)?;
-        if let Some(struct_map) = self.type_cache.read().structs.get(name.as_ref()) {
-            if let Some(struct_info) = struct_map.get(ty_args) {
-                if let Some((struct_tag, gas)) = &struct_info.struct_tag {
-                    gas_context.charge(*gas)?;
-                    return Ok(struct_tag.clone());
-                }
-            }
-        }
-
-        let cur_cost = gas_context.cost;
-
-        let type_args = ty_args
-            .iter()
-            .map(|ty| self.type_to_type_tag_impl(ty, gas_context))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        let struct_tag = StructTag {
-            address: *name.module.address(),
-            module: name.module.name().to_owned(),
-            name: name.name.clone(),
-            type_args,
-        };
-
-        let size =
-            (struct_tag.address.len() + struct_tag.module.len() + struct_tag.name.len()) as u64;
-        gas_context.charge(size * gas_context.cost_per_byte)?;
-        self.type_cache
-            .write()
-            .structs
-            .entry(name.as_ref().clone())
-            .or_default()
-            .entry(ty_args.to_vec())
-            .or_insert_with(StructInfoCache::new)
-            .struct_tag = Some((struct_tag.clone(), gas_context.cost - cur_cost));
-
-        Ok(struct_tag)
-    }
-
-    fn type_to_type_tag_impl(
-        &self,
-        ty: &Type,
-        gas_context: &mut PseudoGasContext,
-    ) -> PartialVMResult<TypeTag> {
-        gas_context.charge(gas_context.cost_base)?;
-        Ok(match ty {
-            Type::Bool => TypeTag::Bool,
-            Type::U8 => TypeTag::U8,
-            Type::U16 => TypeTag::U16,
-            Type::U32 => TypeTag::U32,
-            Type::U64 => TypeTag::U64,
-            Type::U128 => TypeTag::U128,
-            Type::U256 => TypeTag::U256,
-            Type::Address => TypeTag::Address,
-            Type::Signer => TypeTag::Signer,
-            Type::Vector(ty) => TypeTag::Vector(Box::new(self.type_to_type_tag(ty)?)),
-            Type::Struct { idx, .. } => TypeTag::Struct(Box::new(self.struct_name_to_type_tag(
-                *idx,
-                &[],
-                gas_context,
-            )?)),
-            Type::StructInstantiation { idx, ty_args, .. } => TypeTag::Struct(Box::new(
-                self.struct_name_to_type_tag(*idx, ty_args, gas_context)?,
-            )),
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("No type tag for {:?}", ty)),
-                );
-            },
-        })
-    }
-
-    fn struct_name_to_type_layout(
-        &self,
-        struct_idx: StructNameIndex,
-        module_store: &ModuleStorageAdapter,
-        ty_args: &[Type],
-        count: &mut u64,
-        depth: u64,
-    ) -> PartialVMResult<(MoveTypeLayout, bool)> {
-        let name = self.name_cache.idx_to_struct_name_ref(struct_idx)?;
-        if let Some(struct_map) = self.type_cache.read().structs.get(name.as_ref()) {
-            if let Some(struct_info) = struct_map.get(ty_args) {
-                if let Some(struct_layout_info) = &struct_info.struct_layout_info {
-                    *count += struct_layout_info.node_count;
-                    return Ok((
-                        struct_layout_info.struct_layout.clone(),
-                        struct_layout_info.has_identifier_mappings,
-                    ));
-                }
-            }
-        }
-
-        let count_before = *count;
-        let struct_type = module_store.get_struct_type_by_identifier(&name.name, &name.module)?;
-
-        // Some types can have fields which are lifted at serialization or deserialization
-        // times. Right now these are Aggregator and AggregatorSnapshot.
-        let maybe_mapping = self.get_identifier_mapping_kind(name.as_ref());
-
-        let field_tys = struct_type
-            .field_tys
-            .iter()
-            .map(|ty| {
-                self.ty_builder()
-                    .create_ty_with_subst_with_legacy_check(ty, ty_args)
-            })
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        let (mut field_layouts, field_has_identifier_mappings): (Vec<MoveTypeLayout>, Vec<bool>) =
-            field_tys
-                .iter()
-                .map(|ty| self.type_to_type_layout_impl(ty, module_store, count, depth))
-                .collect::<PartialVMResult<Vec<_>>>()?
-                .into_iter()
-                .unzip();
-
-        let has_identifier_mappings =
-            maybe_mapping.is_some() || field_has_identifier_mappings.into_iter().any(|b| b);
-
-        let field_node_count = *count - count_before;
-        let layout = if Some(IdentifierMappingKind::DerivedString) == maybe_mapping {
-            // For DerivedString, the whole object should be lifted.
-            MoveTypeLayout::Native(
-                IdentifierMappingKind::DerivedString,
-                Box::new(MoveTypeLayout::Struct(MoveStructLayout::new(field_layouts))),
-            )
-        } else {
-            // For aggregators / snapshots, the first field should be lifted.
-            if let Some(kind) = &maybe_mapping {
-                if let Some(l) = field_layouts.first_mut() {
-                    *l = MoveTypeLayout::Native(kind.clone(), Box::new(l.clone()));
-                }
-            }
-            MoveTypeLayout::Struct(MoveStructLayout::new(field_layouts))
-        };
-
-        let mut cache = self.type_cache.write();
-        let info = cache
-            .structs
-            .entry(name.as_ref().clone())
-            .or_default()
-            .entry(ty_args.to_vec())
-            .or_insert_with(StructInfoCache::new);
-        info.struct_layout_info = Some(StructLayoutInfoCacheItem {
-            struct_layout: layout.clone(),
-            node_count: field_node_count,
-            has_identifier_mappings,
-        });
-
-        Ok((layout, has_identifier_mappings))
-    }
-
-    // TODO[agg_v2](cleanup):
-    // Currently aggregator checks are hardcoded and leaking to loader.
-    // It seems that this is only because there is no support for native
-    // types.
-    // Let's think how we can do this nicer.
-    fn get_identifier_mapping_kind(
-        &self,
-        struct_name: &StructIdentifier,
-    ) -> Option<IdentifierMappingKind> {
-        if !self.vm_config.aggregator_v2_type_tagging {
-            return None;
-        }
-
-        let ident_str_to_kind = |ident_str: &IdentStr| -> Option<IdentifierMappingKind> {
-            if ident_str.eq(ident_str!("Aggregator")) {
-                Some(IdentifierMappingKind::Aggregator)
-            } else if ident_str.eq(ident_str!("AggregatorSnapshot")) {
-                Some(IdentifierMappingKind::Snapshot)
-            } else if ident_str.eq(ident_str!("DerivedStringSnapshot")) {
-                Some(IdentifierMappingKind::DerivedString)
-            } else {
-                None
-            }
-        };
-
-        (struct_name.module.address().eq(&AccountAddress::ONE)
-            && struct_name.module.name().eq(ident_str!("aggregator_v2")))
-        .then_some(ident_str_to_kind(struct_name.name.as_ident_str()))
-        .flatten()
-    }
-
-    fn type_to_type_layout_impl(
-        &self,
-        ty: &Type,
-        module_store: &ModuleStorageAdapter,
-        count: &mut u64,
-        depth: u64,
-    ) -> PartialVMResult<(MoveTypeLayout, bool)> {
-        if *count > MAX_TYPE_TO_LAYOUT_NODES {
-            return Err(
-                PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).with_message(format!(
-                    "Number of type nodes when constructing type layout exceeded the maximum of {}",
-                    MAX_TYPE_TO_LAYOUT_NODES
-                )),
-            );
-        }
-        if depth > VALUE_DEPTH_MAX {
-            return Err(
-                PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED).with_message(format!(
-                    "Depth of a layout exceeded the maximum of {} during construction",
-                    VALUE_DEPTH_MAX
-                )),
-            );
-        }
-        Ok(match ty {
-            Type::Bool => {
-                *count += 1;
-                (MoveTypeLayout::Bool, false)
-            },
-            Type::U8 => {
-                *count += 1;
-                (MoveTypeLayout::U8, false)
-            },
-            Type::U16 => {
-                *count += 1;
-                (MoveTypeLayout::U16, false)
-            },
-            Type::U32 => {
-                *count += 1;
-                (MoveTypeLayout::U32, false)
-            },
-            Type::U64 => {
-                *count += 1;
-                (MoveTypeLayout::U64, false)
-            },
-            Type::U128 => {
-                *count += 1;
-                (MoveTypeLayout::U128, false)
-            },
-            Type::U256 => {
-                *count += 1;
-                (MoveTypeLayout::U256, false)
-            },
-            Type::Address => {
-                *count += 1;
-                (MoveTypeLayout::Address, false)
-            },
-            Type::Signer => {
-                *count += 1;
-                (MoveTypeLayout::Signer, false)
-            },
-            Type::Vector(ty) => {
-                *count += 1;
-                let (layout, has_identifier_mappings) =
-                    self.type_to_type_layout_impl(ty, module_store, count, depth + 1)?;
-                (
-                    MoveTypeLayout::Vector(Box::new(layout)),
-                    has_identifier_mappings,
-                )
-            },
-            Type::Struct { idx, .. } => {
-                *count += 1;
-                let (layout, has_identifier_mappings) =
-                    self.struct_name_to_type_layout(*idx, module_store, &[], count, depth + 1)?;
-                (layout, has_identifier_mappings)
-            },
-            Type::StructInstantiation { idx, ty_args, .. } => {
-                *count += 1;
-                let (layout, has_identifier_mappings) =
-                    self.struct_name_to_type_layout(*idx, module_store, ty_args, count, depth + 1)?;
-                (layout, has_identifier_mappings)
-            },
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("No type layout for {:?}", ty)),
-                );
-            },
-        })
-    }
-
-    fn struct_name_to_fully_annotated_layout(
-        &self,
-        struct_idx: StructNameIndex,
-        module_store: &ModuleStorageAdapter,
-        ty_args: &[Type],
-        count: &mut u64,
-        depth: u64,
-    ) -> PartialVMResult<MoveTypeLayout> {
-        let name = self.name_cache.idx_to_struct_name_ref(struct_idx)?;
-        if let Some(struct_map) = self.type_cache.read().structs.get(name.as_ref()) {
-            if let Some(struct_info) = struct_map.get(ty_args) {
-                if let Some(annotated_node_count) = &struct_info.annotated_node_count {
-                    *count += *annotated_node_count
-                }
-                if let Some(layout) = &struct_info.annotated_struct_layout {
-                    return Ok(layout.clone());
-                }
-            }
-        }
-
-        let struct_type = module_store.get_struct_type_by_identifier(&name.name, &name.module)?;
-        if struct_type.field_tys.len() != struct_type.field_names.len() {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!(
-                    "Field types did not match the length of field names in loaded struct {}::{}",
-                    &name.module, &name.name
-                ),
-                ),
-            );
-        }
-
-        let count_before = *count;
-        let mut gas_context = PseudoGasContext {
-            cost: 0,
-            max_cost: self.vm_config.type_max_cost,
-            cost_base: self.vm_config.type_base_cost,
-            cost_per_byte: self.vm_config.type_byte_cost,
-        };
-        let struct_tag = self.struct_name_to_type_tag(struct_idx, ty_args, &mut gas_context)?;
-
-        let field_layouts = struct_type
-            .field_names
-            .iter()
-            .zip(&struct_type.field_tys)
-            .map(|(n, ty)| {
-                let ty = self
-                    .ty_builder()
-                    .create_ty_with_subst_with_legacy_check(ty, ty_args)?;
-                let l =
-                    self.type_to_fully_annotated_layout_impl(&ty, module_store, count, depth)?;
-                Ok(MoveFieldLayout::new(n.clone(), l))
-            })
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        let struct_layout =
-            MoveTypeLayout::Struct(MoveStructLayout::with_types(struct_tag, field_layouts));
-        let field_node_count = *count - count_before;
-
-        let mut cache = self.type_cache.write();
-        let info = cache
-            .structs
-            .entry(name.as_ref().clone())
-            .or_default()
-            .entry(ty_args.to_vec())
-            .or_insert_with(StructInfoCache::new);
-        info.annotated_struct_layout = Some(struct_layout.clone());
-        info.annotated_node_count = Some(field_node_count);
-
-        Ok(struct_layout)
-    }
-
-    fn type_to_fully_annotated_layout_impl(
-        &self,
-        ty: &Type,
-        module_store: &ModuleStorageAdapter,
-        count: &mut u64,
-        depth: u64,
-    ) -> PartialVMResult<MoveTypeLayout> {
-        if *count > MAX_TYPE_TO_LAYOUT_NODES {
-            return Err(
-                PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).with_message(format!(
-                    "Number of type nodes when constructing type layout exceeded the maximum of {}",
-                    MAX_TYPE_TO_LAYOUT_NODES
-                )),
-            );
-        }
-        if depth > VALUE_DEPTH_MAX {
-            return Err(
-                PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED).with_message(format!(
-                    "Depth of a layout exceeded the maximum of {} during construction",
-                    VALUE_DEPTH_MAX
-                )),
-            );
-        }
-        Ok(match ty {
-            Type::Bool => MoveTypeLayout::Bool,
-            Type::U8 => MoveTypeLayout::U8,
-            Type::U16 => MoveTypeLayout::U16,
-            Type::U32 => MoveTypeLayout::U32,
-            Type::U64 => MoveTypeLayout::U64,
-            Type::U128 => MoveTypeLayout::U128,
-            Type::U256 => MoveTypeLayout::U256,
-            Type::Address => MoveTypeLayout::Address,
-            Type::Signer => MoveTypeLayout::Signer,
-            Type::Vector(ty) => MoveTypeLayout::Vector(Box::new(
-                self.type_to_fully_annotated_layout_impl(ty, module_store, count, depth + 1)?,
-            )),
-            Type::Struct { idx, .. } => self.struct_name_to_fully_annotated_layout(
-                *idx,
-                module_store,
-                &[],
-                count,
-                depth + 1,
-            )?,
-            Type::StructInstantiation { idx, ty_args, .. } => self
-                .struct_name_to_fully_annotated_layout(
-                    *idx,
-                    module_store,
-                    ty_args,
-                    count,
-                    depth + 1,
-                )?,
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("No type layout for {:?}", ty)),
-                );
-            },
-        })
-    }
-
-    pub(crate) fn calculate_depth_of_struct(
-        &self,
-        struct_idx: StructNameIndex,
-        module_store: &ModuleStorageAdapter,
-    ) -> PartialVMResult<DepthFormula> {
-        let name = self.name_cache.idx_to_struct_name_ref(struct_idx)?;
-        if let Some(depth_formula) = self.type_cache.read().depth_formula.get(name.as_ref()) {
-            return Ok(depth_formula.clone());
-        }
-
-        let struct_type = module_store.get_struct_type_by_identifier(&name.name, &name.module)?;
-
-        let formulas = struct_type
-            .field_tys
-            .iter()
-            .map(|field_type| self.calculate_depth_of_type(field_type, module_store))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        let formula = DepthFormula::normalize(formulas);
-        let prev = self
-            .type_cache
-            .write()
-            .depth_formula
-            .insert(name.as_ref().clone(), formula.clone());
-        if let Some(f) = prev {
-            // TODO: If the VM is not shared across threads, this error means that there is a
-            //       recursive type. But in case it is shared, the current implementation is not
-            //       correct because some other thread can cache depth formula before we reach
-            //       this line, and result in an invariant violation. We need to ensure correct
-            //       behavior, e.g., make the cache available per thread.
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!(
-                        "Depth formula for struct '{}' and formula {:?} (struct type: {:?}) is already cached: {:?}",
-                        name,
-                        formula,
-                        struct_type.as_ref(),
-                        f
-                    ),
-                ),
-            );
-        }
-        Ok(formula)
-    }
-
-    fn calculate_depth_of_type(
-        &self,
-        ty: &Type,
-        module_store: &ModuleStorageAdapter,
-    ) -> PartialVMResult<DepthFormula> {
-        Ok(match ty {
-            Type::Bool
-            | Type::U8
-            | Type::U64
-            | Type::U128
-            | Type::Address
-            | Type::Signer
-            | Type::U16
-            | Type::U32
-            | Type::U256 => DepthFormula::constant(1),
-            Type::Vector(ty) => {
-                let mut inner = self.calculate_depth_of_type(ty, module_store)?;
-                inner.scale(1);
-                inner
-            },
-            Type::Reference(ty) | Type::MutableReference(ty) => {
-                let mut inner = self.calculate_depth_of_type(ty, module_store)?;
-                inner.scale(1);
-                inner
-            },
-            Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
-            Type::Struct { idx, .. } => {
-                let mut struct_formula = self.calculate_depth_of_struct(*idx, module_store)?;
-                debug_assert!(struct_formula.terms.is_empty());
-                struct_formula.scale(1);
-                struct_formula
-            },
-            Type::StructInstantiation { idx, ty_args, .. } => {
-                let ty_arg_map = ty_args
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, ty)| {
-                        let var = idx as TypeParameterIndex;
-                        Ok((var, self.calculate_depth_of_type(ty, module_store)?))
-                    })
-                    .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
-                let struct_formula = self.calculate_depth_of_struct(*idx, module_store)?;
-                let mut subst_struct_formula = struct_formula.subst(ty_arg_map)?;
-                subst_struct_formula.scale(1);
-                subst_struct_formula
-            },
-        })
-    }
-
-    pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        let mut gas_context = PseudoGasContext {
-            cost: 0,
-            max_cost: self.vm_config.type_max_cost,
-            cost_base: self.vm_config.type_base_cost,
-            cost_per_byte: self.vm_config.type_byte_cost,
-        };
-        self.type_to_type_tag_impl(ty, &mut gas_context)
-    }
-
-    pub(crate) fn type_to_type_layout_with_identifier_mappings(
-        &self,
-        ty: &Type,
-        module_store: &ModuleStorageAdapter,
-    ) -> PartialVMResult<(MoveTypeLayout, bool)> {
-        let mut count = 0;
-        self.type_to_type_layout_impl(ty, module_store, &mut count, 1)
-    }
-
-    pub(crate) fn type_to_type_layout(
-        &self,
-        ty: &Type,
-        module_store: &ModuleStorageAdapter,
-    ) -> PartialVMResult<MoveTypeLayout> {
-        let mut count = 0;
-        let (layout, _has_identifier_mappings) =
-            self.type_to_type_layout_impl(ty, module_store, &mut count, 1)?;
-        Ok(layout)
-    }
-
-    pub(crate) fn type_to_fully_annotated_layout(
-        &self,
-        ty: &Type,
-        module_store: &ModuleStorageAdapter,
-    ) -> PartialVMResult<MoveTypeLayout> {
-        let mut count = 0;
-        self.type_to_fully_annotated_layout_impl(ty, module_store, &mut count, 1)
-    }
-}
-
 // Public APIs for external uses.
 impl Loader {
     pub(crate) fn get_type_layout(
@@ -2115,8 +2026,16 @@ impl Loader {
         module_storage: &ModuleStorageAdapter,
     ) -> VMResult<MoveTypeLayout> {
         let ty = self.load_type(type_tag, move_storage, module_storage)?;
-        self.type_to_type_layout(&ty, module_storage)
-            .map_err(|e| e.finish(Location::Undefined))
+        let data_store = LoaderV2DataStore::new(self.runtime_environment(), &*move_storage);
+        let module_storage_v2 = data_store.as_unsync_module_storage();
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        let mut gas_meter = UnmeteredGasMeter;
+        dispatch_loader!(&module_storage_v2, loader, {
+            LayoutConverter::new(&loader)
+                .type_to_type_layout(&mut gas_meter, &mut traversal_context, &ty)
+        })
+        .map_err(|e| e.finish(Location::Undefined))
     }
 
     pub(crate) fn get_fully_annotated_type_layout(
@@ -2126,8 +2045,19 @@ impl Loader {
         module_storage: &ModuleStorageAdapter,
     ) -> VMResult<MoveTypeLayout> {
         let ty = self.load_type(type_tag, move_storage, module_storage)?;
-        self.type_to_fully_annotated_layout(&ty, module_storage)
-            .map_err(|e| e.finish(Location::Undefined))
+        let data_store = LoaderV2DataStore::new(self.runtime_environment(), &*move_storage);
+        let module_storage_v2 = data_store.as_unsync_module_storage();
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        let mut gas_meter = UnmeteredGasMeter;
+        dispatch_loader!(&module_storage_v2, loader, {
+            LayoutConverter::new(&loader).type_to_fully_annotated_layout(
+                &mut gas_meter,
+                &mut traversal_context,
+                &ty,
+            )
+        })
+        .map_err(|e| e.finish(Location::Undefined))
     }
 
     pub(crate) fn update_native_functions(

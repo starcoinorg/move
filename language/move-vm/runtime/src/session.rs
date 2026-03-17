@@ -6,9 +6,11 @@ use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
     loader::{LoadedFunction, ModuleStorageAdapter},
+    logging::expect_no_verification_errors_unless_bogus_storage,
     module_traversal::TraversalContext,
     move_vm::MoveVM,
     native_extensions::NativeContextExtensions,
+    storage::ty_tag_converter::TypeTagConverter,
 };
 use bytes::Bytes;
 use move_binary_format::{
@@ -28,7 +30,7 @@ use move_core_types::{
 };
 use move_vm_types::values::Locals;
 use move_vm_types::{
-    gas::GasMeter,
+    gas::{GasMeter, UnmeteredGasMeter},
     loaded_data::runtime_types::{StructNameIndex, StructType, Type, TypeBuilder},
     values::{GlobalValue, Value},
 };
@@ -77,6 +79,8 @@ impl<'r, 'l> Session<'r, 'l> {
             )));
         }
 
+        let module_id = func.module_id();
+
         self.move_vm.runtime.execute_function_instantiation(
             func,
             args,
@@ -85,7 +89,12 @@ impl<'r, 'l> Session<'r, 'l> {
             gas_meter,
             traversal_context,
             &mut self.native_extensions,
-        )?;
+        ).map_err(|err| match module_id.as_ref() {
+            Some(module_id) if matches!(self.data_cache.exists_module(module_id), Ok(true)) => {
+                expect_no_verification_errors_unless_bogus_storage(err)
+            }
+            _ => err,
+        })?;
         Ok(())
     }
 
@@ -99,12 +108,14 @@ impl<'r, 'l> Session<'r, 'l> {
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
     ) -> VMResult<SerializedReturnValues> {
-        let func = self.move_vm.runtime.loader().load_function(
+        let func = self.move_vm.runtime.loader().load_function_v2(
             module,
             function_name,
             &ty_args,
             &mut self.data_cache,
             &self.module_store,
+            gas_meter,
+            traversal_context,
         )?;
 
         self.move_vm.runtime.execute_function_instantiation(
@@ -115,7 +126,10 @@ impl<'r, 'l> Session<'r, 'l> {
             gas_meter,
             traversal_context,
             &mut self.native_extensions,
-        )
+        ).map_err(|err| match self.data_cache.exists_module(module) {
+            Ok(true) => expect_no_verification_errors_unless_bogus_storage(err),
+            _ => err,
+        })
     }
 
     pub fn execute_loaded_function(
@@ -272,10 +286,15 @@ impl<'r, 'l> Session<'r, 'l> {
         &mut self,
         modules: &[CompiledModule],
     ) -> VMResult<()> {
-        self.move_vm
-            .runtime
-            .loader()
-            .verify_module_bundle_for_publication(modules, &mut self.data_cache, &self.module_store)
+        let Some(sender) = modules.first().map(|module| *module.self_addr()) else {
+            return Ok(());
+        };
+        self.move_vm.runtime.verify_module_bundle_for_publication(
+            modules,
+            sender,
+            Compatibility::no_check(),
+            &self.data_cache,
+        )
     }
 
     pub fn deserialize_args(
@@ -283,9 +302,18 @@ impl<'r, 'l> Session<'r, 'l> {
         param_tys: Vec<Type>,
         serialized_args: Vec<impl Borrow<[u8]>>,
     ) -> PartialVMResult<(Locals, Vec<Value>)> {
+        let mut gas_meter = UnmeteredGasMeter;
+        let traversal_storage = crate::module_traversal::TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
         self.move_vm
             .runtime
-            .deserialize_args(&self.module_store, param_tys, serialized_args)
+            .deserialize_args(
+                &self.data_cache,
+                param_tys,
+                serialized_args,
+                &mut gas_meter,
+                &mut traversal_context,
+            )
     }
 
     pub fn num_mutated_accounts(&self, sender: &AccountAddress) -> u64 {
@@ -369,7 +397,7 @@ impl<'r, 'l> Session<'r, 'l> {
         script: impl Borrow<[u8]>,
         ty_args: &[TypeTag],
     ) -> VMResult<LoadedFunction> {
-        self.move_vm.runtime.loader().load_script(
+        self.move_vm.runtime.loader().load_script_v2_unmetered(
             script.borrow(),
             ty_args,
             &mut self.data_cache,
@@ -403,7 +431,7 @@ impl<'r, 'l> Session<'r, 'l> {
         function_name: &IdentStr,
         ty_args: &[TypeTag],
     ) -> VMResult<LoadedFunction> {
-        self.move_vm.runtime.loader().load_function(
+        self.move_vm.runtime.loader().load_function_v2_unmetered(
             module_id,
             function_name,
             ty_args,
@@ -438,10 +466,8 @@ impl<'r, 'l> Session<'r, 'l> {
     }
 
     pub fn get_type_tag(&self, ty: &Type) -> VMResult<TypeTag> {
-        self.move_vm
-            .runtime
-            .loader()
-            .type_to_type_tag(ty)
+        TypeTagConverter::new(self.move_vm.runtime.runtime_environment())
+            .ty_to_ty_tag(ty)
             .map_err(|e| e.finish(Location::Undefined))
     }
 

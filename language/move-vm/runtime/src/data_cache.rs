@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    dispatch_loader,
+    AsUnsyncModuleStorage,
+    RuntimeEnvironmentRef,
     loader::{Loader, ModuleStorageAdapter},
     logging::expect_no_verification_errors,
 };
@@ -33,6 +36,11 @@ use sha3::{Digest, Sha3_256};
 use std::{
     collections::btree_map::{self, BTreeMap},
     sync::Arc,
+};
+
+use crate::storage::{
+    ty_layout_converter::LayoutConverter,
+    ty_tag_converter::TypeTagConverter,
 };
 
 pub struct AccountDataCache {
@@ -145,9 +153,11 @@ impl<'r> TransactionDataCache<'r> {
             }
 
             let mut resources = BTreeMap::new();
+            let runtime_environment = loader.runtime_environment();
+            let ty_tag_converter = TypeTagConverter::new(&runtime_environment);
             for (ty, (layout, gv, has_aggregator_lifting)) in account_data_cache.data_map {
                 if let Some(op) = gv.into_effect_with_layout(layout) {
-                    let struct_tag = match loader.type_to_type_tag(&ty)? {
+                    let struct_tag = match ty_tag_converter.ty_to_ty_tag(&ty)? {
                         TypeTag::Struct(struct_tag) => *struct_tag,
                         _ => return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)),
                     };
@@ -205,13 +215,15 @@ impl<'r> TransactionDataCache<'r> {
         ty: &Type,
         module_store: &ModuleStorageAdapter,
     ) -> PartialVMResult<(&mut GlobalValue, Option<NumBytes>)> {
-        let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
-            (addr, AccountDataCache::new())
-        });
-
+        let needs_load = self
+            .account_map
+            .get(&addr)
+            .map(|account_cache| !account_cache.data_map.contains_key(ty))
+            .unwrap_or(true);
         let mut load_res = None;
-        if !account_cache.data_map.contains_key(ty) {
-            let ty_tag = match loader.type_to_type_tag(ty)? {
+        let load_info = if needs_load {
+            let runtime_environment = loader.runtime_environment();
+            let ty_tag = match TypeTagConverter::new(&runtime_environment).ty_to_ty_tag(ty)? {
                 TypeTag::Struct(s_tag) => s_tag,
                 _ =>
                 // non-struct top-level value; can't happen
@@ -219,10 +231,25 @@ impl<'r> TransactionDataCache<'r> {
                     return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
                 },
             };
-            // TODO(Gas): Shall we charge for this?
-            let (ty_layout, has_aggregator_lifting) =
-                loader.type_to_type_layout_with_identifier_mappings(ty, module_store)?;
+            let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, &*self);
+            let v2_module_storage = base_storage.as_unsync_module_storage();
+            let traversal_storage = crate::module_traversal::TraversalStorage::new();
+            let mut traversal_context =
+                crate::module_traversal::TraversalContext::new(&traversal_storage);
+            let mut gas_meter = move_vm_types::gas::UnmeteredGasMeter;
+            let (ty_layout, has_aggregator_lifting) = dispatch_loader!(&v2_module_storage, v2_loader, {
+                LayoutConverter::new(&v2_loader).type_to_type_layout_with_identifier_mappings(
+                    &mut gas_meter,
+                    &mut traversal_context,
+                    ty,
+                )
+            })?;
+            Some((ty_tag, ty_layout, has_aggregator_lifting))
+        } else {
+            None
+        };
 
+        if let Some((ty_tag, ty_layout, has_aggregator_lifting)) = load_info {
             let module = module_store.module_at(&ty_tag.module_id());
             let metadata: &[Metadata] = match &module {
                 Some(module) => &module.module().metadata,
@@ -263,11 +290,17 @@ impl<'r> TransactionDataCache<'r> {
                 None => GlobalValue::none(),
             };
 
+            let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
+                (addr, AccountDataCache::new())
+            });
             account_cache
                 .data_map
                 .insert(ty.clone(), (ty_layout, gv, has_aggregator_lifting));
         }
 
+        let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
+            (addr, AccountDataCache::new())
+        });
         Ok((
             account_cache
                 .data_map

@@ -179,10 +179,11 @@ impl<'r, 'l> SessionAdapter<'r, 'l> {
         // Perform bytecode and loading verification. Modules must be sorted in topological order.
         let data_store = &mut self.session.data_cache;
 
-        vm.runtime.loader.verify_module_bundle_for_publication(
+        vm.runtime.verify_module_bundle_for_publication(
             &compiled_modules,
+            sender,
+            Compatibility::no_check(),
             data_store,
-            &self.session.module_store,
         )?;
 
         Ok(compiled_modules)

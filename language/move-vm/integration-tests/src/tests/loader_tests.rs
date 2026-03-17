@@ -14,7 +14,7 @@ use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-    language_storage::ModuleId,
+    language_storage::{ModuleId, StructTag, TypeTag},
 };
 use move_vm_runtime::{config::VMConfig, module_traversal::*, move_vm::MoveVM};
 use move_vm_test_utils::InMemoryStorage;
@@ -31,6 +31,10 @@ struct Adapter {
 
 impl Adapter {
     fn new(store: InMemoryStorage) -> Self {
+        Self::new_with_lazy_loading(store, false)
+    }
+
+    fn new_with_lazy_loading(store: InMemoryStorage, enable_lazy_loading: bool) -> Self {
         let functions = vec![
             (
                 ModuleId::new(WORKING_ACCOUNT, Identifier::new("A").unwrap()),
@@ -58,6 +62,7 @@ impl Adapter {
                 max_dependency_depth: Some(100),
                 ..Default::default()
             },
+            enable_lazy_loading,
             ..Default::default()
         };
         Self {
@@ -199,6 +204,44 @@ fn load_concurrent_many() {
     adapter.publish_modules(modules);
     // makes 150 threads
     adapter.call_functions_async(30);
+}
+
+#[test]
+fn lazy_load() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter = Adapter::new_with_lazy_loading(data_store, true);
+    let modules = get_modules();
+    adapter.publish_modules(modules);
+    adapter.call_functions();
+}
+
+#[test]
+fn lazy_load_concurrent() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter = Adapter::new_with_lazy_loading(data_store, true);
+    let modules = get_modules();
+    adapter.publish_modules(modules);
+    adapter.call_functions_async(3);
+}
+
+#[test]
+fn lazy_get_type_layout() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter = Adapter::new_with_lazy_loading(data_store, true);
+    let modules = get_modules();
+    adapter.publish_modules(modules);
+
+    let mut session = adapter.vm.new_session(&adapter.store);
+    let struct_tag = StructTag {
+        address: WORKING_ACCOUNT,
+        module: Identifier::new("A").unwrap(),
+        name: Identifier::new("S").unwrap(),
+        type_args: vec![],
+    };
+    let type_tag = TypeTag::Struct(Box::new(struct_tag));
+
+    session.get_type_layout(&type_tag).unwrap();
+    session.get_fully_annotated_type_layout(&type_tag).unwrap();
 }
 
 #[test]

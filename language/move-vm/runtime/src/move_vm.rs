@@ -5,6 +5,7 @@
 use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
+    module_traversal::{TraversalContext, TraversalStorage},
     loader::{ModuleStorage, ModuleStorageAdapter},
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunction,
@@ -19,6 +20,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
     metadata::Metadata, resolver::MoveResolver,
 };
+use move_vm_types::gas::UnmeteredGasMeter;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -118,21 +120,33 @@ impl MoveVM {
         module_id: &ModuleId,
         remote: &impl MoveResolver<PartialVMError>,
     ) -> VMResult<Arc<CompiledModule>> {
-        self.runtime
-            .loader()
-            .load_module(
-                module_id,
-                &mut TransactionDataCache::new(
-                    self.runtime
-                        .loader()
-                        .vm_config()
-                        .deserializer_config
-                        .clone(),
-                    remote,
-                ),
-                &ModuleStorageAdapter::new(self.runtime.module_storage()),
-            )
-            .map(|arc_module| arc_module.arc_module())
+        let mut data_cache = TransactionDataCache::new(
+            self.runtime
+                .loader()
+                .vm_config()
+                .deserializer_config
+                .clone(),
+            remote,
+        );
+        let module_store = ModuleStorageAdapter::new(self.runtime.module_storage());
+        let mut gas_meter = UnmeteredGasMeter;
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        self.runtime.loader().load_module_v2(
+            module_id,
+            &mut data_cache,
+            &module_store,
+            &mut gas_meter,
+            &mut traversal_context,
+        )?;
+        module_store
+            .module_at(module_id)
+            .map(|module| module.arc_module())
+            .ok_or_else(|| {
+                PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
+                    .with_message(format!("Module {} doesn't exist", module_id))
+                    .finish(Location::Undefined)
+            })
     }
 
     /// Allows the adapter to announce to the VM that the code loading cache should be considered

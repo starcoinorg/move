@@ -5,10 +5,13 @@
 use crate::{
     access_control::AccessControlState,
     data_cache::TransactionDataCache,
+    dispatch_loader,
     loader::{Function, Loader, ModuleStorageAdapter, Resolver},
     module_traversal::TraversalContext,
     native_extensions::NativeContextExtensions,
     native_functions::NativeContext,
+    storage::{ty_depth_checker::TypeDepthChecker, ty_tag_converter::TypeTagConverter},
+    AsUnsyncModuleStorage, RuntimeEnvironmentRef,
     trace,
 };
 use fail::fail_point;
@@ -27,7 +30,7 @@ use move_core_types::{
 };
 use move_vm_types::{
     debug_write, debug_writeln,
-    gas::{GasMeter, SimpleInstruction},
+    gas::{GasMeter, SimpleInstruction, UnmeteredGasMeter},
     loaded_data::{
         runtime_access_specifier::{AccessInstance, AccessSpecifierEnv, AddressSpecifierFunction},
         runtime_types::Type,
@@ -77,7 +80,10 @@ struct TypeWithLoader<'a, 'b> {
 
 impl<'a, 'b> TypeView for TypeWithLoader<'a, 'b> {
     fn to_type_tag(&self) -> TypeTag {
-        self.loader.type_to_type_tag(self.ty).unwrap()
+        let runtime_environment = self.loader.runtime_environment();
+        TypeTagConverter::new(&runtime_environment)
+            .ty_to_ty_tag(self.ty)
+            .unwrap()
     }
 }
 
@@ -156,7 +162,14 @@ impl Interpreter {
             let resolver = current_frame.resolver(loader, module_store);
             let exit_code =
                 current_frame //self
-                    .execute_code(&resolver, &mut self, data_store, module_store, gas_meter)
+                    .execute_code(
+                        &resolver,
+                        &mut self,
+                        data_store,
+                        module_store,
+                        gas_meter,
+                        traversal_context,
+                    )
                     .map_err(|err| self.attach_state_if_invariant_violation(err, &current_frame))?;
             match exit_code {
                 ExitCode::Return => {
@@ -195,8 +208,13 @@ impl Interpreter {
                 },
                 ExitCode::Call(fh_idx) => {
                     let func = resolver
-                        .function_from_handle(fh_idx)
-                        .map_err(|e| self.set_location(e))?;
+                        .function_from_handle_with_context(
+                            fh_idx,
+                            data_store,
+                            gas_meter,
+                            traversal_context,
+                        )
+                        .map_err(|e| self.set_location(e.to_partial()))?;
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -242,8 +260,13 @@ impl Interpreter {
                         .instantiate_generic_function(Some(gas_meter), idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver
-                        .function_from_instantiation(idx)
-                        .map_err(|e| self.set_location(e))?;
+                        .function_from_instantiation_with_context(
+                            idx,
+                            data_store,
+                            gas_meter,
+                            traversal_context,
+                        )
+                        .map_err(|e| self.set_location(e.to_partial()))?;
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -585,15 +608,18 @@ impl Interpreter {
                 // This is just a precautionary step to make sure that caching status of the VM will not alter execution
                 // result in case framework code forgot to use LoadFunction result to load the modules into cache
                 // and charge properly.
-                resolver
-                    .loader()
-                    .load_module(&module_name, data_store, module_store)
+                let target_func = resolver
+                    .function_from_name_with_context(
+                        &module_name,
+                        &func_name,
+                        data_store,
+                        gas_meter,
+                        traversal_context,
+                    )
                     .map_err(|_| {
                         PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
                             .with_message(format!("Module {} doesn't exist", module_name))
                     })?;
-
-                let target_func = resolver.function_from_name(&module_name, &func_name)?;
 
                 if target_func.is_friend_or_private()
                     || target_func.module_id() == function.module_id()
@@ -643,27 +669,15 @@ impl Interpreter {
                 .map_err(|err| err.to_partial())
             },
             NativeResult::LoadModule { module_name } => {
-                let arena_id = traversal_context
-                    .referenced_module_ids
-                    .alloc(module_name.clone());
                 resolver
                     .loader()
-                    .check_dependencies_and_charge_gas(
-                        module_store,
+                    .load_module_v2(
+                        &module_name,
                         data_store,
+                        module_store,
                         gas_meter,
-                        &mut traversal_context.visited,
-                        traversal_context.referenced_modules,
-                        [(arena_id.address(), arena_id.name())],
+                        traversal_context,
                     )
-                    .map_err(|err| err
-                        .to_partial()
-                        .append_message_with_separator('.',
-                            format!("Failed to charge transitive dependency for {}. Does this module exists?", module_name)
-                        ))?;
-                resolver
-                    .loader()
-                    .load_module(&module_name, data_store, module_store)
                     .map_err(|_| {
                         PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
                             .with_message(format!("Module {} doesn't exist", module_name))
@@ -983,8 +997,10 @@ impl Interpreter {
         debug_write!(buf, "{}", func.name())?;
         let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
+        let runtime_environment = loader.runtime_environment();
+        let type_tag_converter = TypeTagConverter::new(&runtime_environment);
         for ty in ty_args {
-            ty_tags.push(loader.type_to_type_tag(ty)?);
+            ty_tags.push(type_tag_converter.ty_to_ty_tag(ty)?);
         }
         if !ty_tags.is_empty() {
             debug_write!(buf, "<")?;
@@ -1272,80 +1288,19 @@ impl CallStack {
     }
 }
 
-fn check_depth_of_type(resolver: &Resolver, ty: &Type) -> PartialVMResult<()> {
-    // Start at 1 since we always call this right before we add a new node to the value's depth.
-    let max_depth = match resolver.loader().vm_config().max_value_nest_depth {
-        Some(max_depth) => max_depth,
-        None => return Ok(()),
-    };
-    check_depth_of_type_impl(resolver, ty, max_depth, 1)?;
-    Ok(())
-}
-
-fn check_depth_of_type_impl(
+fn check_depth_of_type(
     resolver: &Resolver,
+    data_store: &TransactionDataCache,
+    traversal_context: &mut TraversalContext,
     ty: &Type,
-    max_depth: u64,
-    depth: u64,
-) -> PartialVMResult<u64> {
-    macro_rules! check_depth {
-        ($additional_depth:expr) => {{
-            let new_depth = depth.saturating_add($additional_depth);
-            if new_depth > max_depth {
-                return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
-            } else {
-                new_depth
-            }
-        }};
-    }
-
-    // Calculate depth of the type itself
-    let ty_depth = match ty {
-        Type::Bool
-        | Type::U8
-        | Type::U16
-        | Type::U32
-        | Type::U64
-        | Type::U128
-        | Type::U256
-        | Type::Address
-        | Type::Signer => check_depth!(0),
-        // Even though this is recursive this is OK since the depth of this recursion is
-        // bounded by the depth of the type arguments, which we have already checked.
-        Type::Reference(ty) | Type::MutableReference(ty) => {
-            check_depth_of_type_impl(resolver, ty, max_depth, check_depth!(1))?
-        },
-        Type::Vector(ty) => check_depth_of_type_impl(resolver, ty, max_depth, check_depth!(1))?,
-        Type::Struct { idx, .. } => {
-            let formula = resolver
-                .loader()
-                .calculate_depth_of_struct(*idx, resolver.module_store())?;
-            check_depth!(formula.solve(&[]))
-        },
-        // NB: substitution must be performed before calling this function
-        Type::StructInstantiation { idx, ty_args, .. } => {
-            // Calculate depth of all type arguments, and make sure they themselves are not too deep.
-            let ty_arg_depths = ty_args
-                .iter()
-                .map(|ty| {
-                    // Ty args should be fully resolved and not need any type arguments
-                    check_depth_of_type_impl(resolver, ty, max_depth, check_depth!(0))
-                })
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            let formula = resolver
-                .loader()
-                .calculate_depth_of_struct(*idx, resolver.module_store())?;
-            check_depth!(formula.solve(&ty_arg_depths))
-        },
-        Type::TyParam(_) => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Type parameter should be fully resolved".to_string()),
-            )
-        },
-    };
-
-    Ok(ty_depth)
+) -> PartialVMResult<()> {
+    let runtime_environment = resolver.loader().runtime_environment();
+    let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, data_store);
+    let module_storage = base_storage.as_unsync_module_storage();
+    let mut gas_meter = UnmeteredGasMeter;
+    dispatch_loader!(&module_storage, loader, {
+        TypeDepthChecker::new(&loader).check_depth_of_type(&mut gas_meter, traversal_context, ty)
+    })
 }
 
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
@@ -1490,8 +1445,16 @@ impl Frame {
         data_store: &mut TransactionDataCache,
         module_store: &ModuleStorageAdapter,
         gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
     ) -> VMResult<ExitCode> {
-        self.execute_code_impl(resolver, interpreter, data_store, module_store, gas_meter)
+        self.execute_code_impl(
+            resolver,
+            interpreter,
+            data_store,
+            module_store,
+            gas_meter,
+            traversal_context,
+        )
             .map_err(|e| {
                 let e = if cfg!(feature = "testing") || cfg!(feature = "stacktrace") {
                     e.with_exec_state(interpreter.get_internal_state())
@@ -2101,6 +2064,7 @@ impl Frame {
         data_store: &mut TransactionDataCache,
         module_store: &ModuleStorageAdapter,
         gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
     ) -> PartialVMResult<ExitCode> {
         use SimpleInstruction as S;
 
@@ -2319,7 +2283,7 @@ impl Frame {
                     Bytecode::Pack(sd_idx) => {
                         let field_count = resolver.field_count(*sd_idx);
                         let struct_type = resolver.get_struct_ty(*sd_idx);
-                        check_depth_of_type(resolver, &struct_type)?;
+                        check_depth_of_type(resolver, data_store, traversal_context, &struct_type)?;
                         gas_meter.charge_pack(
                             false,
                             interpreter.operand_stack.last_n(field_count as usize)?,
@@ -2349,7 +2313,7 @@ impl Frame {
                             self.ty_cache
                                 .get_struct_type(*si_idx, resolver, &self.ty_args)?;
                         gas_meter.charge_create_ty(ty_count)?;
-                        check_depth_of_type(resolver, ty)?;
+                        check_depth_of_type(resolver, data_store, traversal_context, ty)?;
 
                         let field_count = resolver.field_instantiation_count(*si_idx);
                         gas_meter.charge_pack(
@@ -2390,7 +2354,7 @@ impl Frame {
                                 .get_struct_type(*si_idx, resolver, &self.ty_args)?;
                         gas_meter.charge_create_ty(ty_count)?;
 
-                        check_depth_of_type(resolver, ty)?;
+                        check_depth_of_type(resolver, data_store, traversal_context, ty)?;
 
                         let struct_ = interpreter.operand_stack.pop_as::<Struct>()?;
 
@@ -2711,7 +2675,7 @@ impl Frame {
                             self.ty_cache
                                 .get_signature_index_type(*si, resolver, &self.ty_args)?;
                         gas_meter.charge_create_ty(ty_count)?;
-                        check_depth_of_type(resolver, ty)?;
+                        check_depth_of_type(resolver, data_store, traversal_context, ty)?;
                         gas_meter.charge_vec_pack(
                             make_ty!(ty),
                             interpreter.operand_stack.last_n(*num as usize)?,

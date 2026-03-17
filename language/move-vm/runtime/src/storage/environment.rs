@@ -23,6 +23,7 @@ use move_core_types::{
 use move_vm_types::{
     loaded_data::struct_name_indexing::StructNameIndexMap,
     module_id_interner::InternedModuleIdPool,
+    code::ModuleBytesStorage,
     ty_interner::InternedTypePool,
 };
 use std::sync::Arc;
@@ -160,12 +161,12 @@ impl RuntimeEnvironment {
         module_size: usize,
         module_hash: &[u8; 32],
     ) -> VMResult<LocallyVerifiedModule> {
-        if !VERIFIED_MODULES_CACHE.contains(module_hash) {
+        if !VERIFIED_MODULES_CACHE.contains(module_hash, &self.vm_config.verifier_config) {
             move_bytecode_verifier::verify_module_with_config(
                 &self.vm_config.verifier_config,
                 compiled_module.as_ref(),
             )?;
-            VERIFIED_MODULES_CACHE.put(*module_hash);
+            VERIFIED_MODULES_CACHE.put(*module_hash, &self.vm_config.verifier_config);
         }
         Ok(LocallyVerifiedModule(compiled_module, module_size))
     }
@@ -249,6 +250,80 @@ pub trait WithRuntimeEnvironment {
 impl WithRuntimeEnvironment for RuntimeEnvironment {
     fn runtime_environment(&self) -> &RuntimeEnvironment {
         self
+    }
+}
+
+pub struct WithRuntimeEnvironmentStorage<'env, T> {
+    runtime_environment: &'env RuntimeEnvironment,
+    storage: T,
+}
+
+impl<'env, T> WithRuntimeEnvironmentStorage<'env, T> {
+    pub fn new(runtime_environment: &'env RuntimeEnvironment, storage: T) -> Self {
+        Self {
+            runtime_environment,
+            storage,
+        }
+    }
+
+    pub fn into_inner(self) -> T {
+        self.storage
+    }
+}
+
+impl<T> WithRuntimeEnvironment for WithRuntimeEnvironmentStorage<'_, T> {
+    fn runtime_environment(&self) -> &RuntimeEnvironment {
+        self.runtime_environment
+    }
+}
+
+impl<T> ModuleBytesStorage for WithRuntimeEnvironmentStorage<'_, T>
+where
+    T: ModuleBytesStorage,
+{
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        self.storage.fetch_module_bytes(address, module_name)
+    }
+}
+
+pub struct RuntimeEnvironmentRef<'a, T> {
+    runtime_environment: &'a RuntimeEnvironment,
+    inner: &'a T,
+}
+
+impl<'a, T> RuntimeEnvironmentRef<'a, T> {
+    pub fn new(runtime_environment: &'a RuntimeEnvironment, inner: &'a T) -> Self {
+        Self {
+            runtime_environment,
+            inner,
+        }
+    }
+
+    pub fn inner(&self) -> &T {
+        self.inner
+    }
+}
+
+impl<T> WithRuntimeEnvironment for RuntimeEnvironmentRef<'_, T> {
+    fn runtime_environment(&self) -> &RuntimeEnvironment {
+        self.runtime_environment
+    }
+}
+
+impl<T> ModuleBytesStorage for RuntimeEnvironmentRef<'_, T>
+where
+    T: ModuleBytesStorage,
+{
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        self.inner.fetch_module_bytes(address, module_name)
     }
 }
 

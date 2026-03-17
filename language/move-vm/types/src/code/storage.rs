@@ -16,3 +16,29 @@ pub trait ModuleBytesStorage {
         module_name: &IdentStr,
     ) -> VMResult<Option<Bytes>>;
 }
+
+impl<T> ModuleBytesStorage for &T
+where
+    T: ModuleBytesStorage + ?Sized,
+{
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        (**self).fetch_module_bytes(address, module_name)
+    }
+}
+
+impl<T> ModuleBytesStorage for &mut T
+where
+    T: ModuleBytesStorage + ?Sized,
+{
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        (**self).fetch_module_bytes(address, module_name)
+    }
+}

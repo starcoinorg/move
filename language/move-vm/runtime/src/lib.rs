@@ -35,17 +35,43 @@ mod access_control;
 pub use loader::LoadedFunction;
 pub use storage::{
     code_storage::CodeStorage,
+    dependencies_gas_charging::check_dependencies_and_charge_gas,
     environment::{
-        ambassador_impl_WithRuntimeEnvironment, RuntimeEnvironment, WithRuntimeEnvironment,
+        ambassador_impl_WithRuntimeEnvironment, RuntimeEnvironment, RuntimeEnvironmentRef,
+        WithRuntimeEnvironment,
     },
     implementations::{
         unsync_code_storage::{AsUnsyncCodeStorage, UnsyncCodeStorage},
         unsync_module_storage::{AsUnsyncModuleStorage, BorrowedOrOwned, UnsyncModuleStorage},
     },
     layout_cache::{LayoutCache, LayoutCacheEntry, NoOpLayoutCache, StructKey},
+    loader::{
+        eager::EagerLoader,
+        lazy::LazyLoader,
+        traits::{
+            FunctionDefinitionLoader, InstantiatedFunctionLoader, LegacyLoaderConfig, Loader as StorageLoader,
+            ModuleMetadataLoader, NativeModuleLoader, ScriptLoader, StructDefinitionLoader,
+        },
+    },
     module_storage::{
         ambassador_impl_ModuleStorage, AsFunctionValueExtension, FunctionValueExtensionAdapter,
         ModuleStorage,
     },
     publishing::{StagingModuleStorage, VerifiedModuleBundle},
 };
+
+#[macro_export]
+macro_rules! dispatch_loader {
+    ($module_storage:expr, $loader:ident, $dispatch:expr) => {
+        if $crate::WithRuntimeEnvironment::runtime_environment($module_storage)
+            .vm_config()
+            .enable_lazy_loading
+        {
+            let $loader = $crate::LazyLoader::new($module_storage);
+            $dispatch
+        } else {
+            let $loader = $crate::EagerLoader::new($module_storage);
+            $dispatch
+        }
+    };
+}

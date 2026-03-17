@@ -67,7 +67,7 @@ fn test_malformed_resource() {
             }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_hex()));
+    let code = code.replace("{{ADDR}}", &TEST_ADDR.to_hex());
     let mut units = compile_units(&code).unwrap();
 
     let s2 = as_script(units.pop().unwrap());
@@ -166,7 +166,7 @@ fn test_malformed_module() {
         }
     "#;
 
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_hex()));
+    let code = code.replace("{{ADDR}}", &TEST_ADDR.to_hex());
     let mut units = compile_units(&code).unwrap();
 
     let m = as_module(units.pop().unwrap());
@@ -233,7 +233,7 @@ fn test_unverifiable_module() {
         }
     "#;
 
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_hex()));
+    let code = code.replace("{{ADDR}}", &TEST_ADDR.to_hex());
     let mut units = compile_units(&code).unwrap();
     let m = as_module(units.pop().unwrap());
 
@@ -288,6 +288,7 @@ fn test_unverifiable_module() {
             )
             .unwrap_err();
 
+        eprintln!("test_missing_module_dependency err: {:?}", err);
         assert_eq!(err.status_type(), StatusType::InvariantViolation);
     }
 }
@@ -306,7 +307,7 @@ fn test_missing_module_dependency() {
             public fun bar() { M::foo(); }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_hex()));
+    let code = code.replace("{{ADDR}}", &TEST_ADDR.to_hex());
     let mut units = compile_units(&code).unwrap();
     let n = as_module(units.pop().unwrap());
     let m = as_module(units.pop().unwrap());
@@ -379,7 +380,7 @@ fn test_malformed_module_dependency() {
             public fun bar() { M::foo(); }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_hex()));
+    let code = code.replace("{{ADDR}}", &TEST_ADDR.to_hex());
     let mut units = compile_units(&code).unwrap();
     let n = as_module(units.pop().unwrap());
     let m = as_module(units.pop().unwrap());
@@ -458,7 +459,7 @@ fn test_unverifiable_module_dependency() {
             public fun bar() { M::foo(); }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_hex()));
+    let code = code.replace("{{ADDR}}", &TEST_ADDR.to_hex());
     let mut units = compile_units(&code).unwrap();
     let n = as_module(units.pop().unwrap());
     let m = as_module(units.pop().unwrap());
@@ -617,7 +618,7 @@ fn test_storage_returns_bogus_error_when_loading_resource() {
             }
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_hex()));
+    let code = code.replace("{{ADDR}}", &TEST_ADDR.to_hex());
 
     let mut units = compile_units(&code).unwrap();
     let m = as_module(units.pop().unwrap());

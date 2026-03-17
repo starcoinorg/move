@@ -55,6 +55,13 @@ impl<M: ModuleStorage> UnsyncCodeStorage<M> {
     pub fn into_module_storage(self) -> M {
         self.module_storage
     }
+
+    pub fn get_verified_script(&self, hash: &[u8; 32]) -> Option<Arc<Script>> {
+        match self.script_cache.get_script(hash)? {
+            Code::Verified(script) => Some(script),
+            Code::Deserialized(_) => None,
+        }
+    }
 }
 
 pub trait AsUnsyncCodeStorage<'ctx, Ctx: ModuleBytesStorage + WithRuntimeEnvironment> {

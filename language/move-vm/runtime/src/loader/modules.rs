@@ -121,6 +121,23 @@ impl ModuleStorageAdapter {
         Ok(self.modules.store_module(&id, module))
     }
 
+    pub(crate) fn store_verified_module(&self, module: Arc<Module>) -> Arc<Module> {
+        self.modules
+            .store_module(module.self_id(), module.as_ref().clone())
+    }
+
+    pub(crate) fn cache_verified_module(
+        &self,
+        id: &ModuleId,
+        module: Arc<Module>,
+    ) -> Arc<Module> {
+        if let Some(cached) = self.module_at(id) {
+            cached
+        } else {
+            self.modules.store_module(id, module.as_ref().clone())
+        }
+    }
+
     pub(crate) fn has_module(&self, module_id: &ModuleId) -> bool {
         self.modules.fetch_module(module_id).is_some()
     }
@@ -523,6 +540,10 @@ impl Module {
         &self.struct_instantiations[idx as usize]
     }
 
+    pub(crate) fn self_id(&self) -> &ModuleId {
+        &self.id
+    }
+
     pub(crate) fn function_at(&self, idx: u16) -> &FunctionHandle {
         &self.function_refs[idx as usize]
     }
@@ -557,6 +578,45 @@ impl Module {
 
     pub(crate) fn single_type_at(&self, idx: SignatureIndex) -> &Type {
         self.single_signature_token_map.get(&idx).unwrap()
+    }
+
+    pub fn get_function(&self, function_name: &IdentStr) -> VMResult<Arc<Function>> {
+        Ok(self
+            .function_map
+            .get(function_name)
+            .and_then(|idx| self.function_defs.get(*idx))
+            .ok_or_else(|| {
+                let module_id = self.self_id();
+                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
+                    .with_message(format!(
+                        "Function {}::{}::{} does not exist",
+                        module_id.address(),
+                        module_id.name(),
+                        function_name
+                    ))
+                    .finish(Location::Undefined)
+            })?
+            .clone())
+    }
+
+    pub(crate) fn get_struct(&self, struct_name: &IdentStr) -> VMResult<Arc<StructType>> {
+        Ok(self
+            .struct_map
+            .get(struct_name)
+            .and_then(|idx| self.structs.get(*idx))
+            .ok_or_else(|| {
+                let module_id = self.self_id();
+                PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
+                    .with_message(format!(
+                        "Struct {}::{}::{} does not exist",
+                        module_id.address(),
+                        module_id.name(),
+                        struct_name
+                    ))
+                    .finish(Location::Undefined)
+            })?
+            .definition_struct_type
+            .clone())
     }
 }
 

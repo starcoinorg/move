@@ -46,7 +46,7 @@ fn test_publish_module_with_nested_loops() {
             native fun bar();
         }
     "#;
-    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR.to_hex()));
+    let code = code.replace("{{ADDR}}", &TEST_ADDR.to_hex());
     let mut units = compile_units(&code).unwrap();
 
     let m = as_module(units.pop().unwrap());

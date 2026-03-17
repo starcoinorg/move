@@ -6,19 +6,22 @@ use crate::{
     AsUnsyncModuleStorage,
     config::VMConfig,
     data_cache::TransactionDataCache,
+    dispatch_loader,
     interpreter::Interpreter,
     loader::{LoadedFunction, Loader, ModuleCache, ModuleStorage, ModuleStorageAdapter},
     module_traversal::TraversalContext,
     native_extensions::NativeContextExtensions,
     native_functions::{NativeFunction, NativeFunctions},
     session::SerializedReturnValues,
-    StagingModuleStorage, RuntimeEnvironment, WithRuntimeEnvironment,
+    RuntimeEnvironment, RuntimeEnvironmentRef, StagingModuleStorage,
+    WithRuntimeEnvironment,
 };
 use bytes::Bytes;
 use move_binary_format::{
     compatibility::Compatibility,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::LocalIndex,
+    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
@@ -31,6 +34,8 @@ use move_vm_types::{
     values::{Locals, Reference, VMValueCast, Value},
 };
 use std::{borrow::Borrow, sync::Arc};
+
+use crate::storage::ty_layout_converter::LayoutConverter;
 
 /// An instantiation of the MoveVM.
 pub(crate) struct VMRuntime {
@@ -137,24 +142,59 @@ impl VMRuntime {
         Ok(())
     }
 
+    pub(crate) fn verify_module_bundle_for_publication(
+        &self,
+        modules: &[CompiledModule],
+        sender: AccountAddress,
+        compat: Compatibility,
+        data_store: &TransactionDataCache,
+    ) -> VMResult<()> {
+        let base_storage = WithEnvironment::new(self.runtime_environment(), data_store);
+        let existing_module_storage = base_storage.as_unsync_module_storage();
+        StagingModuleStorage::create_with_compat_config(
+            &sender,
+            compat,
+            &existing_module_storage,
+            modules
+                .iter()
+                .map(|module| {
+                    let mut bytes = vec![];
+                    module
+                        .serialize(&mut bytes)
+                        .map(|()| Bytes::from(bytes))
+                        .map_err(|err| {
+                            PartialVMError::new(
+                                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            )
+                            .with_message(format!(
+                                "failed to serialize verified module bundle entry: {err}"
+                            ))
+                            .finish(Location::Undefined)
+                        })
+                })
+                .collect::<VMResult<Vec<_>>>()?,
+        )?;
+        Ok(())
+    }
+
     pub(crate) fn deserialize_arg(
         &self,
-        module_store: &ModuleStorageAdapter,
+        data_store: &TransactionDataCache,
         ty: &Type,
         arg: impl Borrow<[u8]>,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
     ) -> PartialVMResult<Value> {
-        let (layout, has_identifier_mappings) = match self
-            .loader
-            .type_to_type_layout_with_identifier_mappings(ty, module_store)
-        {
-            Ok(layout) => layout,
-            Err(_err) => {
-                return Err(PartialVMError::new(
-                    StatusCode::INVALID_PARAM_TYPE_FOR_DESERIALIZATION,
-                )
-                .with_message("[VM] failed to get layout from type".to_string()));
-            }
-        };
+        let base_storage = RuntimeEnvironmentRef::new(self.runtime_environment(), data_store);
+        let module_storage = base_storage.as_unsync_module_storage();
+        let (layout, has_identifier_mappings) = dispatch_loader!(&module_storage, loader, {
+            LayoutConverter::new(&loader)
+                .type_to_type_layout_with_identifier_mappings(gas_meter, traversal_context, ty)
+        })
+        .map_err(|_err| {
+            PartialVMError::new(StatusCode::INVALID_PARAM_TYPE_FOR_DESERIALIZATION)
+                .with_message("[VM] failed to get layout from type".to_string())
+        })?;
 
         let deserialization_error = || -> PartialVMError {
             PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT)
@@ -176,9 +216,11 @@ impl VMRuntime {
 
     pub(crate) fn deserialize_args(
         &self,
-        module_store: &ModuleStorageAdapter,
+        data_store: &TransactionDataCache,
         param_tys: Vec<Type>,
         serialized_args: Vec<impl Borrow<[u8]>>,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
     ) -> PartialVMResult<(Locals, Vec<Value>)> {
         if param_tys.len() != serialized_args.len() {
             return Err(
@@ -204,12 +246,24 @@ impl VMRuntime {
                 Type::MutableReference(inner_t) | Type::Reference(inner_t) => {
                     dummy_locals.store_loc(
                         idx,
-                        self.deserialize_arg(module_store, inner_t, arg_bytes)?,
+                        self.deserialize_arg(
+                            data_store,
+                            inner_t,
+                            arg_bytes,
+                            gas_meter,
+                            traversal_context,
+                        )?,
                         self.loader.vm_config().check_invariant_in_swap_loc,
                     )?;
                     dummy_locals.borrow_loc(idx)
                 }
-                _ => self.deserialize_arg(module_store, &ty, arg_bytes),
+                _ => self.deserialize_arg(
+                    data_store,
+                    &ty,
+                    arg_bytes,
+                    gas_meter,
+                    traversal_context,
+                ),
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
         Ok((dummy_locals, deserialized_args))
@@ -217,9 +271,11 @@ impl VMRuntime {
 
     fn serialize_return_value(
         &self,
-        module_store: &ModuleStorageAdapter,
+        data_store: &TransactionDataCache,
         ty: &Type,
         value: Value,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
     ) -> PartialVMResult<(Vec<u8>, MoveTypeLayout)> {
         let (ty, value) = match ty {
             Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -230,10 +286,13 @@ impl VMRuntime {
             _ => (ty, value),
         };
 
-        let (layout, has_identifier_mappings) = self
-            .loader
-            .type_to_type_layout_with_identifier_mappings(ty, module_store)
-            .map_err(|_err| {
+        let base_storage = RuntimeEnvironmentRef::new(self.runtime_environment(), data_store);
+        let module_storage = base_storage.as_unsync_module_storage();
+        let (layout, has_identifier_mappings) = dispatch_loader!(&module_storage, loader, {
+            LayoutConverter::new(&loader)
+                .type_to_type_layout_with_identifier_mappings(gas_meter, traversal_context, ty)
+        })
+        .map_err(|_err| {
                 // TODO: Should we use `err` instead of mapping?
                 PartialVMError::new(StatusCode::VERIFICATION_ERROR).with_message(
                     "entry point functions cannot have non-serializable return types".to_string(),
@@ -258,9 +317,11 @@ impl VMRuntime {
 
     fn serialize_return_values(
         &self,
-        module_store: &ModuleStorageAdapter,
+        data_store: &TransactionDataCache,
         return_types: &[Type],
         return_values: Vec<Value>,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
     ) -> PartialVMResult<Vec<(Vec<u8>, MoveTypeLayout)>> {
         if return_types.len() != return_values.len() {
             return Err(
@@ -277,7 +338,15 @@ impl VMRuntime {
         return_types
             .iter()
             .zip(return_values)
-            .map(|(ty, value)| self.serialize_return_value(module_store, ty, value))
+            .map(|(ty, value)| {
+                self.serialize_return_value(
+                    data_store,
+                    ty,
+                    value,
+                    gas_meter,
+                    traversal_context,
+                )
+            })
             .collect()
     }
 
@@ -309,7 +378,13 @@ impl VMRuntime {
             })
             .collect::<Vec<_>>();
         let (mut dummy_locals, deserialized_args) = self
-            .deserialize_args(module_store, param_tys, serialized_args)
+            .deserialize_args(
+                data_store,
+                param_tys,
+                serialized_args,
+                gas_meter,
+                traversal_context,
+            )
             .map_err(|e| e.finish(Location::Undefined))?;
         let return_tys = function
             .return_tys()
@@ -331,7 +406,13 @@ impl VMRuntime {
         )?;
 
         let serialized_return_values = self
-            .serialize_return_values(module_store, &return_tys, return_values)
+            .serialize_return_values(
+                data_store,
+                &return_tys,
+                return_values,
+                gas_meter,
+                traversal_context,
+            )
             .map_err(|e| e.finish(Location::Undefined))?;
         let serialized_mut_ref_outputs = mut_ref_args
             .into_iter()
@@ -339,7 +420,13 @@ impl VMRuntime {
                 // serialize return values first in the case that a value points into this local
                 let local_val = dummy_locals
                     .move_loc(idx, self.loader.vm_config().check_invariant_in_swap_loc)?;
-                let (bytes, layout) = self.serialize_return_value(module_store, &ty, local_val)?;
+                let (bytes, layout) = self.serialize_return_value(
+                    data_store,
+                    &ty,
+                    local_val,
+                    gas_meter,
+                    traversal_context,
+                )?;
                 Ok((idx as LocalIndex, bytes, layout))
             })
             .collect::<PartialVMResult<_>>()
@@ -389,7 +476,14 @@ impl VMRuntime {
         // Load the script first, verify it, and then execute the entry-point main function.
         let main = self
             .loader
-            .load_script(script.borrow(), &ty_args, data_store, module_store)?;
+            .load_script_v2(
+                script.borrow(),
+                &ty_args,
+                data_store,
+                module_store,
+                gas_meter,
+                traversal_context,
+            )?;
         self.execute_function_impl(
             main,
             serialized_args,

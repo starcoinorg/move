@@ -666,7 +666,9 @@ fn check_script_function() {
         // but the important thing is that the signature was accepted
         assert!(
             res.major_status() == StatusCode::ABORTED
-                || res.major_status() == StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT
+                || res.major_status() == StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT,
+            "{:?}",
+            res
         )
     }
 

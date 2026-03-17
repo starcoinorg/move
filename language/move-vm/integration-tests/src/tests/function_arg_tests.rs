@@ -38,7 +38,7 @@ fn run(
 
     let code = format!(
         r#"
-        module 0x{}::M {{
+        module {}::M {{
             struct Foo has copy, drop {{ x: u64 }}
             struct Bar<T> has copy, drop {{ x: T }}
 
@@ -83,7 +83,8 @@ fn run(
 }
 
 fn expect_err(params: &[&str], args: Vec<MoveValue>, expected_status: StatusCode) {
-    assert!(run(&[], params, vec![], args).unwrap_err().major_status() == expected_status);
+    let err = run(&[], params, vec![], args).unwrap_err();
+    assert_eq!(err.major_status(), expected_status, "{:?}", err);
 }
 
 fn expect_err_generic(
@@ -93,12 +94,8 @@ fn expect_err_generic(
     args: Vec<MoveValue>,
     expected_status: StatusCode,
 ) {
-    assert!(
-        run(ty_params, params, ty_args, args)
-            .unwrap_err()
-            .major_status()
-            == expected_status
-    );
+    let err = run(ty_params, params, ty_args, args).unwrap_err();
+    assert_eq!(err.major_status(), expected_status, "{:?}", err);
 }
 
 fn expect_ok(params: &[&str], args: Vec<MoveValue>) {
