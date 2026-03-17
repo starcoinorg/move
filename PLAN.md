@@ -54,6 +54,10 @@
   - `Session::execute_*`、`load_script`、`load_function`
   - 发布、layout/type-tag、native `LoadModule`
   这些入口现在直接通过 `VMRuntime + loader-v2 storage` 运行，不再从外层依赖 `load_*_v2` 兼容包装。
+- 结构统一已继续推进到解释器内部：
+  - 新增 `ExecutionContext` 作为执行期唯一上下文，统一承载 `Loader`、`ModuleStorageAdapter` 与共享 `RuntimeEnvironment`。
+  - `Resolver`、native context、debug/tracing 现在都依赖 `ExecutionContext`，不再各自单独持有 `loader + module_store` 组合。
+  - 当前保留的 `Loader`/`Resolver` 只承担运行时表示与字节码解析职责，不再构成第二套模块加载 runtime。
 - eager/lazy 两条语义都已经通过仓内主测试验证：
   - `cargo test -p move-vm-runtime -p move-vm-test-utils -p move-vm-integration-tests -p move-unit-test`
   - `cargo test -p move-vm-transactional-tests`
@@ -61,7 +65,6 @@
 - 测试手册与测试合约选型已整理到根目录 `LAZY_LOADER_TESTING.md`。
 
 ## Remaining Gaps
-- 旧 `Loader` 的运行时表示与解析器内部逻辑仍然存在，当前状态是“对外兼容层已显著收缩，但解释器内部还没有完全改写成纯 storage/loader-v2 表示”。
 - `PLAN` 中提到的 `module_storage_tests.rs` 风格 cache-state 断言还没有完整补齐；当前测试更偏功能与行为回归，而不是细粒度 deserialized/verified cache 状态校验。
 - 性能专项仍未闭环：性能专用 synthetic contracts 还没补，因此目前可以确认“功能正确、可正常运行”，但还不能把“性能提升已完成验收”视为已落地结论。
 

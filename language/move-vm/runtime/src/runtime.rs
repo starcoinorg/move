@@ -6,6 +6,7 @@ use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
     dispatch_loader,
+    execution_context::ExecutionContext,
     interpreter::Interpreter,
     loader::{LoadedFunction, Loader, ModuleCache, ModuleStorage, ModuleStorageAdapter},
     module_traversal::TraversalContext,
@@ -829,16 +830,16 @@ impl VMRuntime {
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
+        let execution_context = ExecutionContext::new(&self.loader, module_store);
         let return_values = Interpreter::entrypoint(
             function,
             ty_args,
             deserialized_args,
             data_store,
-            module_store,
+            &execution_context,
             gas_meter,
             traversal_context,
             extensions,
-            &self.loader,
         )?;
 
         let serialized_return_values = self
