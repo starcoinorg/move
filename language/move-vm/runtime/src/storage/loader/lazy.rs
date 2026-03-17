@@ -28,9 +28,7 @@ use move_core_types::{
 use move_vm_types::{
     code::Code,
     gas::GasMeter,
-    loaded_data::{
-        runtime_types::{StructNameIndex, StructType, Type},
-    },
+    loaded_data::runtime_types::{StructNameIndex, StructType, Type},
     sha3_256,
 };
 use std::sync::Arc;
@@ -60,12 +58,7 @@ where
                 .module_storage
                 .unmetered_get_existing_module_size(addr, name)
                 .map_err(|err| err.to_partial())?;
-            gas_meter.charge_dependency(
-                false,
-                addr,
-                name,
-                NumBytes::new(size as u64),
-            )?;
+            gas_meter.charge_dependency(false, addr, name, NumBytes::new(size as u64))?;
         }
         Ok(())
     }
@@ -124,7 +117,7 @@ where
                         .map_err(|err| err.finish(Location::Undefined))?;
                 }
                 return Ok(script);
-            },
+            }
             Some(Deserialized(deserialized_script)) => deserialized_script,
             None => self
                 .runtime_environment()
@@ -215,16 +208,14 @@ where
                 | StatusCode::UNEXPECTED_VERIFIER_ERROR
                 | StatusCode::UNEXPECTED_DESERIALIZATION_ERROR
                 | StatusCode::CODE_DESERIALIZATION_ERROR => err,
-                _ => {
-                    PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
-                        .with_message(format!(
-                            "Module or function do not exist for {}::{}::{}",
-                            module_id.address(),
-                            module_id.name(),
-                            function_name
-                        ))
-                        .finish(err.location().clone())
-                }
+                _ => PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
+                    .with_message(format!(
+                        "Module or function do not exist for {}::{}::{}",
+                        module_id.address(),
+                        module_id.name(),
+                        function_name
+                    ))
+                    .finish(err.location().clone()),
             })
     }
 }

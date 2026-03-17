@@ -19,32 +19,32 @@ fn get_tested_transformation_pipeline(
             let mut pipeline = FunctionTargetPipeline::default();
             pipeline.add_processor(ReachingDefProcessor::new());
             Ok(Some(pipeline))
-        },
+        }
         "livevar" => {
             let mut pipeline = FunctionTargetPipeline::default();
             pipeline.add_processor(ReachingDefProcessor::new());
             pipeline.add_processor(LiveVarAnalysisProcessor::new());
             Ok(Some(pipeline))
-        },
+        }
         "borrow" => {
             let mut pipeline = FunctionTargetPipeline::default();
             pipeline.add_processor(ReachingDefProcessor::new());
             pipeline.add_processor(LiveVarAnalysisProcessor::new());
             pipeline.add_processor(BorrowAnalysisProcessor::new());
             Ok(Some(pipeline))
-        },
+        }
         "borrow_strong" => {
             let mut pipeline = FunctionTargetPipeline::default();
             pipeline.add_processor(ReachingDefProcessor::new());
             pipeline.add_processor(LiveVarAnalysisProcessor::new());
             pipeline.add_processor(BorrowAnalysisProcessor::new());
             Ok(Some(pipeline))
-        },
+        }
         "usage_analysis" => {
             let mut pipeline = FunctionTargetPipeline::default();
             pipeline.add_processor(UsageProcessor::new());
             Ok(Some(pipeline))
-        },
+        }
         _ => Err(anyhow!(
             "the sub-directory `{}` has no associated pipeline to test",
             dir_name

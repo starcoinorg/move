@@ -160,7 +160,7 @@ impl Script {
                                         .to_owned(),
                                 )
                                 .finish(Location::Script));
-                            },
+                            }
                             Some(sig_token) => sig_token,
                         };
                         single_signature_token_map.insert(
@@ -169,8 +169,8 @@ impl Script {
                                 .map_err(|e| e.finish(Location::Script))?,
                         );
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 

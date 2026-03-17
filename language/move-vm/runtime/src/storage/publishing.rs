@@ -4,8 +4,7 @@
 #![allow(clippy::duplicated_attributes)]
 
 use crate::{
-    ambassador_impl_ModuleStorage, ambassador_impl_WithRuntimeEnvironment,
-    loader::Module,
+    ambassador_impl_ModuleStorage, ambassador_impl_WithRuntimeEnvironment, loader::Module,
     storage::layout_cache::NoOpLayoutCache, AsUnsyncModuleStorage, ModuleStorage,
     RuntimeEnvironment, UnsyncModuleStorage, WithRuntimeEnvironment,
 };
@@ -124,16 +123,18 @@ impl<'a, M: ModuleStorage> StagingModuleStorage<'a, M> {
 
     fn verify_module_cyclic_relations(&self, module: &CompiledModule) -> VMResult<()> {
         let lookup_module_relations =
-            |module_id: &ModuleId, include_friends: bool| -> move_binary_format::errors::PartialVMResult<Vec<ModuleId>> {
-                let maybe_module = self
-                    .get_existing_or_staged_module(module_id)
-                    .map_err(|err| {
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(format!(
-                                "failed to fetch {} while checking module cycles: {err}",
-                                module_id
-                            ))
-                    })?;
+            |module_id: &ModuleId,
+             include_friends: bool|
+             -> move_binary_format::errors::PartialVMResult<Vec<ModuleId>> {
+                let maybe_module =
+                    self.get_existing_or_staged_module(module_id)
+                        .map_err(|err| {
+                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                                .with_message(format!(
+                                    "failed to fetch {} while checking module cycles: {err}",
+                                    module_id
+                                ))
+                        })?;
                 let compiled_module = maybe_module.ok_or_else(|| {
                     PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
                         .with_message(format!("Missing dependency {module_id}"))

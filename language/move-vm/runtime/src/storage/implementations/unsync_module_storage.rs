@@ -170,7 +170,10 @@ where
                 .module_cache
                 .into_modules_iter()
                 .flat_map(|(key, module)| {
-                    module.code().is_verified().then(|| (key, module.code().verified().clone()))
+                    module
+                        .code()
+                        .is_verified()
+                        .then(|| (key, module.code().verified().clone()))
                 });
         (self.0.ctx, verified_modules_iter)
     }

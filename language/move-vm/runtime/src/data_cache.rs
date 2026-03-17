@@ -4,16 +4,14 @@
 
 use crate::{
     dispatch_loader,
-    AsUnsyncModuleStorage,
-    RuntimeEnvironmentRef,
     loader::{Loader, ModuleStorageAdapter},
-    logging::expect_no_verification_errors,
+    AsUnsyncModuleStorage, RuntimeEnvironmentRef,
 };
 use bytes::Bytes;
 use move_binary_format::{
     deserializer::DeserializerConfig,
     errors::*,
-    file_format::{CompiledModule, CompiledScript},
+    file_format::CompiledScript,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -32,16 +30,12 @@ use move_vm_types::{
     value_serde::deserialize_and_allow_delayed_values,
     values::{GlobalValue, Value},
 };
-use sha3::{Digest, Sha3_256};
 use std::{
     collections::btree_map::{self, BTreeMap},
     sync::Arc,
 };
 
-use crate::storage::{
-    ty_layout_converter::LayoutConverter,
-    ty_tag_converter::TypeTagConverter,
-};
+use crate::storage::{ty_layout_converter::LayoutConverter, ty_tag_converter::TypeTagConverter};
 
 pub struct AccountDataCache {
     // The bool flag in the `data_map` indicates whether the resource contains
@@ -96,7 +90,6 @@ pub(crate) struct TransactionDataCache<'r> {
 
     // Caches to help avoid duplicate deserialization calls.
     compiled_scripts: BTreeMap<[u8; 32], Arc<CompiledScript>>,
-    compiled_modules: BTreeMap<ModuleId, (Arc<CompiledModule>, usize, [u8; 32])>,
 }
 
 impl<'r> TransactionDataCache<'r> {
@@ -111,7 +104,6 @@ impl<'r> TransactionDataCache<'r> {
             account_map: BTreeMap::new(),
             deserializer_config,
             compiled_scripts: BTreeMap::new(),
-            compiled_modules: BTreeMap::new(),
         }
     }
 
@@ -229,7 +221,7 @@ impl<'r> TransactionDataCache<'r> {
                 // non-struct top-level value; can't happen
                 {
                     return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
-                },
+                }
             };
             let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, &*self);
             let v2_module_storage = base_storage.as_unsync_module_storage();
@@ -237,13 +229,14 @@ impl<'r> TransactionDataCache<'r> {
             let mut traversal_context =
                 crate::module_traversal::TraversalContext::new(&traversal_storage);
             let mut gas_meter = move_vm_types::gas::UnmeteredGasMeter;
-            let (ty_layout, has_aggregator_lifting) = dispatch_loader!(&v2_module_storage, v2_loader, {
-                LayoutConverter::new(&v2_loader).type_to_type_layout_with_identifier_mappings(
-                    &mut gas_meter,
-                    &mut traversal_context,
-                    ty,
-                )
-            })?;
+            let (ty_layout, has_aggregator_lifting) =
+                dispatch_loader!(&v2_module_storage, v2_loader, {
+                    LayoutConverter::new(&v2_loader).type_to_type_layout_with_identifier_mappings(
+                        &mut gas_meter,
+                        &mut traversal_context,
+                        ty,
+                    )
+                })?;
             Some((ty_tag, ty_layout, has_aggregator_lifting))
         } else {
             None
@@ -282,11 +275,11 @@ impl<'r> TransactionDataCache<'r> {
                                 StatusCode::FAILED_TO_DESERIALIZE_RESOURCE,
                             )
                             .with_message(msg));
-                        },
+                        }
                     };
 
                     GlobalValue::cached(val)?
-                },
+                }
                 None => GlobalValue::none(),
             };
 
@@ -334,53 +327,10 @@ impl<'r> TransactionDataCache<'r> {
                         return Err(PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
                             .with_message(msg)
                             .finish(Location::Script));
-                    },
+                    }
                 };
                 Ok(entry.insert(Arc::new(script)).clone())
-            },
-        }
-    }
-
-    pub(crate) fn load_compiled_module_to_cache(
-        &mut self,
-        id: ModuleId,
-        allow_loading_failure: bool,
-    ) -> VMResult<(Arc<CompiledModule>, usize, [u8; 32])> {
-        let cache = &mut self.compiled_modules;
-        match cache.entry(id) {
-            btree_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
-            btree_map::Entry::Vacant(entry) => {
-                // bytes fetching, allow loading to fail if the flag is set
-                let bytes = match load_module_impl(self.remote, &self.account_map, entry.key())
-                    .map_err(|err| err.finish(Location::Undefined))
-                {
-                    Ok(bytes) => bytes,
-                    Err(err) if allow_loading_failure => return Err(err),
-                    Err(err) => {
-                        return Err(expect_no_verification_errors(err));
-                    },
-                };
-
-                let mut sha3_256 = Sha3_256::new();
-                sha3_256.update(&bytes);
-                let hash_value: [u8; 32] = sha3_256.finalize().into();
-
-                // for bytes obtained from the data store, they should always deserialize and verify.
-                // It is an invariant violation if they don't.
-                let module =
-                    CompiledModule::deserialize_with_config(&bytes, &self.deserializer_config)
-                        .map_err(|err| {
-                            let msg = format!("Deserialization error: {:?}", err);
-                            PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
-                                .with_message(msg)
-                                .finish(Location::Module(entry.key().clone()))
-                        })
-                        .map_err(expect_no_verification_errors)?;
-
-                Ok(entry
-                    .insert((Arc::new(module), bytes.len(), hash_value))
-                    .clone())
-            },
+            }
         }
     }
 

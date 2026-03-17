@@ -117,13 +117,13 @@ pub fn shortest_cycle<'a, T: Ord + Hash>(
             );
             match (shortest_path, path_opt) {
                 (p, None) | (None, p) => p,
-                (Some((acc_len, acc_path)), Some((cur_len, cur_path))) => Some(
-                    if cur_len < acc_len {
+                (Some((acc_len, acc_path)), Some((cur_len, cur_path))) => {
+                    Some(if cur_len < acc_len {
                         (cur_len, cur_path)
                     } else {
                         (acc_len, acc_path)
-                    },
-                ),
+                    })
+                }
             }
         });
     let (_, mut path) = shortest_path.unwrap();
@@ -159,7 +159,7 @@ impl NamedAddressMaps {
         &self.0[idx.0]
     }
 
-    pub fn extend(&mut self, i:&Self) {
+    pub fn extend(&mut self, i: &Self) {
         for j in &i.0 {
             self.insert(j.clone());
         }
@@ -682,17 +682,17 @@ pub mod known_attributes {
                 TestingAttribute::TEST_ONLY => Self::Testing(TestingAttribute::TestOnly),
                 TestingAttribute::EXPECTED_FAILURE => {
                     Self::Testing(TestingAttribute::ExpectedFailure)
-                },
+                }
                 VerificationAttribute::VERIFY_ONLY => {
                     Self::Verification(VerificationAttribute::VerifyOnly)
-                },
+                }
                 NativeAttribute::BYTECODE_INSTRUCTION => {
                     Self::Native(NativeAttribute::BytecodeInstruction)
-                },
+                }
                 NativeAttribute::NATIVE_INTERFACE => Self::Native(NativeAttribute::NativeInterface),
                 DeprecationAttribute::DEPRECATED_NAME => {
                     Self::Deprecation(DeprecationAttribute::Deprecated)
-                },
+                }
                 _ => return None,
             })
         }

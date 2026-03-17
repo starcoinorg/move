@@ -28,7 +28,10 @@ enum TypeRepr {
     Vector(TypeId),
     Reference(TypeId),
     MutableReference(TypeId),
-    Struct { idx: StructNameIndex, ty_args: TypeVecId },
+    Struct {
+        idx: StructNameIndex,
+        ty_args: TypeVecId,
+    },
     TyParam(u16),
 }
 
@@ -173,27 +176,24 @@ impl InternedTypePool {
             Type::Vector(inner) => {
                 let inner = self.intern_ty_impl(inner);
                 self.ty_interner.intern(TypeRepr::Vector(inner))
-            },
+            }
             Type::Reference(inner) => {
                 let inner = self.intern_ty_impl(inner);
                 self.ty_interner.intern(TypeRepr::Reference(inner))
-            },
+            }
             Type::MutableReference(inner) => {
                 let inner = self.intern_ty_impl(inner);
-                self.ty_interner
-                    .intern(TypeRepr::MutableReference(inner))
-            },
+                self.ty_interner.intern(TypeRepr::MutableReference(inner))
+            }
             Type::Struct { idx, .. } => self.ty_interner.intern(TypeRepr::Struct {
                 idx: *idx,
                 ty_args: self.ty_vec_interner.intern(&[]),
             }),
             Type::StructInstantiation { idx, ty_args, .. } => {
                 let ty_args = self.intern_ty_args(ty_args);
-                self.ty_interner.intern(TypeRepr::Struct {
-                    idx: *idx,
-                    ty_args,
-                })
-            },
+                self.ty_interner
+                    .intern(TypeRepr::Struct { idx: *idx, ty_args })
+            }
             Type::TyParam(idx) => self.ty_interner.intern(TypeRepr::TyParam(*idx)),
         }
     }
@@ -203,7 +203,10 @@ impl InternedTypePool {
     }
 
     pub fn intern_ty_args(&self, tys: &[Type]) -> TypeVecId {
-        let ty_ids = tys.iter().map(|ty| self.intern_ty_impl(ty)).collect::<Vec<_>>();
+        let ty_ids = tys
+            .iter()
+            .map(|ty| self.intern_ty_impl(ty))
+            .collect::<Vec<_>>();
         self.ty_vec_interner.intern(&ty_ids)
     }
 }

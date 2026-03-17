@@ -134,7 +134,7 @@ fn build_test_info(
                 env.error_with_labels(&fn_id_loc, fn_msg, vec![(abort_loc, abort_msg.to_string())]);
             }
             return None;
-        },
+        }
         Some(test_attribute) => test_attribute,
     };
 
@@ -149,13 +149,17 @@ fn build_test_info(
                    it as either one or the other";
         let test_only_id = test_only_attribute.node_id();
         let test_only_loc = env.get_node_loc(test_only_id);
-        env.error_with_labels(&fn_id_loc, "invalid usage of known attribute", vec![
-            (test_only_loc, msg.to_string()),
-            (
-                test_attribute_loc.clone(),
-                "Previously annotated here".to_string(),
-            ),
-        ]);
+        env.error_with_labels(
+            &fn_id_loc,
+            "invalid usage of known attribute",
+            vec![
+                (test_only_loc, msg.to_string()),
+                (
+                    test_attribute_loc.clone(),
+                    "Previously annotated here".to_string(),
+                ),
+            ],
+        );
     }
 
     let test_annotation_params = parse_test_attribute(env, test_attribute, 0);
@@ -170,14 +174,18 @@ fn build_test_info(
                 let missing_param_msg = "Missing test parameter assignment in test. Expected a \
                                          parameter to be assigned in this attribute";
                 let invalid_test = "unable to generate test";
-                env.error_with_labels(&fn_id_loc, invalid_test, vec![
-                    (test_attribute_loc.clone(), missing_param_msg.to_string()),
-                    (
-                        var_loc.clone(),
-                        "Corresponding to this parameter".to_string(),
-                    ),
-                ]);
-            },
+                env.error_with_labels(
+                    &fn_id_loc,
+                    invalid_test,
+                    vec![
+                        (test_attribute_loc.clone(), missing_param_msg.to_string()),
+                        (
+                            var_loc.clone(),
+                            "Corresponding to this parameter".to_string(),
+                        ),
+                    ],
+                );
+            }
         }
     }
 
@@ -207,7 +215,7 @@ fn parse_test_attribute(
             let aloc = env.get_node_loc(*id);
             env.error(&aloc, "Unexpected nested attribute in test declaration");
             BTreeMap::new()
-        },
+        }
         Attribute::Apply(_id, sym, vec) => {
             assert!(
                 *TestingAttribute::TEST == env.symbol_pool().string(*sym).to_string(),
@@ -216,7 +224,7 @@ fn parse_test_attribute(
             vec.iter()
                 .flat_map(|attr| parse_test_attribute(env, attr, depth + 1))
                 .collect()
-        },
+        }
         Attribute::Assign(id, sym, val) => {
             if depth != 1 {
                 let aloc = env.get_node_loc(*id);
@@ -229,18 +237,19 @@ fn parse_test_attribute(
                 None => {
                     let aloc = env.get_node_loc(*id);
                     let assign_loc = env.get_node_loc(*id);
-                    env.error_with_labels(&assign_loc, "Unsupported attribute value", vec![(
-                        aloc,
-                        "Assigned in this attribute".to_string(),
-                    )]);
+                    env.error_with_labels(
+                        &assign_loc,
+                        "Unsupported attribute value",
+                        vec![(aloc, "Assigned in this attribute".to_string())],
+                    );
                     return BTreeMap::new();
-                },
+                }
             };
 
             let mut args = BTreeMap::new();
             args.insert(*sym, value);
             args
-        },
+        }
     }
 }
 
@@ -255,12 +264,13 @@ fn parse_failure_attribute(
             let invalid_assignment_msg = "Invalid expected failure code assignment";
             let expected_msg =
                 "Expect an #[expected_failure(...)] attribute for error specification";
-            env.error_with_labels(&assign_loc, invalid_assignment_msg, vec![(
-                assign_loc.clone(),
-                expected_msg.to_string(),
-            )]);
+            env.error_with_labels(
+                &assign_loc,
+                invalid_assignment_msg,
+                vec![(assign_loc.clone(), expected_msg.to_string())],
+            );
             None
-        },
+        }
         Attribute::Apply(id, sym, attrs) => {
             assert!(
                 TestingAttribute::EXPECTED_FAILURE == env.symbol_pool().string(*sym).to_string(),
@@ -328,7 +338,7 @@ fn parse_failure_attribute(
                         return Some(ExpectedFailure::ExpectedWithCodeDEPRECATED(u));
                     };
                     (StatusCode::ABORTED, Some(u), location)
-                },
+                }
                 TestingAttribute::ARITHMETIC_ERROR_NAME => {
                     check_attribute_unassigned(env, TestingAttribute::ARITHMETIC_ERROR_NAME, attr)?;
                     let location_attr = check_location(
@@ -339,7 +349,7 @@ fn parse_failure_attribute(
                     )?;
                     let location = convert_location(env, location_attr)?;
                     (StatusCode::ARITHMETIC_ERROR, None, location)
-                },
+                }
                 TestingAttribute::OUT_OF_GAS_NAME => {
                     check_attribute_unassigned(env, TestingAttribute::OUT_OF_GAS_NAME, attr)?;
                     let location_attr = check_location(
@@ -350,7 +360,7 @@ fn parse_failure_attribute(
                     )?;
                     let location = convert_location(env, location_attr)?;
                     (StatusCode::OUT_OF_GAS, None, location)
-                },
+                }
                 TestingAttribute::VECTOR_ERROR_NAME => {
                     check_attribute_unassigned(env, TestingAttribute::VECTOR_ERROR_NAME, attr)?;
                     let minor_attr_opt = attrs.remove(TestingAttribute::MINOR_STATUS_NAME);
@@ -377,7 +387,7 @@ fn parse_failure_attribute(
                     )?;
                     let location = convert_location(env, location_attr)?;
                     (StatusCode::VECTOR_OPERATION_ERROR, minor_status, location)
-                },
+                }
                 TestingAttribute::MAJOR_STATUS_NAME => {
                     let (value_name_loc, attr_value) =
                         get_assigned_attribute(env, TestingAttribute::MAJOR_STATUS_NAME, attr)?;
@@ -396,10 +406,11 @@ fn parse_failure_attribute(
                         );
                         let no_code =
                             format!("No status code associated with value `{major_status_u64}`");
-                        env.error_with_labels(&value_name_loc, &bad_value, vec![(
-                            major_value_loc,
-                            no_code,
-                        )]);
+                        env.error_with_labels(
+                            &value_name_loc,
+                            &bad_value,
+                            vec![(major_value_loc, no_code)],
+                        );
                         return None;
                     };
                     let minor_attr_opt = attrs.remove(TestingAttribute::MINOR_STATUS_NAME);
@@ -426,7 +437,7 @@ fn parse_failure_attribute(
                     )?;
                     let location = convert_location(env, location_attr)?;
                     (major_status, minor_status, location)
-                },
+                }
                 _ => unreachable!(),
             };
             // warn for any remaining attrs
@@ -444,7 +455,7 @@ fn parse_failure_attribute(
                 move_binary_format::errors::Location::Module(location),
                 None,
             )))
-        },
+        }
     }
 }
 
@@ -463,7 +474,7 @@ fn check_attribute_unassigned(env: &GlobalEnv, kind: &str, attr: Attribute) -> O
             } else {
                 Some(())
             }
-        },
+        }
         Attribute::Assign(id, sym, _) => {
             assert!(env.symbol_pool().string(sym).to_string() == kind);
             let msg = format!(
@@ -473,7 +484,7 @@ fn check_attribute_unassigned(env: &GlobalEnv, kind: &str, attr: Attribute) -> O
             let attr_loc = env.get_node_loc(id);
             env.error(&attr_loc, &msg);
             None
-        },
+        }
     }
 }
 
@@ -487,7 +498,7 @@ fn get_assigned_attribute(
             assert!(env.symbol_pool().string(sym).to_string() == kind);
             let loc = env.get_node_loc(id);
             Some((loc, value))
-        },
+        }
         Attribute::Apply(id, _sym, _vec) => {
             let loc = env.get_node_loc(id);
             let msg = format!(
@@ -496,7 +507,7 @@ fn get_assigned_attribute(
             );
             env.error(&loc, &msg);
             None
-        },
+        }
     }
 }
 
@@ -506,15 +517,19 @@ fn convert_location(env: &GlobalEnv, attr: Attribute) -> Option<ModuleId> {
         AttributeValue::Name(id, opt_module_name, _sym) => {
             let vloc = env.get_node_loc(id);
             convert_module_id(env, vloc, opt_module_name)
-        },
+        }
         AttributeValue::Value(id, _val) => {
             let vloc = env.get_node_loc(id);
-            env.error_with_labels(&loc, "invalid attribute value", vec![(
-                vloc,
-                "Expected a module identifier, e.g. 'std::vector'".to_string(),
-            )]);
+            env.error_with_labels(
+                &loc,
+                "invalid attribute value",
+                vec![(
+                    vloc,
+                    "Expected a module identifier, e.g. 'std::vector'".to_string(),
+                )],
+            );
             None
-        },
+        }
     }
 }
 
@@ -531,11 +546,11 @@ fn convert_constant_value_u64_constant_or_value(
             } else {
                 return None;
             }
-        },
+        }
         AttributeValue::Name(id, opt_module_name, sym) => {
             let vloc = env.get_node_loc(*id);
             (vloc, opt_module_name, sym)
-        },
+        }
     };
     let module_env: ModuleEnv = if let Some(module_name) = opt_module_name {
         if let Some(module_env) = env.find_module(module_name) {
@@ -587,7 +602,7 @@ fn convert_constant_value_u64_constant_or_value(
                         ),
                     )
                 }
-            },
+            }
             Type::Primitive(PrimitiveType::Num) => {
                 if u <= BigInt::from(std::u64::MAX) {
                     return Some((vloc, mod_id, u.to_u64().unwrap()));
@@ -601,7 +616,7 @@ fn convert_constant_value_u64_constant_or_value(
                         ),
                     )
                 }
-            },
+            }
             _ => (
                 Severity::Error,
                 format!(
@@ -652,14 +667,14 @@ fn convert_model_ast_value_u64(env: &GlobalEnv, loc: Loc, value: &Value) -> Opti
                 );
                 None
             }
-        },
+        }
         _ => {
             env.error(
                 &loc,
                 "Invalid attribute value: only u64 literal values permitted",
             );
             None
-        },
+        }
     }
 }
 

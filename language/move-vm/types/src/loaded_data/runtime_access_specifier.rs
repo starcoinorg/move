@@ -136,7 +136,7 @@ impl AccessSpecifier {
                     clause.specialize(env)?;
                 }
                 Ok(())
-            },
+            }
         }
     }
 
@@ -147,7 +147,7 @@ impl AccessSpecifier {
             Any => true,
             Constraint(incls, excls) => {
                 incls.iter().any(|c| c.enables(access)) && excls.iter().all(|c| !c.enables(access))
-            },
+            }
         }
     }
 
@@ -183,7 +183,7 @@ impl AccessSpecifier {
                             .collect(),
                     )
                 }
-            },
+            }
         }
     }
 
@@ -197,7 +197,7 @@ impl AccessSpecifier {
             (Constraint(_, excls), _) if !excls.is_empty() => {
                 // If there are exclusions, we don't know the effective subset, so bail out
                 None
-            },
+            }
             (Constraint(incls, _), Constraint(other_incls, _)) => {
                 // We can ignore the exclusions from other. As long as the inclusions are subsumed
                 // subset can be decided.
@@ -217,7 +217,7 @@ impl AccessSpecifier {
                     return None;
                 }
                 Some(true)
-            },
+            }
         }
     }
 }
@@ -315,7 +315,7 @@ impl ResourceSpecifier {
             Resource(enabled_struct_id) => enabled_struct_id == struct_id,
             ResourceInstantiation(enabled_struct_id, enabled_type_inst) => {
                 enabled_struct_id == struct_id && enabled_type_inst == type_inst
-            },
+            }
         }
     }
 
@@ -331,7 +331,7 @@ impl ResourceSpecifier {
                 | Resource(struct_identifier_addr!(other_addr))
                 | ResourceInstantiation(struct_identifier_addr!(other_addr), _) => {
                     some_if!(other.clone(), addr == other_addr)
-                },
+                }
             },
             DeclaredInModule(module_id) => match &other {
                 Any => Some(self.clone()),
@@ -340,35 +340,35 @@ impl ResourceSpecifier {
                 | Resource(struct_identifier_module!(other_module_id))
                 | ResourceInstantiation(struct_identifier_module!(other_module_id), _) => {
                     some_if!(other.clone(), module_id == other_module_id)
-                },
+                }
             },
             Resource(struct_id) => match &other {
                 Any => Some(self.clone()),
                 DeclaredAtAddress(addr) => {
                     some_if!(self.clone(), addr == struct_id.module.address())
-                },
+                }
                 DeclaredInModule(module_id) => {
                     some_if!(self.clone(), module_id == &struct_id.module)
-                },
+                }
                 Resource(other_struct_id) | ResourceInstantiation(other_struct_id, _) => {
                     some_if!(other.clone(), struct_id == other_struct_id)
-                },
+                }
             },
             ResourceInstantiation(struct_id, inst) => match other {
                 Any => Some(self.clone()),
                 DeclaredAtAddress(addr) => {
                     some_if!(self.clone(), struct_id.module.address() == addr)
-                },
+                }
                 DeclaredInModule(module_id) => {
                     some_if!(self.clone(), &struct_id.module == module_id)
-                },
+                }
                 Resource(other_struct_id) => some_if!(self.clone(), struct_id == other_struct_id),
                 ResourceInstantiation(other_struct_id, other_inst) => {
                     some_if!(
                         self.clone(),
                         struct_id == other_struct_id && inst == other_inst
                     )
-                },
+                }
             },
         }
     }
@@ -384,7 +384,7 @@ impl ResourceSpecifier {
                 | Resource(struct_identifier_addr!(other_addr))
                 | ResourceInstantiation(struct_identifier_addr!(other_addr), _) => {
                     addr == other_addr
-                },
+                }
             },
             DeclaredInModule(module_id) => match &other {
                 Any | DeclaredAtAddress(_) => false,
@@ -392,19 +392,19 @@ impl ResourceSpecifier {
                 | Resource(struct_identifier_module!(other_module_id))
                 | ResourceInstantiation(struct_identifier_module!(other_module_id), _) => {
                     module_id == other_module_id
-                },
+                }
             },
             Resource(struct_id) => match &other {
                 Any | DeclaredAtAddress(_) | DeclaredInModule(_) => false,
                 Resource(other_struct_id) | ResourceInstantiation(other_struct_id, _) => {
                     struct_id == other_struct_id
-                },
+                }
             },
             ResourceInstantiation(struct_id, inst) => match other {
                 Any | DeclaredAtAddress(_) | DeclaredInModule(_) | Resource(_) => false,
                 ResourceInstantiation(other_struct_id, other_inst) => {
                     struct_id == other_struct_id && inst == other_inst
-                },
+                }
             },
         }
     }
@@ -439,7 +439,7 @@ impl AddressSpecifier {
                 // Eval should be specialized away when join is called.
                 debug_assert!(false, "unexpected AddressSpecifier::Eval found");
                 None
-            },
+            }
         }
     }
 
@@ -453,7 +453,7 @@ impl AddressSpecifier {
                 // Eval should be specialized away when subsumes is called.
                 debug_assert!(false, "unexpected AddressSpecifier::Eval found");
                 false
-            },
+            }
         }
     }
 }
@@ -479,7 +479,7 @@ impl AddressSpecifierFunction {
                     .value_as::<Reference>()?
                     .read_ref()?
                     .value_as::<AccountAddress>()
-            },
+            }
             ObjectAddress => Err(PartialVMError::new(
                 StatusCode::ACCESS_CONTROL_INVARIANT_VIOLATION,
             )

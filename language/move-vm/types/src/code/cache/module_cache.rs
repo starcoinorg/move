@@ -232,7 +232,7 @@ where
                     .insert(VersionedModuleCode::new(module, version))
                     .module_code()
                     .clone())
-            },
+            }
         }
     }
 
@@ -251,7 +251,7 @@ where
                 Ordering::Less => Err(version_too_small_error!()),
                 Ordering::Equal if entry.get().module_code().code().is_verified() => {
                     Ok(entry.get().module_code().clone())
-                },
+                }
                 Ordering::Equal | Ordering::Greater => {
                     let module = ModuleCode::from_verified(verified_code, extension);
                     let module_code = VersionedModuleCode::new(module, version);
@@ -261,7 +261,7 @@ where
                         "New module code version should not be smaller than old version",
                     );
                     Ok(entry.get().module_code().clone())
-                },
+                }
             },
             Vacant(entry) => {
                 let module = ModuleCode::from_verified(verified_code, extension);
@@ -269,7 +269,7 @@ where
                     .insert(VersionedModuleCode::new(module, version))
                     .module_code()
                     .clone())
-            },
+            }
         }
     }
 
@@ -368,7 +368,7 @@ where
                     .insert(CachePadded::new(VersionedModuleCode::new(module, version)))
                     .module_code()
                     .clone())
-            },
+            }
         }
     }
 
@@ -386,7 +386,7 @@ where
                 Ordering::Less => Err(version_too_small_error!()),
                 Ordering::Equal if entry.get().module_code().code().is_verified() => {
                     Ok(entry.get().module_code().clone())
-                },
+                }
                 Ordering::Equal | Ordering::Greater => {
                     let module = ModuleCode::from_verified(verified_code, extension);
                     let module_code = VersionedModuleCode::new(module, version);
@@ -396,7 +396,7 @@ where
                         "New module code version should not be smaller than old version",
                     );
                     Ok(entry.get().module_code().clone())
-                },
+                }
             },
             Vacant(entry) => {
                 let module = ModuleCode::from_verified(verified_code, extension);
@@ -404,7 +404,7 @@ where
                     .insert(CachePadded::new(VersionedModuleCode::new(module, version)))
                     .module_code()
                     .clone())
-            },
+            }
         }
     }
 
@@ -438,9 +438,9 @@ where
             match self.module_cache.entry(key.clone()) {
                 Occupied(entry) => entry.get().clone(),
                 Vacant(entry) => entry
-                    .insert(CachePadded::new(VersionedModuleCode::new_with_default_version(
-                        initialized_module,
-                    )))
+                    .insert(CachePadded::new(
+                        VersionedModuleCode::new_with_default_version(initialized_module),
+                    ))
                     .clone(),
             }
             .as_module_code_and_version(),

@@ -31,7 +31,7 @@ impl JsonSchema for AccountAddress {
             format: Some("AccountAddress".to_owned()),
             ..Default::default()
         }
-            .into()
+        .into()
     }
 }
 
@@ -533,88 +533,68 @@ mod tests {
     fn test_to_standard_string() {
         // Testing the special range of 0x0 to 0xf
         assert_eq!(
-            &AccountAddress::from_hex(
-                "00000000000000000000000000000000"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("00000000000000000000000000000000")
+                .unwrap()
+                .to_standard_string(),
             "0x0"
         );
         assert_eq!(
-            &AccountAddress::from_hex(
-                "00000000000000000000000000000001"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("00000000000000000000000000000001")
+                .unwrap()
+                .to_standard_string(),
             "0x1"
         );
         assert_eq!(
-            &AccountAddress::from_hex(
-                "00000000000000000000000000000004"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("00000000000000000000000000000004")
+                .unwrap()
+                .to_standard_string(),
             "0x4"
         );
         assert_eq!(
-            &AccountAddress::from_hex(
-                "0000000000000000000000000000000f"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("0000000000000000000000000000000f")
+                .unwrap()
+                .to_standard_string(),
             "0xf"
         );
 
         // Testing addresses outside of the special range
         assert_eq!(
-            &AccountAddress::from_hex(
-                "00000000000000000000000000000010"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("00000000000000000000000000000010")
+                .unwrap()
+                .to_standard_string(),
             "0x00000000000000000000000000000010"
         );
         assert_eq!(
-            &AccountAddress::from_hex(
-                "0000000000000000000000000000001f"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("0000000000000000000000000000001f")
+                .unwrap()
+                .to_standard_string(),
             "0x0000000000000000000000000000001f"
         );
         assert_eq!(
-            &AccountAddress::from_hex(
-                "000000000000000000000000000000a0"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("000000000000000000000000000000a0")
+                .unwrap()
+                .to_standard_string(),
             "0x000000000000000000000000000000a0"
         );
         assert_eq!(
-            &AccountAddress::from_hex(
-                "ca843279e3427144cead5e4d5999a3d0"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("ca843279e3427144cead5e4d5999a3d0")
+                .unwrap()
+                .to_standard_string(),
             "0xca843279e3427144cead5e4d5999a3d0"
         );
         assert_eq!(
-            &AccountAddress::from_hex(
-                "10000000000000000000000000000000"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("10000000000000000000000000000000")
+                .unwrap()
+                .to_standard_string(),
             "0x10000000000000000000000000000000"
         );
 
         // Demonstrating that neither leading nor trailing zeroes get trimmed for
         // non-special addresses
         assert_eq!(
-            &AccountAddress::from_hex(
-                "0f000000000000000000000000000000"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_hex("0f000000000000000000000000000000")
+                .unwrap()
+                .to_standard_string(),
             "0x0f000000000000000000000000000000"
         );
 
@@ -690,10 +670,7 @@ mod tests {
 
     #[test]
     fn test_short_str_lossless() {
-        let address = AccountAddress::from_hex(
-            "00c0f1f95c5b1c5f0eda533eff269000",
-        )
-        .unwrap();
+        let address = AccountAddress::from_hex("00c0f1f95c5b1c5f0eda533eff269000").unwrap();
 
         assert_eq!(
             address.short_str_lossless(),
@@ -703,10 +680,7 @@ mod tests {
 
     #[test]
     fn test_short_str_lossless_zero() {
-        let address = AccountAddress::from_hex(
-            "00000000000000000000000000000000",
-        )
-        .unwrap();
+        let address = AccountAddress::from_hex("00000000000000000000000000000000").unwrap();
 
         assert_eq!(address.short_str_lossless(), "0");
     }
@@ -744,10 +718,7 @@ mod tests {
         // Missing '0x' is ok
         AccountAddress::from_hex_literal(hex).unwrap_err();
         // Too long
-        AccountAddress::from_hex_literal(
-            "0x100000000000000000000000000000001",
-        )
-        .unwrap_err();
+        AccountAddress::from_hex_literal("0x100000000000000000000000000000001").unwrap_err();
     }
 
     #[test]
@@ -789,11 +760,9 @@ mod tests {
             "0x000000000000000000000000000fdfdf"
         );
         assert_eq!(
-            &AccountAddress::from_str(
-                "0x05000000000000000000000000aadfdf"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_str("0x05000000000000000000000000aadfdf")
+                .unwrap()
+                .to_standard_string(),
             "0x05000000000000000000000000aadfdf"
         );
 
@@ -827,11 +796,9 @@ mod tests {
             "0x000000000000000000000000000fdfdf"
         );
         assert_eq!(
-            &AccountAddress::from_str(
-                "05000000000000000000000000aadfdf"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_str("05000000000000000000000000aadfdf")
+                .unwrap()
+                .to_standard_string(),
             "0x05000000000000000000000000aadfdf"
         );
     }
@@ -862,11 +829,9 @@ mod tests {
         assert!(&AccountAddress::from_str_strict("0x010").is_err());
         assert!(&AccountAddress::from_str_strict("0xfdfdf").is_err());
         assert_eq!(
-            &AccountAddress::from_str_strict(
-                "0x05000000000000000000000000aadfdf"
-            )
-            .unwrap()
-            .to_standard_string(),
+            &AccountAddress::from_str_strict("0x05000000000000000000000000aadfdf")
+                .unwrap()
+                .to_standard_string(),
             "0x05000000000000000000000000aadfdf"
         );
 

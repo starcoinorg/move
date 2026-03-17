@@ -5,52 +5,45 @@
 use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
-    logging::{expect_no_verification_errors, expect_no_verification_errors_unless_bogus_storage},
-    module_traversal::{TraversalContext, TraversalStorage}, native_functions::NativeFunctions,
-    dispatch_loader, AsUnsyncCodeStorage, AsUnsyncModuleStorage, LegacyLoaderConfig,
-    InstantiatedFunctionLoader, NativeModuleLoader, ScriptLoader, StructDefinitionLoader,
-    WithRuntimeEnvironment,
-    ModuleStorage as LoaderV2ModuleStorage,
+    dispatch_loader,
+    logging::expect_no_verification_errors_unless_bogus_storage,
+    module_traversal::TraversalContext,
+    native_functions::NativeFunctions,
+    AsUnsyncModuleStorage, ModuleStorage as LoaderV2ModuleStorage, NativeModuleLoader,
+    StructDefinitionLoader, WithRuntimeEnvironment,
 };
 use hashbrown::Equivalent;
 use lazy_static::lazy_static;
 use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
-    errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
-        FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex, StructDefInstantiationIndex,
-        StructDefinitionIndex, StructFieldInformation, TableIndex,
+        Constant, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
+        FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex,
+        StructDefInstantiationIndex, StructDefinitionIndex,
     },
-    IndexKind,
 };
-use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
     account_address::AccountAddress,
-    gas_algebra::{NumBytes, NumTypeNodes},
+    gas_algebra::NumTypeNodes,
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
-    value::MoveTypeLayout,
+    language_storage::ModuleId,
     vm_status::StatusCode,
 };
 use move_vm_types::{
     code::ModuleBytesStorage,
     gas::GasMeter,
-    gas::UnmeteredGasMeter,
     loaded_data::{
         runtime_types::{AbilityInfo, StructNameIndex, StructType, Type},
         struct_name_indexing::StructNameIndexMap,
     },
 };
-use crate::storage::ty_layout_converter::LayoutConverter;
 use parking_lot::{Mutex, RwLock};
-use sha3::{Digest, Sha3_256};
 use std::{
-    collections::{btree_map, BTreeMap, BTreeSet},
+    collections::BTreeSet,
     hash::Hash,
     sync::Arc,
 };
-use typed_arena::Arena;
 
 mod access_specifier_loader;
 mod function;
@@ -58,6 +51,7 @@ mod modules;
 mod script;
 mod type_loader;
 
+use crate::native_functions::NativeFunction;
 pub use function::LoadedFunction;
 pub(crate) use function::{Function, FunctionHandle, FunctionInstantiation, Scope};
 pub(crate) use modules::{Module, ModuleCache, ModuleStorage, ModuleStorageAdapter};
@@ -65,7 +59,6 @@ use move_core_types::identifier::Identifier;
 use move_vm_types::loaded_data::runtime_types::{legacy_count_type_nodes, TypeBuilder};
 pub(crate) use script::{Script, ScriptCache};
 use type_loader::intern_type;
-use crate::native_functions::NativeFunction;
 
 type ScriptHash = [u8; 32];
 
@@ -230,172 +223,7 @@ impl Loader {
         &self.vm_config
     }
 
-    fn with_module_storage<'a, T, R>(
-        &self,
-        data_store: &'a T,
-        f: impl FnOnce(&crate::UnsyncModuleStorage<'a, LoaderV2DataStore<'a, T>>) -> VMResult<R>,
-    ) -> VMResult<(R, Vec<(ModuleId, Arc<Module>)>)>
-    where
-        T: ModuleBytesStorage,
-    {
-        let runtime_environment = self.runtime_environment();
-        let base_storage = LoaderV2DataStore::new(runtime_environment, data_store);
-        let module_storage = base_storage.into_unsync_module_storage();
-        let result = f(&module_storage)?;
-        let (_ctx, verified_modules_iter) = module_storage.unpack_into_verified_modules_iter();
-        Ok((result, verified_modules_iter.collect()))
-    }
-
-    fn sync_verified_modules(
-        &self,
-        module_store: &ModuleStorageAdapter,
-        verified_modules: Vec<(ModuleId, Arc<Module>)>,
-    ) {
-        for (_module_id, module) in verified_modules {
-            module_store.store_verified_module(module);
-        }
-    }
-
-    fn normalize_module_loading_error(
-        &self,
-        module_id: &ModuleId,
-        data_store: &TransactionDataCache,
-        err: move_binary_format::errors::VMError,
-    ) -> move_binary_format::errors::VMError {
-        match data_store.exists_module(module_id) {
-            Ok(true) => expect_no_verification_errors_unless_bogus_storage(err),
-            _ => err,
-        }
-    }
-
-    pub(crate) fn load_function_v2(
-        &self,
-        module_id: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: &[TypeTag],
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        gas_meter: &mut impl GasMeter,
-        traversal_context: &mut TraversalContext,
-    ) -> VMResult<LoadedFunction> {
-        let config = LegacyLoaderConfig {
-            charge_for_dependencies: true,
-            charge_for_ty_tag_dependencies: true,
-        };
-        let result = self
-            .with_module_storage(data_store, |storage| {
-            dispatch_loader!(storage, loader, {
-                loader.load_instantiated_function(
-                    &config,
-                    gas_meter,
-                    traversal_context,
-                    module_id,
-                    function_name,
-                    ty_args,
-                )
-            })
-        });
-        let (result, verified_modules) = result
-            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
-        self.sync_verified_modules(module_store, verified_modules);
-        Ok(result)
-    }
-
-    pub(crate) fn load_function_v2_unmetered(
-        &self,
-        module_id: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: &[TypeTag],
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<LoadedFunction> {
-        let mut gas_meter = UnmeteredGasMeter;
-        let traversal_storage = TraversalStorage::new();
-        let mut traversal_context = TraversalContext::new(&traversal_storage);
-        let config = LegacyLoaderConfig::unmetered();
-        let result = self
-            .with_module_storage(data_store, |storage| {
-            dispatch_loader!(storage, loader, {
-                loader.load_instantiated_function(
-                    &config,
-                    &mut gas_meter,
-                    &mut traversal_context,
-                    module_id,
-                    function_name,
-                    ty_args,
-                )
-            })
-        });
-        let (result, verified_modules) = result
-            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
-        self.sync_verified_modules(module_store, verified_modules);
-        Ok(result)
-    }
-
-    pub(crate) fn load_script_v2(
-        &self,
-        script_blob: &[u8],
-        ty_args: &[TypeTag],
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        gas_meter: &mut impl GasMeter,
-        traversal_context: &mut TraversalContext,
-    ) -> VMResult<LoadedFunction> {
-        let config = LegacyLoaderConfig {
-            charge_for_dependencies: true,
-            charge_for_ty_tag_dependencies: true,
-        };
-        let mut sha3_256 = Sha3_256::new();
-        sha3_256.update(script_blob);
-        let hash_value: [u8; 32] = sha3_256.finalize().into();
-
-        let runtime_environment = self.runtime_environment();
-        let base_storage = LoaderV2DataStore::new(runtime_environment, data_store);
-        let code_storage = base_storage.into_unsync_code_storage();
-        let result = dispatch_loader!(&code_storage, loader, {
-            loader.load_script(
-                &config,
-                gas_meter,
-                traversal_context,
-                script_blob,
-                ty_args,
-            )
-        })?;
-        if let Some(script) = code_storage.get_verified_script(&hash_value) {
-            self.scripts
-                .write()
-                .scripts
-                .insert(hash_value, script.as_ref().clone());
-        }
-        let (_ctx, verified_modules_iter) = code_storage
-            .into_module_storage()
-            .unpack_into_verified_modules_iter();
-        let verified_modules = verified_modules_iter.collect();
-        self.sync_verified_modules(module_store, verified_modules);
-        Ok(result)
-    }
-
-    pub(crate) fn load_script_v2_unmetered(
-        &self,
-        script_blob: &[u8],
-        ty_args: &[TypeTag],
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<LoadedFunction> {
-        let mut gas_meter = UnmeteredGasMeter;
-        let traversal_storage = TraversalStorage::new();
-        let mut traversal_context = TraversalContext::new(&traversal_storage);
-        self.load_script_v2(
-            script_blob,
-            ty_args,
-            data_store,
-            module_store,
-            &mut gas_meter,
-            &mut traversal_context,
-        )
-    }
-
-    pub(crate) fn load_module_v2(
+    pub(crate) fn ensure_module_loaded_v2(
         &self,
         module_id: &ModuleId,
         data_store: &mut TransactionDataCache,
@@ -407,29 +235,37 @@ impl Loader {
             return Ok(());
         }
 
-        let result = self
-            .with_module_storage(data_store, |storage| {
-            dispatch_loader!(storage, loader, {
-                loader
-                    .charge_native_result_load_module(gas_meter, traversal_context, module_id)
-                    .map_err(|err| err.finish(Location::Undefined))?;
-                if self.vm_config.enable_lazy_loading {
-                    storage
-                        .unmetered_get_existing_lazily_verified_module(module_id)
-                        .map(|_| ())
-                } else {
-                    storage
-                        .unmetered_get_existing_eagerly_verified_module(
-                            module_id.address(),
-                            module_id.name(),
-                        )
-                        .map(|_| ())
-                }
-            })
+        let runtime_environment = self.runtime_environment();
+        let base_storage = LoaderV2DataStore::new(runtime_environment, &*data_store);
+        let module_storage = base_storage.into_unsync_module_storage();
+        let result = dispatch_loader!(&module_storage, loader, {
+            loader
+                .charge_native_result_load_module(gas_meter, traversal_context, module_id)
+                .map_err(|err| err.finish(Location::Undefined))?;
+            if self.vm_config.enable_lazy_loading {
+                module_storage
+                    .unmetered_get_existing_lazily_verified_module(module_id)
+                    .map(|_| ())
+            } else {
+                module_storage
+                    .unmetered_get_existing_eagerly_verified_module(
+                        module_id.address(),
+                        module_id.name(),
+                    )
+                    .map(|_| ())
+            }
         });
-        let (result, verified_modules) = result
-            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
-        self.sync_verified_modules(module_store, verified_modules);
+        let (_ctx, verified_modules_iter) = module_storage.unpack_into_verified_modules_iter();
+        let result = match result {
+            Ok(()) => Ok(()),
+            Err(err) => match data_store.exists_module(module_id) {
+                Ok(true) => Err(expect_no_verification_errors_unless_bogus_storage(err)),
+                _ => Err(err),
+            },
+        }?;
+        for (_module_id, module) in verified_modules_iter {
+            module_store.store_verified_module(module);
+        }
         Ok(result)
     }
 
@@ -457,38 +293,6 @@ impl Loader {
         *self.invalidated.read()
     }
 
-    //
-    // Script verification and loading
-    //
-
-    pub(crate) fn check_script_dependencies_and_check_gas(
-        &self,
-        module_store: &ModuleStorageAdapter,
-        data_store: &mut TransactionDataCache,
-        gas_meter: &mut impl GasMeter,
-        traversal_context: &mut TraversalContext,
-        script_blob: &[u8],
-    ) -> VMResult<()> {
-        let mut sha3_256 = Sha3_256::new();
-        sha3_256.update(script_blob);
-        let hash_value: [u8; 32] = sha3_256.finalize().into();
-
-        let script = data_store.load_compiled_script_to_cache(script_blob, hash_value)?;
-        let script = traversal_context.referenced_scripts.alloc(script);
-
-        // TODO(Gas): Should we charge dependency gas for the script itself?
-        self.check_dependencies_and_charge_gas(
-            module_store,
-            data_store,
-            gas_meter,
-            &mut traversal_context.visited,
-            traversal_context.referenced_modules,
-            script.immediate_dependencies_iter(),
-        )?;
-
-        Ok(())
-    }
-
     pub(crate) fn runtime_environment(&self) -> crate::RuntimeEnvironment {
         crate::RuntimeEnvironment::new_with_shared_name_cache(
             self.natives.clone(),
@@ -497,657 +301,16 @@ impl Loader {
         )
     }
 
+    pub(crate) fn cache_verified_script(&self, hash: ScriptHash, script: Arc<Script>) {
+        self.scripts
+            .write()
+            .scripts
+            .insert(hash, script.as_ref().clone());
+    }
+
     //
     // Module verification and loading
     //
-
-    // Loading verifies the module if it was never loaded.
-    fn load_function_without_type_args(
-        &self,
-        module_id: &ModuleId,
-        function_name: &IdentStr,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<Arc<Function>> {
-        // Need to load the module first, before resolving the function.
-        if self.vm_config.enable_lazy_loading {
-            let mut gas_meter = UnmeteredGasMeter;
-            let traversal_storage = TraversalStorage::new();
-            let mut traversal_context = TraversalContext::new(&traversal_storage);
-            self.load_module_v2(
-                module_id,
-                data_store,
-                module_store,
-                &mut gas_meter,
-                &mut traversal_context,
-            )?;
-        } else {
-            self.load_module(module_id, data_store, module_store)?;
-        }
-        module_store
-            .resolve_function_by_name(function_name, module_id)
-            .map_err(|err| err.finish(Location::Undefined))
-    }
-
-    // Matches the actual returned type to the expected type, binding any type args to the
-    // necessary type as stored in the map. The expected type must be a concrete type (no TyParam).
-    // Returns true if a successful match is made.
-    fn match_return_type<'a>(
-        returned: &Type,
-        expected: &'a Type,
-        map: &mut BTreeMap<u16, &'a Type>,
-    ) -> bool {
-        match (returned, expected) {
-            // The important case, deduce the type params
-            (Type::TyParam(idx), _) => match map.entry(*idx) {
-                btree_map::Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(expected);
-                    true
-                },
-                btree_map::Entry::Occupied(occupied_entry) => *occupied_entry.get() == expected,
-            },
-            // Recursive types we need to recurse the matching types
-            (Type::Reference(ret_inner), Type::Reference(expected_inner))
-            | (Type::MutableReference(ret_inner), Type::MutableReference(expected_inner)) => {
-                Self::match_return_type(ret_inner, expected_inner, map)
-            },
-            (Type::Vector(ret_inner), Type::Vector(expected_inner)) => {
-                Self::match_return_type(ret_inner, expected_inner, map)
-            },
-            // Abilities should not contribute to the equality check as they just serve for caching computations.
-            // For structs the both need to be the same struct.
-            (
-                Type::Struct { idx: ret_idx, .. },
-                Type::Struct {
-                    idx: expected_idx, ..
-                },
-            ) => *ret_idx == *expected_idx,
-            // For struct instantiations we need to additionally match all type arguments
-            (
-                Type::StructInstantiation {
-                    idx: ret_idx,
-                    ty_args: ret_fields,
-                    ..
-                },
-                Type::StructInstantiation {
-                    idx: expected_idx,
-                    ty_args: expected_fields,
-                    ..
-                },
-            ) => {
-                *ret_idx == *expected_idx
-                    && ret_fields.len() == expected_fields.len()
-                    && ret_fields
-                        .iter()
-                        .zip(expected_fields.iter())
-                        .all(|types| Self::match_return_type(types.0, types.1, map))
-            },
-            // For primitive types we need to assure the types match
-            (Type::U8, Type::U8)
-            | (Type::U16, Type::U16)
-            | (Type::U32, Type::U32)
-            | (Type::U64, Type::U64)
-            | (Type::U128, Type::U128)
-            | (Type::U256, Type::U256)
-            | (Type::Bool, Type::Bool)
-            | (Type::Address, Type::Address)
-            | (Type::Signer, Type::Signer) => true,
-            // Otherwise the types do not match and we can't match return type to the expected type.
-            // Note we don't use the _ pattern but spell out all cases, so that the compiler will
-            // bark when a case is missed upon future updates to the types.
-            (Type::U8, _)
-            | (Type::U16, _)
-            | (Type::U32, _)
-            | (Type::U64, _)
-            | (Type::U128, _)
-            | (Type::U256, _)
-            | (Type::Bool, _)
-            | (Type::Address, _)
-            | (Type::Signer, _)
-            | (Type::Struct { .. }, _)
-            | (Type::StructInstantiation { .. }, _)
-            | (Type::Vector(_), _)
-            | (Type::MutableReference(_), _)
-            | (Type::Reference(_), _) => false,
-        }
-    }
-
-    // Loading verifies the module if it was never loaded.
-    // Type parameters are inferred from the expected return type. Returns an error if it's not
-    // possible to infer the type parameters or return type cannot be matched.
-    // The type parameters are verified with capabilities.
-    pub(crate) fn load_function_with_type_arg_inference(
-        &self,
-        module_id: &ModuleId,
-        function_name: &IdentStr,
-        expected_return_type: &Type,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<LoadedFunction> {
-        let function = self.load_function_without_type_args(
-            module_id,
-            function_name,
-            data_store,
-            module_store,
-        )?;
-
-        if function.return_tys().len() != 1 {
-            // For functions that are marked constructor this should not happen.
-            return Err(PartialVMError::new(StatusCode::ABORTED).finish(Location::Undefined));
-        }
-
-        let mut map = BTreeMap::new();
-        if !Self::match_return_type(&function.return_tys()[0], expected_return_type, &mut map) {
-            // For functions that are marked constructor this should not happen.
-            return Err(
-                PartialVMError::new(StatusCode::INVALID_MAIN_FUNCTION_SIGNATURE)
-                    .finish(Location::Undefined),
-            );
-        }
-
-        // Construct the type arguments from the match
-        let mut ty_args = vec![];
-        let num_ty_args = function.ty_param_abilities().len();
-        for i in 0..num_ty_args {
-            if let Some(t) = map.get(&(i as u16)) {
-                ty_args.push((*t).clone());
-            } else {
-                // Unknown type argument we are not able to infer the type arguments.
-                // For functions that are marked constructor this should not happen.
-                return Err(
-                    PartialVMError::new(StatusCode::INVALID_MAIN_FUNCTION_SIGNATURE)
-                        .finish(Location::Undefined),
-                );
-            }
-        }
-
-        Type::verify_ty_arg_abilities(function.ty_param_abilities(), &ty_args)
-            .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
-
-        Ok(LoadedFunction { ty_args, function })
-    }
-
-    fn check_natives(&self, module: &CompiledModule) -> VMResult<()> {
-        fn check_natives_impl(_loader: &Loader, module: &CompiledModule) -> PartialVMResult<()> {
-            // TODO: fix check and error code if we leave something around for native structs.
-            // For now this generates the only error test cases care about...
-            for (idx, struct_def) in module.struct_defs().iter().enumerate() {
-                if struct_def.field_information == StructFieldInformation::Native {
-                    return Err(verification_error(
-                        StatusCode::MISSING_DEPENDENCY,
-                        IndexKind::FunctionHandle,
-                        idx as TableIndex,
-                    ));
-                }
-            }
-            Ok(())
-        }
-        check_natives_impl(self, module).map_err(|e| e.finish(Location::Module(module.self_id())))
-    }
-
-    //
-    // Helpers for loading and verification
-    //
-
-    pub(crate) fn load_type(
-        &self,
-        ty_tag: &TypeTag,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<Type> {
-        let resolver = |struct_tag: &StructTag| -> VMResult<Arc<StructType>> {
-            let module_id = ModuleId::new(struct_tag.address, struct_tag.module.clone());
-            self.load_module(&module_id, data_store, module_store)?;
-            module_store
-                .get_struct_type_by_identifier(&struct_tag.name, &module_id)
-                .map_err(|e| e.finish(Location::Undefined))
-        };
-        self.ty_builder().create_ty(ty_tag, resolver)
-    }
-
-    /// Traverses the whole transitive closure of dependencies, starting from the specified
-    /// modules and performs gas metering.
-    ///
-    /// The traversal follows a depth-first order, with the module itself being visited first,
-    /// followed by its dependencies, and finally its friends.
-    /// DO NOT CHANGE THE ORDER unless you have a good reason, or otherwise this could introduce
-    /// a breaking change to the gas semantics.
-    ///
-    /// This will result in the shallow-loading of the modules -- they will be read from the
-    /// storage as bytes and then deserialized, but NOT converted into the runtime representation.
-    ///
-    /// It should also be noted that this is implemented in a way that avoids the cloning of
-    /// `ModuleId`, a.k.a. heap allocations, as much as possible, which is critical for
-    /// performance.
-    ///
-    /// TODO: Revisit the order of traversal. Consider switching to alphabetical order.
-    pub(crate) fn check_dependencies_and_charge_gas<'a, I>(
-        &self,
-        module_store: &ModuleStorageAdapter,
-        data_store: &mut TransactionDataCache,
-        gas_meter: &mut impl GasMeter,
-        visited: &mut BTreeMap<(&'a AccountAddress, &'a IdentStr), ()>,
-        referenced_modules: &'a Arena<Arc<CompiledModule>>,
-        ids: I,
-    ) -> VMResult<()>
-    where
-        I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
-        I::IntoIter: DoubleEndedIterator,
-    {
-        // Initialize the work list (stack) and the map of visited modules.
-        //
-        // TODO: Determine the reserved capacity based on the max number of dependencies allowed.
-        let mut stack = Vec::with_capacity(512);
-
-        for (addr, name) in ids.into_iter().rev() {
-            // TODO: Allow the check of special addresses to be customized.
-            if !addr.is_special() && visited.insert((addr, name), ()).is_none() {
-                stack.push((addr, name, true));
-            }
-        }
-
-        while let Some((addr, name, allow_loading_failure)) = stack.pop() {
-            // Load and deserialize the module only if it has not been cached by the loader.
-            // Otherwise this will cause a significant regression in performance.
-            let (module, size) = match module_store.module_at_by_ref(addr, name) {
-                Some(module) => (module.module.clone(), module.size),
-                None => {
-                    let (module, size, _) = data_store.load_compiled_module_to_cache(
-                        ModuleId::new(*addr, name.to_owned()),
-                        allow_loading_failure,
-                    )?;
-                    (module, size)
-                },
-            };
-
-            // Extend the lifetime of the module to the remainder of the function body
-            // by storing it in an arena.
-            //
-            // This is needed because we need to store references derived from it in the
-            // work list.
-            let module = referenced_modules.alloc(module);
-
-            gas_meter
-                .charge_dependency(false, addr, name, NumBytes::new(size as u64))
-                .map_err(|err| {
-                    err.finish(Location::Module(ModuleId::new(*addr, name.to_owned())))
-                })?;
-
-            // Explore all dependencies and friends that have been visited yet.
-            for (addr, name) in module
-                .immediate_dependencies_iter()
-                .chain(module.immediate_friends_iter())
-                .rev()
-            {
-                // TODO: Allow the check of special addresses to be customized.
-                if !addr.is_special() && visited.insert((addr, name), ()).is_none() {
-                    stack.push((addr, name, false));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Similar to `check_dependencies_and_charge_gas`, except that this does not recurse
-    /// into transitive dependencies and allows non-existent modules.
-    pub(crate) fn check_dependencies_and_charge_gas_non_recursive_optional<'a, I>(
-        &self,
-        module_store: &ModuleStorageAdapter,
-        data_store: &mut TransactionDataCache,
-        gas_meter: &mut impl GasMeter,
-        visited: &mut BTreeMap<(&'a AccountAddress, &'a IdentStr), ()>,
-        ids: I,
-    ) -> VMResult<()>
-    where
-        I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
-    {
-        for (addr, name) in ids.into_iter() {
-            // TODO: Allow the check of special addresses to be customized.
-            if addr.is_special() || visited.insert((addr, name), ()).is_some() {
-                continue;
-            }
-
-            // Load and deserialize the module only if it has not been cached by the loader.
-            // Otherwise this will cause a significant regression in performance.
-            let size = match module_store.module_at_by_ref(addr, name) {
-                Some(module) => module.size,
-                None => match data_store
-                    .load_compiled_module_to_cache(ModuleId::new(*addr, name.to_owned()), true)
-                {
-                    Ok((_module, size, _hash)) => size,
-                    Err(err) if err.major_status() == StatusCode::LINKER_ERROR => continue,
-                    Err(err) => return Err(err),
-                },
-            };
-
-            gas_meter
-                .charge_dependency(false, addr, name, NumBytes::new(size as u64))
-                .map_err(|err| {
-                    err.finish(Location::Module(ModuleId::new(*addr, name.to_owned())))
-                })?;
-        }
-
-        Ok(())
-    }
-
-    // The interface for module loading. Aligned with `load_type` and `load_function`, this function
-    // verifies that the module is OK instead of expect it.
-    pub(crate) fn load_module(
-        &self,
-        id: &ModuleId,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<Arc<Module>> {
-        // if the module is already in the code cache, load the cached version
-        if let Some(cached) = module_store.module_at(id) {
-            self.module_cache_hits.write().insert(id.clone());
-            return Ok(cached);
-        }
-
-        if self.vm_config.enable_lazy_loading {
-            return self.load_module_shallow(
-                id,
-                data_store,
-                module_store,
-                /* allow_loading_failure */ true,
-            );
-        }
-
-        // otherwise, load the transitive closure of the target module
-        let module_ref = self.load_and_verify_module_and_dependencies_and_friends(
-            id,
-            &BTreeMap::new(),
-            &BTreeSet::new(),
-            data_store,
-            module_store,
-            /* allow_module_loading_failure */ true,
-        )?;
-
-        // verify that the transitive closure does not have cycles
-        self.verify_module_cyclic_relations(
-            module_ref.module(),
-            &BTreeMap::new(),
-            &BTreeSet::new(),
-            module_store,
-        )
-        .map_err(expect_no_verification_errors)?;
-        Ok(module_ref)
-    }
-
-    fn load_module_shallow(
-        &self,
-        id: &ModuleId,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        allow_loading_failure: bool,
-    ) -> VMResult<Arc<Module>> {
-        if let Some(cached) = module_store.module_at(id) {
-            self.module_cache_hits.write().insert(id.clone());
-            return Ok(cached);
-        }
-
-        let (module, size) = self.load_and_verify_module(id, data_store, allow_loading_failure)?;
-        module_store.insert(&self.natives, id.clone(), size, module, &self.name_cache)
-    }
-
-    fn verify_module_cyclic_relations(
-        &self,
-        module: &CompiledModule,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
-        bundle_unverified: &BTreeSet<ModuleId>,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<()> {
-        cyclic_dependencies::verify_module(
-            module,
-            |module_id| {
-                bundle_verified
-                    .get(module_id)
-                    .map(|module| module.immediate_dependencies())
-                    .or_else(|| {
-                        module_store
-                            .module_at(module_id)
-                            .map(|m| m.module.immediate_dependencies())
-                    })
-                    .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
-            },
-            |module_id| {
-                if bundle_unverified.contains(module_id) {
-                    Ok(vec![])
-                } else {
-                    bundle_verified
-                        .get(module_id)
-                        .map(|module| module.immediate_friends())
-                        .or_else(|| {
-                            module_store
-                                .module_at(module_id)
-                                .map(|m| m.module.immediate_friends())
-                        })
-                        .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
-                }
-            },
-        )
-    }
-
-    // Load, deserialize, and check the module with the bytecode verifier, without linking
-    fn load_and_verify_module(
-        &self,
-        id: &ModuleId,
-        data_store: &mut TransactionDataCache,
-        allow_loading_failure: bool,
-    ) -> VMResult<(Arc<CompiledModule>, usize)> {
-        let (module, size, hash_value) =
-            data_store.load_compiled_module_to_cache(id.clone(), allow_loading_failure)?;
-
-        fail::fail_point!("verifier-failpoint-2", |_| { Ok((module.clone(), size)) });
-
-        if self.vm_config.paranoid_type_checks && &module.self_id() != id {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Module self id mismatch with storage".to_string())
-                    .finish(Location::Module(id.clone())),
-            );
-        }
-
-        // Verify the module if it hasn't been verified before.
-        if VERIFIED_MODULES.lock().get(&hash_value).is_none() {
-            move_bytecode_verifier::verify_module_with_config(
-                &self.vm_config.verifier_config,
-                &module,
-            )
-            .map_err(expect_no_verification_errors)?;
-
-            VERIFIED_MODULES.lock().put(hash_value, ());
-        }
-
-        self.check_natives(&module)
-            .map_err(expect_no_verification_errors)?;
-        Ok((module, size))
-    }
-
-    // Everything in `load_and_verify_module` and also recursively load and verify all the
-    // dependencies of the target module.
-    fn load_and_verify_module_and_dependencies(
-        &self,
-        id: &ModuleId,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        visited: &mut BTreeSet<ModuleId>,
-        friends_discovered: &mut BTreeSet<ModuleId>,
-        allow_module_loading_failure: bool,
-    ) -> VMResult<Arc<Module>> {
-        // dependency loading does not permit cycles
-        if visited.contains(id) {
-            return Err(PartialVMError::new(StatusCode::CYCLIC_MODULE_DEPENDENCY)
-                .finish(Location::Undefined));
-        }
-
-        // module self-check
-        let (module, size) =
-            self.load_and_verify_module(id, data_store, allow_module_loading_failure)?;
-        visited.insert(id.clone());
-        friends_discovered.extend(module.immediate_friends());
-
-        // downward exploration of the module's dependency graph. For a module that is loaded from
-        // the data_store, we should never allow its dependencies to fail to load.
-        self.load_and_verify_dependencies(
-            &module,
-            bundle_verified,
-            data_store,
-            module_store,
-            visited,
-            friends_discovered,
-            /* allow_dependency_loading_failure */ false,
-        )?;
-
-        // if linking goes well, insert the module to the code cache
-        let module_ref =
-            module_store.insert(&self.natives, id.clone(), size, module, &self.name_cache)?;
-
-        Ok(module_ref)
-    }
-
-    // downward exploration of the module's dependency graph
-    fn load_and_verify_dependencies(
-        &self,
-        module: &CompiledModule,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        visited: &mut BTreeSet<ModuleId>,
-        friends_discovered: &mut BTreeSet<ModuleId>,
-        allow_dependency_loading_failure: bool,
-    ) -> VMResult<()> {
-        // all immediate dependencies of the module being verified should be in one of the locations
-        // - the verified portion of the bundle (e.g., verified before this module)
-        // - the code cache (i.e., loaded already)
-        // - the data store (i.e., not loaded to code cache yet)
-        let mut bundle_deps = vec![];
-        let mut cached_deps = vec![];
-        for module_id in module.immediate_dependencies() {
-            if let Some(cached) = bundle_verified.get(&module_id) {
-                bundle_deps.push(cached);
-            } else {
-                let loaded = match module_store.module_at(&module_id) {
-                    None => self.load_and_verify_module_and_dependencies(
-                        &module_id,
-                        bundle_verified,
-                        data_store,
-                        module_store,
-                        visited,
-                        friends_discovered,
-                        allow_dependency_loading_failure,
-                    )?,
-                    Some(cached) => cached,
-                };
-                cached_deps.push(loaded);
-            }
-        }
-
-        // once all dependencies are loaded, do the linking check
-        let all_imm_deps = bundle_deps
-            .into_iter()
-            .chain(cached_deps.iter().map(|m| m.module()));
-
-        fail::fail_point!("verifier-failpoint-4", |_| { Ok(()) });
-
-        let result = dependencies::verify_module(module, all_imm_deps);
-
-        // if dependencies loading is not allowed to fail, the linking should not fail as well
-        if allow_dependency_loading_failure {
-            result
-        } else {
-            result.map_err(expect_no_verification_errors)
-        }
-    }
-
-    // Everything in `load_and_verify_module_and_dependencies` and also recursively load and verify
-    // all the friends modules of the newly loaded modules, until the friends frontier covers the
-    // whole closure.
-    fn load_and_verify_module_and_dependencies_and_friends(
-        &self,
-        id: &ModuleId,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
-        bundle_unverified: &BTreeSet<ModuleId>,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        allow_module_loading_failure: bool,
-    ) -> VMResult<Arc<Module>> {
-        // load the closure of the module in terms of dependency relation
-        let mut visited = BTreeSet::new();
-        let mut friends_discovered = BTreeSet::new();
-        let module_ref = self.load_and_verify_module_and_dependencies(
-            id,
-            bundle_verified,
-            data_store,
-            module_store,
-            &mut visited,
-            &mut friends_discovered,
-            allow_module_loading_failure,
-        )?;
-
-        // upward exploration of the module's friendship graph and expand the friendship frontier.
-        // For a module that is loaded from the data_store, we should never allow that its friends
-        // fail to load.
-        self.load_and_verify_friends(
-            friends_discovered,
-            bundle_verified,
-            bundle_unverified,
-            data_store,
-            module_store,
-            /* allow_friend_loading_failure */ false,
-        )?;
-        Ok(module_ref)
-    }
-
-    // upward exploration of the module's dependency graph
-    fn load_and_verify_friends(
-        &self,
-        friends_discovered: BTreeSet<ModuleId>,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
-        bundle_unverified: &BTreeSet<ModuleId>,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        allow_friend_loading_failure: bool,
-    ) -> VMResult<()> {
-        // for each new module discovered in the frontier, load them fully and expand the frontier.
-        // apply three filters to the new friend modules discovered
-        // - `!locked_cache.has_module(mid)`
-        //   If we friend a module that is already in the code cache, then we know that the
-        //   transitive closure of that module is loaded into the cache already, skip the loading
-        // - `!bundle_verified.contains_key(mid)`
-        //   In the case of publishing a bundle, we don't actually put the published module into
-        //   code cache. This `bundle_verified` cache is a temporary extension of the code cache
-        //   in the bundle publication scenario. If a module is already verified, we don't need to
-        //   re-load it again.
-        // - `!bundle_unverified.contains(mid)
-        //   If the module under verification declares a friend which is also in the bundle (and
-        //   positioned after this module in the bundle), we defer the loading of that module when
-        //   it is the module's turn in the bundle.
-
-        // FIXME: Is there concurrency issue?
-        let new_imm_friends: Vec<_> = friends_discovered
-            .into_iter()
-            .filter(|mid| {
-                !module_store.has_module(mid)
-                    && !bundle_verified.contains_key(mid)
-                    && !bundle_unverified.contains(mid)
-            })
-            .collect();
-
-        for module_id in new_imm_friends {
-            self.load_and_verify_module_and_dependencies_and_friends(
-                &module_id,
-                bundle_verified,
-                bundle_unverified,
-                data_store,
-                module_store,
-                allow_friend_loading_failure,
-            )?;
-        }
-        Ok(())
-    }
 
     //
     // Internal helpers
@@ -1277,14 +440,13 @@ impl<'a> Resolver<'a> {
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
     ) -> VMResult<()> {
-        self.loader
-            .load_module_v2(
-                module_id,
-                data_store,
-                self.module_store,
-                gas_meter,
-                traversal_context,
-            )
+        self.loader.ensure_module_loaded_v2(
+            module_id,
+            data_store,
+            self.module_store,
+            gas_meter,
+            traversal_context,
+        )
     }
 
     pub(crate) fn function_from_handle_with_context(
@@ -1311,7 +473,7 @@ impl<'a> Resolver<'a> {
                 self.module_store
                     .resolve_function_by_name(name.as_ident_str(), module)
                     .map_err(|err| err.finish(Location::Undefined))
-            },
+            }
         }
     }
 
@@ -1339,7 +501,7 @@ impl<'a> Resolver<'a> {
                 self.module_store
                     .resolve_function_by_name(name.as_ident_str(), module)
                     .map_err(|err| err.finish(Location::Undefined))
-            },
+            }
         }
     }
 
@@ -1451,7 +613,7 @@ impl<'a> Resolver<'a> {
             BinaryType::Module(module) => {
                 let handle = &module.field_handles[idx.0 as usize];
                 Ok(&handle.definition_struct_type.field_tys[handle.offset])
-            },
+            }
             BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
         }
     }
@@ -1575,7 +737,7 @@ impl<'a> Resolver<'a> {
                 self.loader()
                     .ty_builder()
                     .create_struct_ty(struct_ty.idx, AbilityInfo::struct_(struct_ty.abilities))
-            },
+            }
             BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
         }
     }
@@ -1594,7 +756,7 @@ impl<'a> Resolver<'a> {
                 self.loader()
                     .ty_builder()
                     .create_struct_instantiation_ty(struct_ty, ty_params, ty_args)
-            },
+            }
             BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
         }
     }
@@ -1610,49 +772,7 @@ impl<'a> Resolver<'a> {
     }
 }
 
-// Public APIs for external uses.
 impl Loader {
-    pub(crate) fn get_type_layout(
-        &self,
-        type_tag: &TypeTag,
-        move_storage: &mut TransactionDataCache,
-        module_storage: &ModuleStorageAdapter,
-    ) -> VMResult<MoveTypeLayout> {
-        let ty = self.load_type(type_tag, move_storage, module_storage)?;
-        let data_store = LoaderV2DataStore::new(self.runtime_environment(), &*move_storage);
-        let module_storage_v2 = data_store.as_unsync_module_storage();
-        let traversal_storage = TraversalStorage::new();
-        let mut traversal_context = TraversalContext::new(&traversal_storage);
-        let mut gas_meter = UnmeteredGasMeter;
-        dispatch_loader!(&module_storage_v2, loader, {
-            LayoutConverter::new(&loader)
-                .type_to_type_layout(&mut gas_meter, &mut traversal_context, &ty)
-        })
-        .map_err(|e| e.finish(Location::Undefined))
-    }
-
-    pub(crate) fn get_fully_annotated_type_layout(
-        &self,
-        type_tag: &TypeTag,
-        move_storage: &mut TransactionDataCache,
-        module_storage: &ModuleStorageAdapter,
-    ) -> VMResult<MoveTypeLayout> {
-        let ty = self.load_type(type_tag, move_storage, module_storage)?;
-        let data_store = LoaderV2DataStore::new(self.runtime_environment(), &*move_storage);
-        let module_storage_v2 = data_store.as_unsync_module_storage();
-        let traversal_storage = TraversalStorage::new();
-        let mut traversal_context = TraversalContext::new(&traversal_storage);
-        let mut gas_meter = UnmeteredGasMeter;
-        dispatch_loader!(&module_storage_v2, loader, {
-            LayoutConverter::new(&loader).type_to_fully_annotated_layout(
-                &mut gas_meter,
-                &mut traversal_context,
-                &ty,
-            )
-        })
-        .map_err(|e| e.finish(Location::Undefined))
-    }
-
     pub(crate) fn update_native_functions(
         &mut self,
         natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,

@@ -64,13 +64,16 @@ fn test_publish_module_with_nested_loops() {
             Identifier::new("bar").unwrap(),
             make_failed_native(),
         )];
-        let vm = MoveVM::new_with_config(natives, VMConfig {
-            verifier_config: VerifierConfig {
-                max_loop_depth: Some(2),
+        let vm = MoveVM::new_with_config(
+            natives,
+            VMConfig {
+                verifier_config: VerifierConfig {
+                    max_loop_depth: Some(2),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            ..Default::default()
-        })
+        )
         .unwrap();
 
         let mut sess = vm.new_session(&storage);

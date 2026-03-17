@@ -17,14 +17,12 @@ use move_binary_format::{
 use move_bytecode_verifier::dependencies;
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::{Identifier, IdentStr},
+    identifier::{IdentStr, Identifier},
     vm_status::StatusCode,
 };
 use move_vm_types::{
-    loaded_data::struct_name_indexing::StructNameIndexMap,
-    module_id_interner::InternedModuleIdPool,
-    code::ModuleBytesStorage,
-    ty_interner::InternedTypePool,
+    code::ModuleBytesStorage, loaded_data::struct_name_indexing::StructNameIndexMap,
+    module_id_interner::InternedModuleIdPool, ty_interner::InternedTypePool,
 };
 use std::sync::Arc;
 
@@ -105,13 +103,14 @@ impl RuntimeEnvironment {
     }
 
     pub fn deserialize_into_compiled_module(&self, bytes: &Bytes) -> VMResult<CompiledModule> {
-        CompiledModule::deserialize_with_config(bytes, &self.vm_config.deserializer_config)
-            .map_err(|err| {
+        CompiledModule::deserialize_with_config(bytes, &self.vm_config.deserializer_config).map_err(
+            |err| {
                 let msg = format!("Deserialization error: {:?}", err);
                 PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
                     .with_message(msg)
                     .finish(Location::Undefined)
-            })
+            },
+        )
     }
 
     pub fn deserialize_into_script(&self, serialized_script: &[u8]) -> VMResult<CompiledScript> {
@@ -146,7 +145,9 @@ impl RuntimeEnvironment {
     ) -> VMResult<crate::loader::Script> {
         dependencies::verify_script(
             locally_verified_script.0.as_ref(),
-            immediate_dependencies.iter().map(|module| module.as_ref().module()),
+            immediate_dependencies
+                .iter()
+                .map(|module| module.as_ref().module()),
         )?;
         crate::loader::Script::new(
             locally_verified_script.0,
@@ -178,11 +179,12 @@ impl RuntimeEnvironment {
     ) -> VMResult<crate::loader::Module> {
         dependencies::verify_module(
             locally_verified_module.0.as_ref(),
-            immediate_dependencies.iter().map(|module| module.as_ref().module()),
+            immediate_dependencies
+                .iter()
+                .map(|module| module.as_ref().module()),
         )?;
         crate::loader::Module::new(
             self.natives(),
-            locally_verified_module.1,
             locally_verified_module.0,
             self.struct_name_index_map(),
         )
@@ -195,7 +197,6 @@ impl RuntimeEnvironment {
     ) -> VMResult<crate::loader::Module> {
         crate::loader::Module::new(
             self.natives(),
-            locally_verified_module.1,
             locally_verified_module.0,
             self.struct_name_index_map(),
         )

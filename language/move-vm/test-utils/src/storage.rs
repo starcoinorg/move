@@ -209,7 +209,7 @@ impl CompiledModuleView for InMemoryStorage {
             Some(bytes) => {
                 let config = DeserializerConfig::new(VERSION_MAX, IDENTIFIER_SIZE_MAX);
                 Some(CompiledModule::deserialize_with_config(&bytes, &config)?)
-            },
+            }
             None => None,
         })
     }
@@ -234,16 +234,16 @@ where
                         entry.key()
                     )),
                 )
-            },
+            }
             (Occupied(entry), Delete) => {
                 entry.remove();
-            },
+            }
             (Occupied(entry), Modify(val)) => {
                 *entry.into_mut() = val;
-            },
+            }
             (Vacant(entry), New(val)) => {
                 entry.insert(val);
-            },
+            }
             (Vacant(entry), Delete | Modify(_)) => {
                 return Err(
                     PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
@@ -251,7 +251,7 @@ where
                         entry.key()
                     )),
                 )
-            },
+            }
         }
     }
     Ok(())
@@ -296,12 +296,12 @@ impl InMemoryStorage {
             match self.accounts.entry(addr) {
                 btree_map::Entry::Occupied(entry) => {
                     entry.into_mut().apply(account_changeset)?;
-                },
+                }
                 btree_map::Entry::Vacant(entry) => {
                     let mut account_storage = InMemoryAccountStorage::new();
                     account_storage.apply(account_changeset)?;
                     entry.insert(account_storage);
-                },
+                }
             }
         }
 

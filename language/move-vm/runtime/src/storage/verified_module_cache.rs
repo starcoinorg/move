@@ -22,7 +22,11 @@ impl VerifiedModuleCache {
         hasher.finalize().into()
     }
 
-    pub(crate) fn contains(&self, module_hash: &[u8; 32], verifier_config: &VerifierConfig) -> bool {
+    pub(crate) fn contains(
+        &self,
+        module_hash: &[u8; 32],
+        verifier_config: &VerifierConfig,
+    ) -> bool {
         let cache_key = Self::cache_key(module_hash, verifier_config);
         self.0.lock().get(&cache_key).is_some()
     }

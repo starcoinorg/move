@@ -17,8 +17,8 @@ use move_core_types::{
 };
 use move_vm_types::{
     gas::GasMeter,
-    loaded_data::{
-        runtime_types::{legacy_count_type_nodes, StructNameIndex, StructType, Type, TypeBuilder},
+    loaded_data::runtime_types::{
+        legacy_count_type_nodes, StructNameIndex, StructType, Type, TypeBuilder,
     },
 };
 use std::sync::Arc;
@@ -130,7 +130,9 @@ pub(crate) trait InstantiatedFunctionLoaderHelper: WithRuntimeEnvironment {
             && ty_args.iter().map(legacy_count_type_nodes).sum::<u64>()
                 > TypeBuilder::LEGACY_MAX_TYPE_INSTANTIATION_NODES
         {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).finish(Location::Script));
+            return Err(
+                PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).finish(Location::Script)
+            );
         }
 
         let main = script.entry_point();

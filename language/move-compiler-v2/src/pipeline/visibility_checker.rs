@@ -49,7 +49,7 @@ impl FunctionTargetProcessor for VisibilityChecker {
                     Visibility::Public => {
                         // Public functions are visible from any caller.
                         continue;
-                    },
+                    }
                     _ if is_script => {
                         // Only public functions are visible from scripts.
                         global_env.error(
@@ -59,7 +59,7 @@ impl FunctionTargetProcessor for VisibilityChecker {
                                 callee_env.get_full_name_with_address()
                             ),
                         );
-                    },
+                    }
                     Visibility::Friend => {
                         // Friend functions are visible from a caller whose module is a friend of the callee's module.
                         // For the purposes of this check, we assume friend declarations are valid.
@@ -76,7 +76,7 @@ impl FunctionTargetProcessor for VisibilityChecker {
                                 ),
                             );
                         }
-                    },
+                    }
                     Visibility::Private => {
                         // Private functions are not visible outside of the callee's module.
                         global_env.error(
@@ -88,7 +88,7 @@ impl FunctionTargetProcessor for VisibilityChecker {
                                 callee_env.module_env.get_full_name_str()
                             ),
                         );
-                    },
+                    }
                 }
             }
         }

@@ -268,29 +268,29 @@ impl<'env> ConstantFolder<'env> {
                 match oper {
                     O::Add => {
                         self.binop_num(name(), BigInt::checked_add, id, result_pty, val0, val1)
-                    },
+                    }
                     O::Sub => {
                         self.binop_num(name(), BigInt::checked_sub, id, result_pty, val0, val1)
-                    },
+                    }
                     O::Mul => {
                         self.binop_num(name(), BigInt::checked_mul, id, result_pty, val0, val1)
-                    },
+                    }
                     O::Div => {
                         self.binop_num(name(), BigInt::checked_div, id, result_pty, val0, val1)
-                    },
+                    }
                     O::Mod => self.binop_num(name(), Self::checked_rem, id, result_pty, val0, val1),
                     O::Shl => {
                         // result_pty should be same size as arg0
                         let arg0_size = Self::ptype_num_bits_bigint(result_pty);
                         self.binop_num(name(), Self::checked_shl, id, result_pty, val0, val1)
                             .filter(|_r| val1 < &arg0_size) // shift fails if val1 >= bits in val0
-                    },
+                    }
                     O::Shr => {
                         // result_pty should be same size as arg0
                         let arg0_size = Self::ptype_num_bits_bigint(result_pty);
                         self.binop_num(name(), Self::checked_shr, id, result_pty, val0, val1)
                             .filter(|_r| val1 < &arg0_size) // shift fails if val1 >= bits in val0
-                    },
+                    }
                     O::BitAnd => Some(V(id, Number(val0.bitand(val1))).into_exp()),
                     O::BitOr => Some(V(id, Number(val0.bitor(val1))).into_exp()),
                     O::Xor => Some(V(id, Number(val0.bitxor(val1))).into_exp()),
@@ -318,7 +318,7 @@ impl<'env> ConstantFolder<'env> {
                              not foldable to constant"
                                 .to_owned()
                         })
-                    },
+                    }
                 }
             } else {
                 match oper {
@@ -433,7 +433,7 @@ impl<'env> ExpRewriterFunctions for ConstantFolder<'env> {
                 } else {
                     result
                 }
-            },
+            }
             _ => result,
         }
     }

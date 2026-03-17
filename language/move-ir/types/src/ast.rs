@@ -1141,12 +1141,16 @@ impl fmt::Display for TypeVar_ {
 
 impl fmt::Display for Ability {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            Ability::Copy => Ability::COPY,
-            Ability::Drop => Ability::DROP,
-            Ability::Store => Ability::STORE,
-            Ability::Key => Ability::KEY,
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Ability::Copy => Ability::COPY,
+                Ability::Drop => Ability::DROP,
+                Ability::Store => Ability::STORE,
+                Ability::Key => Ability::KEY,
+            }
+        )
     }
 }
 
@@ -1369,7 +1373,7 @@ impl fmt::Display for FunctionBody {
                     writeln!(f, "{}", block.value)?;
                 }
                 Ok(())
-            },
+            }
             FunctionBody::Bytecode { locals, code } => {
                 write!(f, "locals: [")?;
                 for (local, ty) in locals {
@@ -1383,7 +1387,7 @@ impl fmt::Display for FunctionBody {
                     }
                 }
                 Ok(())
-            },
+            }
             FunctionBody::Native => write!(f, "native"),
         }
     }
@@ -1476,7 +1480,7 @@ impl fmt::Display for Type {
             Type::Struct(ident, tys) => write!(f, "{}{}", ident, format_type_actuals(tys)),
             Type::Reference(is_mutable, t) => {
                 write!(f, "&{}{}", if *is_mutable { "mut " } else { "" }, t)
-            },
+            }
             Type::TypeParameter(s) => write!(f, "{}", s),
         }
     }
@@ -1501,7 +1505,7 @@ impl fmt::Display for Builtin {
                     t,
                     format_type_actuals(tys)
                 )
-            },
+            }
             Builtin::MoveFrom(t, tys) => write!(f, "move_from<{}{}>", t, format_type_actuals(tys)),
             Builtin::MoveTo(t, tys) => write!(f, "move_to<{}{}>", t, format_type_actuals(tys)),
             Builtin::VecPack(tys, num) => write!(f, "vec_pack_{}{}", num, format_type_actuals(tys)),
@@ -1512,7 +1516,7 @@ impl fmt::Display for Builtin {
             Builtin::VecPopBack(tys) => write!(f, "vec_pop_back{}", format_type_actuals(tys)),
             Builtin::VecUnpack(tys, num) => {
                 write!(f, "vec_unpack_{}{}", num, format_type_actuals(tys))
-            },
+            }
             Builtin::VecSwap(tys) => write!(f, "vec_swap{}", format_type_actuals(tys)),
             Builtin::Freeze => write!(f, "freeze"),
             Builtin::ToU8 => write!(f, "to_u8"),
@@ -1567,7 +1571,7 @@ impl fmt::Display for Statement_ {
                 } else {
                     write!(f, "{} = ({});", intersperse(var_list, ", "), e)
                 }
-            },
+            }
             Statement_::Exp(e) => write!(f, "({});", e),
             Statement_::Jump(label) => write!(f, "jump {}", label),
             Statement_::JumpIf(e, label) => write!(f, "jump_if ({}) {}", e, label),
@@ -1618,39 +1622,47 @@ impl fmt::Display for CopyableVal_ {
 
 impl fmt::Display for UnaryOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            UnaryOp::Not => "!",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                UnaryOp::Not => "!",
+            }
+        )
     }
 }
 
 impl fmt::Display for BinOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            BinOp::Add => "+",
-            BinOp::Sub => "-",
-            BinOp::Mul => "*",
-            BinOp::Mod => "%",
-            BinOp::Div => "/",
-            BinOp::BitOr => "|",
-            BinOp::BitAnd => "&",
-            BinOp::Xor => "^",
-            BinOp::Shl => "<<",
-            BinOp::Shr => ">>",
+        write!(
+            f,
+            "{}",
+            match self {
+                BinOp::Add => "+",
+                BinOp::Sub => "-",
+                BinOp::Mul => "*",
+                BinOp::Mod => "%",
+                BinOp::Div => "/",
+                BinOp::BitOr => "|",
+                BinOp::BitAnd => "&",
+                BinOp::Xor => "^",
+                BinOp::Shl => "<<",
+                BinOp::Shr => ">>",
 
-            // Bool ops
-            BinOp::Or => "||",
-            BinOp::And => "&&",
+                // Bool ops
+                BinOp::Or => "||",
+                BinOp::And => "&&",
 
-            // Compare Ops
-            BinOp::Eq => "==",
-            BinOp::Neq => "!=",
-            BinOp::Lt => "<",
-            BinOp::Gt => ">",
-            BinOp::Le => "<=",
-            BinOp::Ge => ">=",
-            BinOp::Subrange => "..",
-        })
+                // Compare Ops
+                BinOp::Eq => "==",
+                BinOp::Neq => "!=",
+                BinOp::Lt => "<",
+                BinOp::Gt => ">",
+                BinOp::Le => "<=",
+                BinOp::Ge => ">=",
+                BinOp::Subrange => "..",
+            }
+        )
     }
 }
 
@@ -1686,7 +1698,7 @@ impl fmt::Display for Exp_ {
             Exp_::Copy(v) => write!(f, "copy({})", v),
             Exp_::BorrowLocal(is_mutable, v) => {
                 write!(f, "&{}{}", if *is_mutable { "mut " } else { "" }, v)
-            },
+            }
             Exp_::FunctionCall(func, e) => write!(f, "{}({})", func, e),
             Exp_::ExprList(exps) => {
                 if exps.is_empty() {
@@ -1694,7 +1706,7 @@ impl fmt::Display for Exp_ {
                 } else {
                     write!(f, "({})", intersperse(exps, ", "))
                 }
-            },
+            }
         }
     }
 }
@@ -1752,10 +1764,10 @@ impl fmt::Display for Bytecode_ {
             ),
             Bytecode_::MutBorrowGlobal(n, tys) => {
                 write!(f, "MutBorrowGlobal {}{}", n, format_type_actuals(tys))
-            },
+            }
             Bytecode_::ImmBorrowGlobal(n, tys) => {
                 write!(f, "ImmBorrowGlobal {}{}", n, format_type_actuals(tys))
-            },
+            }
             Bytecode_::Add => write!(f, "Add"),
             Bytecode_::Sub => write!(f, "Sub"),
             Bytecode_::Mul => write!(f, "Mul"),
@@ -1806,10 +1818,10 @@ fn format_move_value(v: &MoveValue) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("vector[{}]", items)
-        },
+        }
         MoveValue::Struct(_) | MoveValue::Signer(_) => {
             panic!("Should be inexpressible as a constant")
-        },
+        }
         MoveValue::U16(u) => format!("{}u16", u),
         MoveValue::U32(u) => format!("{}u32", u),
         MoveValue::U256(u) => format!("{}u256", u),

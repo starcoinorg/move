@@ -247,16 +247,16 @@ impl<'a> Iterator for TypePreorderTraversalIter<'a> {
 
                     Reference(ty) | MutableReference(ty) => {
                         self.stack.push(ty);
-                    },
+                    }
 
                     Vector(ty) => {
                         self.stack.push(ty);
-                    },
+                    }
 
                     StructInstantiation { ty_args, .. } => self.stack.extend(ty_args.iter().rev()),
                 }
                 Some(ty)
-            },
+            }
             None => None,
         }
     }
@@ -479,7 +479,7 @@ impl Type {
             _ => {
                 let msg = format!("Expected a mutable reference to freeze, got {}", self);
                 paranoid_failure!(msg)
-            },
+            }
         }
     }
 
@@ -489,11 +489,11 @@ impl Type {
             Type::Reference(inner_ty) | Type::MutableReference(inner_ty) => {
                 inner_ty.paranoid_check_has_ability(Ability::Copy)?;
                 Ok(inner_ty.as_ref().clone())
-            },
+            }
             _ => {
                 let msg = format!("Expected a reference to read, got {}", self);
                 paranoid_failure!(msg)
-            },
+            }
         }
     }
 
@@ -523,7 +523,7 @@ impl Type {
                     is_mut, self
                 );
                 paranoid_failure!(msg)
-            },
+            }
         }
     }
 
@@ -546,11 +546,11 @@ impl Type {
                 "Unexpected TyParam type after translating from TypeTag to Type".to_string(),
             )),
 
-            Type::Vector(ty) => {
-                AbilitySet::polymorphic_abilities(AbilitySet::VECTOR, vec![false], vec![
-                    ty.abilities()?
-                ])
-            },
+            Type::Vector(ty) => AbilitySet::polymorphic_abilities(
+                AbilitySet::VECTOR,
+                vec![false],
+                vec![ty.abilities()?],
+            ),
             Type::Struct { ability, .. } => Ok(ability.base_ability_set),
             Type::StructInstantiation {
                 ty_args,
@@ -570,7 +570,7 @@ impl Type {
                     phantom_ty_args_mask.iter(),
                     type_argument_abilities,
                 )
-            },
+            }
         }
     }
 
@@ -614,7 +614,7 @@ impl Type {
                             ))
                         })?;
                         *entry.insert(ty.num_nodes())
-                    },
+                    }
                 })
             };
 
@@ -623,7 +623,7 @@ impl Type {
                 match ty {
                     TyParam(idx) => {
                         n += num_nodes_in_arg(*idx as usize)?;
-                    },
+                    }
                     Address
                     | Bool
                     | Signer
@@ -967,7 +967,7 @@ impl TypeBuilder {
                     if legacy_count_type_nodes(ty) > Self::LEGACY_MAX_TYPE_INSTANTIATION_NODES {
                         return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
                     }
-                },
+                }
                 Type::StructInstantiation {
                     ty_args: struct_inst,
                     ..
@@ -979,7 +979,7 @@ impl TypeBuilder {
                             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
                         }
                     }
-                },
+                }
                 Type::Address
                 | Type::Bool
                 | Type::Signer
@@ -1024,11 +1024,11 @@ impl TypeBuilder {
                             *max_ty_depth
                         )));
                 }
-            },
+            }
 
             // No checks in legacy implementation. Depth check for substitution
             // is handled separately.
-            Self::Legacy => {},
+            Self::Legacy => {}
         }
         Ok(())
     }
@@ -1056,7 +1056,7 @@ impl TypeBuilder {
             S::Vector(elem_tok) => {
                 let elem_ty = self.create_constant_ty_impl(elem_tok, count, depth + 1)?;
                 Vector(TriompheArc::new(elem_ty))
-            },
+            }
 
             S::Struct(_) | S::StructInstantiation(_, _) => {
                 let msg = if self.is_legacy() {
@@ -1068,7 +1068,7 @@ impl TypeBuilder {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(msg),
                 );
-            },
+            }
 
             tok => {
                 let msg = if self.is_legacy() {
@@ -1083,7 +1083,7 @@ impl TypeBuilder {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(msg),
                 );
-            },
+            }
         })
     }
 
@@ -1120,7 +1120,7 @@ impl TypeBuilder {
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                             .with_message(msg),
                     )
-                },
+                }
             },
             count,
             depth,
@@ -1178,7 +1178,7 @@ impl TypeBuilder {
                 // To avoid double-counting, revert counting the type parameter.
                 *count -= 1;
                 subst(*idx, count, depth)?
-            },
+            }
 
             Bool => Bool,
             U8 => U8,
@@ -1192,15 +1192,15 @@ impl TypeBuilder {
             Vector(elem_ty) => {
                 let elem_ty = Self::apply_subst(elem_ty, subst, count, depth + 1, check)?;
                 Vector(TriompheArc::new(elem_ty))
-            },
+            }
             Reference(inner_ty) => {
                 let inner_ty = Self::apply_subst(inner_ty, subst, count, depth + 1, check)?;
                 Reference(Box::new(inner_ty))
-            },
+            }
             MutableReference(inner_ty) => {
                 let inner_ty = Self::apply_subst(inner_ty, subst, count, depth + 1, check)?;
                 MutableReference(Box::new(inner_ty))
-            },
+            }
             Struct { idx, ability } => Struct {
                 idx: *idx,
                 ability: ability.clone(),
@@ -1220,7 +1220,7 @@ impl TypeBuilder {
                     ty_args: TriompheArc::new(instantiated_tys),
                     ability: ability.clone(),
                 }
-            },
+            }
         })
     }
 
@@ -1253,7 +1253,7 @@ impl TypeBuilder {
             T::Vector(elem_ty_tag) => {
                 let elem_ty = self.create_ty_impl(elem_ty_tag, resolver, count, depth + 1)?;
                 Vector(triomphe::Arc::new(elem_ty))
-            },
+            }
             T::Struct(struct_tag) => {
                 let struct_ty = resolver(struct_tag.as_ref())?;
 
@@ -1279,7 +1279,7 @@ impl TypeBuilder {
                         ),
                     }
                 }
-            },
+            }
         })
     }
 
@@ -1301,18 +1301,18 @@ pub fn legacy_count_type_nodes(ty: &Type) -> u64 {
             Type::Vector(ty) => {
                 result += 1;
                 todo.push(ty);
-            },
+            }
             Type::Reference(ty) | Type::MutableReference(ty) => {
                 result += 1;
                 todo.push(ty);
-            },
+            }
             Type::StructInstantiation { ty_args, .. } => {
                 result += 1;
                 todo.extend(ty_args.iter())
-            },
+            }
             _ => {
                 result += 1;
-            },
+            }
         }
     }
     result

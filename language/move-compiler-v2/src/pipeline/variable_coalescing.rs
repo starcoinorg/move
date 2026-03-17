@@ -195,7 +195,7 @@ impl VariableCoalescing {
                 (End(local_a, _), End(local_b, _)) => local_a.cmp(local_b),
                 (Begin(local_a, _, length_a), Begin(local_b, _, length_b)) => {
                     length_a.cmp(length_b).then_with(|| local_a.cmp(local_b))
-                },
+                }
             })
         });
         sorted_events.append(&mut other_events); // `other_events` are now sorted.
@@ -240,13 +240,13 @@ impl VariableCoalescing {
                             coalesceable_locals.insert(local, avail);
                         }
                     }
-                },
+                }
                 End(local, _) => {
                     let local_type = target.get_local_type(local);
                     let avail_local = *coalesceable_locals.get(&local).unwrap_or(&local);
                     // `local` is no longer alive, so it can be reused.
                     avail_map.entry(local_type).or_default().insert(avail_local);
-                },
+                }
             }
         }
         coalesceable_locals

@@ -22,8 +22,8 @@ pub mod session;
 #[macro_use]
 pub mod tracing;
 pub mod config;
-pub mod move_vm_adapter;
 pub mod module_traversal;
+pub mod move_vm_adapter;
 mod storage;
 
 // Only include debugging functionality in debug builds
@@ -49,8 +49,9 @@ pub use storage::{
         eager::EagerLoader,
         lazy::LazyLoader,
         traits::{
-            FunctionDefinitionLoader, InstantiatedFunctionLoader, LegacyLoaderConfig, Loader as StorageLoader,
-            ModuleMetadataLoader, NativeModuleLoader, ScriptLoader, StructDefinitionLoader,
+            FunctionDefinitionLoader, InstantiatedFunctionLoader, LegacyLoaderConfig,
+            Loader as StorageLoader, ModuleMetadataLoader, NativeModuleLoader, ScriptLoader,
+            StructDefinitionLoader,
         },
     },
     module_storage::{

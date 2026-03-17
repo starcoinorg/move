@@ -158,7 +158,7 @@ fn check_function(function: &FunctionEnv) {
                             }
                         }
                     }
-                },
+                }
                 Sequence(id, seq)
                     if seq.len() > 1 && !seq.iter().all(|exp| exp.is_ok_to_remove_from_code()) =>
                 {
@@ -170,8 +170,8 @@ fn check_function(function: &FunctionEnv) {
                         // `is_ok_to_remove_from_code` to track side-effect-free expressions.
                         sequences.entry(*binop_id).or_insert(*id);
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
             true // continue traversal
         };

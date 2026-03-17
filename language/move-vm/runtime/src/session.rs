@@ -81,20 +81,23 @@ impl<'r, 'l> Session<'r, 'l> {
 
         let module_id = func.module_id();
 
-        self.move_vm.runtime.execute_function_instantiation(
-            func,
-            args,
-            &mut self.data_cache,
-            &self.module_store,
-            gas_meter,
-            traversal_context,
-            &mut self.native_extensions,
-        ).map_err(|err| match module_id.as_ref() {
-            Some(module_id) if matches!(self.data_cache.exists_module(module_id), Ok(true)) => {
-                expect_no_verification_errors_unless_bogus_storage(err)
-            }
-            _ => err,
-        })?;
+        self.move_vm
+            .runtime
+            .execute_function_instantiation(
+                func,
+                args,
+                &mut self.data_cache,
+                &self.module_store,
+                gas_meter,
+                traversal_context,
+                &mut self.native_extensions,
+            )
+            .map_err(|err| match module_id.as_ref() {
+                Some(module_id) if matches!(self.data_cache.exists_module(module_id), Ok(true)) => {
+                    expect_no_verification_errors_unless_bogus_storage(err)
+                }
+                _ => err,
+            })?;
         Ok(())
     }
 
@@ -108,7 +111,7 @@ impl<'r, 'l> Session<'r, 'l> {
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
     ) -> VMResult<SerializedReturnValues> {
-        let func = self.move_vm.runtime.loader().load_function_v2(
+        let func = self.move_vm.runtime.load_function(
             module,
             function_name,
             &ty_args,
@@ -118,18 +121,21 @@ impl<'r, 'l> Session<'r, 'l> {
             traversal_context,
         )?;
 
-        self.move_vm.runtime.execute_function_instantiation(
-            func,
-            args,
-            &mut self.data_cache,
-            &self.module_store,
-            gas_meter,
-            traversal_context,
-            &mut self.native_extensions,
-        ).map_err(|err| match self.data_cache.exists_module(module) {
-            Ok(true) => expect_no_verification_errors_unless_bogus_storage(err),
-            _ => err,
-        })
+        self.move_vm
+            .runtime
+            .execute_function_instantiation(
+                func,
+                args,
+                &mut self.data_cache,
+                &self.module_store,
+                gas_meter,
+                traversal_context,
+                &mut self.native_extensions,
+            )
+            .map_err(|err| match self.data_cache.exists_module(module) {
+                Ok(true) => expect_no_verification_errors_unless_bogus_storage(err),
+                _ => err,
+            })
     }
 
     pub fn execute_loaded_function(
@@ -305,15 +311,13 @@ impl<'r, 'l> Session<'r, 'l> {
         let mut gas_meter = UnmeteredGasMeter;
         let traversal_storage = crate::module_traversal::TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);
-        self.move_vm
-            .runtime
-            .deserialize_args(
-                &self.data_cache,
-                param_tys,
-                serialized_args,
-                &mut gas_meter,
-                &mut traversal_context,
-            )
+        self.move_vm.runtime.deserialize_args(
+            &self.data_cache,
+            param_tys,
+            serialized_args,
+            &mut gas_meter,
+            &mut traversal_context,
+        )
     }
 
     pub fn num_mutated_accounts(&self, sender: &AccountAddress) -> u64 {
@@ -397,7 +401,7 @@ impl<'r, 'l> Session<'r, 'l> {
         script: impl Borrow<[u8]>,
         ty_args: &[TypeTag],
     ) -> VMResult<LoadedFunction> {
-        self.move_vm.runtime.loader().load_script_v2_unmetered(
+        self.move_vm.runtime.load_script_unmetered(
             script.borrow(),
             ty_args,
             &mut self.data_cache,
@@ -414,7 +418,6 @@ impl<'r, 'l> Session<'r, 'l> {
     ) -> VMResult<LoadedFunction> {
         self.move_vm
             .runtime
-            .loader()
             .load_function_with_type_arg_inference(
                 module_id,
                 function_name,
@@ -431,7 +434,7 @@ impl<'r, 'l> Session<'r, 'l> {
         function_name: &IdentStr,
         ty_args: &[TypeTag],
     ) -> VMResult<LoadedFunction> {
-        self.move_vm.runtime.loader().load_function_v2_unmetered(
+        self.move_vm.runtime.load_function_unmetered(
             module_id,
             function_name,
             ty_args,
@@ -441,18 +444,13 @@ impl<'r, 'l> Session<'r, 'l> {
     }
 
     pub fn load_type(&mut self, type_tag: &TypeTag) -> VMResult<Type> {
-        self.move_vm
-            .runtime
-            .loader()
-            .load_type(type_tag, &mut self.data_cache, &self.module_store)
+        self.move_vm.runtime.load_type(type_tag, &mut self.data_cache)
     }
 
     pub fn get_type_layout(&mut self, type_tag: &TypeTag) -> VMResult<MoveTypeLayout> {
-        self.move_vm.runtime.loader().get_type_layout(
-            type_tag,
-            &mut self.data_cache,
-            &self.module_store,
-        )
+        self.move_vm
+            .runtime
+            .get_type_layout(type_tag, &mut self.data_cache)
     }
 
     pub fn get_fully_annotated_type_layout(
@@ -461,8 +459,7 @@ impl<'r, 'l> Session<'r, 'l> {
     ) -> VMResult<MoveTypeLayout> {
         self.move_vm
             .runtime
-            .loader()
-            .get_fully_annotated_type_layout(type_tag, &mut self.data_cache, &self.module_store)
+            .get_fully_annotated_type_layout(type_tag, &mut self.data_cache)
     }
 
     pub fn get_type_tag(&self, ty: &Type) -> VMResult<TypeTag> {
@@ -486,19 +483,19 @@ impl<'r, 'l> Session<'r, 'l> {
     }
 
     pub fn get_vm_config(&self) -> &'l VMConfig {
-        self.move_vm.runtime.loader().vm_config()
+        self.move_vm.runtime.vm_config()
     }
 
     pub fn get_ty_builder(&self) -> &'l TypeBuilder {
-        self.move_vm.runtime.loader().ty_builder()
+        &self.move_vm.runtime.vm_config().ty_builder
     }
 
     pub fn get_struct_type(&self, index: StructNameIndex) -> Option<Arc<StructType>> {
         let name = self
             .move_vm
             .runtime
-            .loader()
-            .name_cache
+            .runtime_environment()
+            .struct_name_index_map()
             .idx_to_struct_name_ref(index)
             .ok()?;
         self.module_store
@@ -518,13 +515,10 @@ impl<'r, 'l> Session<'r, 'l> {
     {
         self.move_vm
             .runtime
-            .loader()
             .check_dependencies_and_charge_gas(
-                &self.module_store,
-                &mut self.data_cache,
+                &self.data_cache,
                 gas_meter,
-                &mut traversal_context.visited,
-                traversal_context.referenced_modules,
+                traversal_context,
                 ids,
             )
     }
@@ -540,12 +534,10 @@ impl<'r, 'l> Session<'r, 'l> {
     {
         self.move_vm
             .runtime
-            .loader()
             .check_dependencies_and_charge_gas_non_recursive_optional(
-                &self.module_store,
-                &mut self.data_cache,
+                &self.data_cache,
                 gas_meter,
-                &mut traversal_context.visited,
+                traversal_context,
                 ids,
             )
     }
@@ -558,13 +550,11 @@ impl<'r, 'l> Session<'r, 'l> {
     ) -> VMResult<()> {
         self.move_vm
             .runtime
-            .loader()
-            .check_script_dependencies_and_check_gas(
-                &self.module_store,
+            .check_script_dependencies_and_charge_gas(
+                script.borrow(),
                 &mut self.data_cache,
                 gas_meter,
                 traversal_context,
-                script.borrow(),
             )
     }
 }

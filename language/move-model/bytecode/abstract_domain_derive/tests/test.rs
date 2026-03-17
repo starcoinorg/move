@@ -23,11 +23,11 @@ impl<T: Eq + Clone> AbstractDomain for Plus2<T> {
             (Plus2::Mid(_), _mid_or_top) => {
                 *self = Plus2::Top;
                 JoinResult::Changed
-            },
+            }
             (Plus2::Bot, _mid_or_top) => {
                 *self = other.clone();
                 JoinResult::Changed
-            },
+            }
         }
     }
 }

@@ -113,11 +113,7 @@ impl TypeTagCache {
         }
     }
 
-    fn get_struct_tag(
-        &self,
-        idx: &StructNameIndex,
-        ty_args: &[Type],
-    ) -> Option<PricedStructTag> {
+    fn get_struct_tag(&self, idx: &StructNameIndex, ty_args: &[Type]) -> Option<PricedStructTag> {
         self.cache
             .read()
             .get(&StructKeyRef { idx, ty_args })
@@ -131,11 +127,12 @@ impl TypeTagCache {
         priced_struct_tag: PricedStructTag,
     ) {
         let mut cache = self.cache.write();
-        cache.entry(StructKey {
-            idx: *idx,
-            ty_args: ty_args.to_vec(),
-        })
-        .or_insert(priced_struct_tag);
+        cache
+            .entry(StructKey {
+                idx: *idx,
+                ty_args: ty_args.to_vec(),
+            })
+            .or_insert(priced_struct_tag);
     }
 }
 
@@ -194,7 +191,7 @@ impl<'a> TypeTagConverter<'a> {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(format!("No type tag for {:?}", ty)),
                 );
-            },
+            }
         })
     }
 

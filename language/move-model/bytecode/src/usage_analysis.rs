@@ -204,21 +204,21 @@ impl<'a> TransferFunctions for MemoryUsageAnalysis<'a> {
                     {
                         state.subsume_callee(summary, inst);
                     }
-                },
+                }
                 MoveTo(mid, sid, inst)
                 | MoveFrom(mid, sid, inst)
                 | BorrowGlobal(mid, sid, inst) => {
                     let mem = mid.qualified_inst(*sid, inst.to_owned());
                     state.add_direct_modified(mem);
-                },
+                }
                 WriteBack(BorrowNode::GlobalRoot(mem), _) => {
                     state.add_direct_modified(mem.clone());
-                },
+                }
                 Exists(mid, sid, inst) | GetGlobal(mid, sid, inst) => {
                     let mem = mid.qualified_inst(*sid, inst.to_owned());
                     state.add_direct_accessed(mem);
-                },
-                _ => {},
+                }
+                _ => {}
             },
             // memory accesses in expressions
             Prop(_, kind, exp) => match kind {
@@ -234,9 +234,9 @@ impl<'a> TransferFunctions for MemoryUsageAnalysis<'a> {
                 ),
                 Modifies => {
                     // do nothing, as the `modifies` memories are captured by other sets
-                },
+                }
             },
-            _ => {},
+            _ => {}
         }
     }
 }
@@ -255,10 +255,10 @@ impl<'a> MemoryUsageAnalysis<'a> {
             match &cond.kind {
                 Ensures | AbortsIf | Emits => {
                     state.add_direct_asserted_iter(used_memory.into_iter().map(|(usage, _)| usage));
-                },
+                }
                 _ => {
                     state.add_direct_assumed_iter(used_memory.into_iter().map(|(usage, _)| usage));
-                },
+                }
             }
             if matches!(cond.kind, Update) {
                 // Add target of spec update to modified memory

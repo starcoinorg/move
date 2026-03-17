@@ -5,8 +5,8 @@
 use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
-    module_traversal::{TraversalContext, TraversalStorage},
     loader::{ModuleStorage, ModuleStorageAdapter},
+    module_traversal::{TraversalContext, TraversalStorage},
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunction,
     runtime::VMRuntime,
@@ -80,11 +80,7 @@ impl MoveVM {
         Session {
             move_vm: self,
             data_cache: TransactionDataCache::new(
-                self.runtime
-                    .loader()
-                    .vm_config()
-                    .deserializer_config
-                    .clone(),
+                self.runtime.vm_config().deserializer_config.clone(),
                 remote,
             ),
             module_store: ModuleStorageAdapter::new(self.runtime.module_storage()),
@@ -102,11 +98,7 @@ impl MoveVM {
         Session {
             move_vm: self,
             data_cache: TransactionDataCache::new(
-                self.runtime
-                    .loader()
-                    .vm_config()
-                    .deserializer_config
-                    .clone(),
+                self.runtime.vm_config().deserializer_config.clone(),
                 remote,
             ),
             module_store: ModuleStorageAdapter::new(module_storage),
@@ -120,19 +112,13 @@ impl MoveVM {
         module_id: &ModuleId,
         remote: &impl MoveResolver<PartialVMError>,
     ) -> VMResult<Arc<CompiledModule>> {
-        let mut data_cache = TransactionDataCache::new(
-            self.runtime
-                .loader()
-                .vm_config()
-                .deserializer_config
-                .clone(),
-            remote,
-        );
+        let mut data_cache =
+            TransactionDataCache::new(self.runtime.vm_config().deserializer_config.clone(), remote);
         let module_store = ModuleStorageAdapter::new(self.runtime.module_storage());
         let mut gas_meter = UnmeteredGasMeter;
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);
-        self.runtime.loader().load_module_v2(
+        self.runtime.load_module(
             module_id,
             &mut data_cache,
             &module_store,

@@ -2,18 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    loader::Module, logging::expect_no_verification_errors,
-    LayoutCache, WithRuntimeEnvironment,
+    loader::Module, logging::expect_no_verification_errors, LayoutCache, WithRuntimeEnvironment,
 };
 use ambassador::delegatable_trait;
 use bytes::Bytes;
 use hashbrown::HashSet;
 #[cfg(fuzzing)]
 use move_binary_format::errors::Location;
-use move_binary_format::{
-    errors::VMResult,
-    CompiledModule,
-};
+use move_binary_format::{errors::VMResult, CompiledModule};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
@@ -185,7 +181,11 @@ where
         let mut visited = HashSet::new();
         visited.insert(id.clone());
         Ok(Some(visit_dependencies_and_verify(
-            id, module, version, &mut visited, self,
+            id,
+            module,
+            version,
+            &mut visited,
+            self,
         )?))
     }
 
@@ -206,7 +206,11 @@ where
         let mut visited = HashSet::new();
         visited.insert(id.clone());
         Ok(Some(visit_dependencies_and_skip_verification(
-            id, module, version, &mut visited, self,
+            id,
+            module,
+            version,
+            &mut visited,
+            self,
         )?))
     }
 

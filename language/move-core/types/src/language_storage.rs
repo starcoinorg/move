@@ -278,13 +278,7 @@ impl ModuleId {
 
 impl Display for StructTag {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}::{}::{}",
-            &self.address,
-            self.module,
-            self.name
-        )?;
+        write!(f, "{}::{}::{}", &self.address, self.module, self.name)?;
         if let Some(first_ty) = self.type_args.first() {
             write!(f, "<")?;
             write!(f, "{}", first_ty)?;

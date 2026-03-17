@@ -31,14 +31,14 @@ fn find_identifiers_in_value_impl(
         | ValueImpl::U128(_)
         | ValueImpl::U256(_)
         | ValueImpl::Bool(_)
-        | ValueImpl::Address(_) => {},
+        | ValueImpl::Address(_) => {}
 
         ValueImpl::Container(c) => match c {
             Container::Locals(_) => {
                 return Err(PartialVMError::new(
                     StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 ))
-            },
+            }
 
             Container::VecU8(_)
             | Container::VecU64(_)
@@ -47,20 +47,20 @@ fn find_identifiers_in_value_impl(
             | Container::VecAddress(_)
             | Container::VecU16(_)
             | Container::VecU32(_)
-            | Container::VecU256(_) => {},
+            | Container::VecU256(_) => {}
 
             Container::Vec(v) | Container::Struct(v) => {
                 for val in v.borrow().iter() {
                     find_identifiers_in_value_impl(val, identifiers)?;
                 }
-            },
+            }
         },
 
         ValueImpl::Invalid | ValueImpl::ContainerRef(_) | ValueImpl::IndexedRef(_) => {
             return Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
             ))
-        },
+        }
 
         ValueImpl::DelayedFieldID { id } => {
             if !identifiers.insert(id.as_u64()) {
@@ -68,7 +68,7 @@ fn find_identifiers_in_value_impl(
                     "Duplicated identifiers for Move value".to_string(),
                 ));
             }
-        },
+        }
     }
     Ok(())
 }

@@ -95,13 +95,13 @@ impl<'a> RecursiveStructChecker<'a> {
                     }) {
                         self.report_invalid_field(&struct_env, &field_env);
                     }
-                },
+                }
                 Type::Vector(ty) => {
                     if self.ty_contains_struct(path, &ty, loc.clone(), struct_id, checked) {
                         self.report_invalid_field(&struct_env, &field_env);
                     }
-                },
-                Type::Primitive(_) | Type::TypeParameter(_) => {},
+                }
+                Type::Primitive(_) | Type::TypeParameter(_) => {}
                 _ => unreachable!("invalid field type"),
             }
             path.pop();
@@ -117,12 +117,11 @@ impl<'a> RecursiveStructChecker<'a> {
             struct_name,
             struct_name,
         );
-        self.mod_env
-            .env
-            .error_with_labels(&struct_env.get_loc(), "cyclic data", vec![(
-                field_env.get_loc().clone(),
-                note,
-            )]);
+        self.mod_env.env.error_with_labels(
+            &struct_env.get_loc(),
+            "cyclic data",
+            vec![(field_env.get_loc().clone(), note)],
+        );
     }
 
     /// Report cyclic dependency of structs
@@ -194,7 +193,7 @@ impl<'a> RecursiveStructChecker<'a> {
                 insts
                     .iter()
                     .any(|ty| self.ty_contains_struct(path, ty, loc.clone(), struct_id, checked))
-            },
+            }
             Type::Primitive(_) | Type::TypeParameter(_) => false,
             _ => panic!("ICE: {:?} used as a type parameter", ty),
         }

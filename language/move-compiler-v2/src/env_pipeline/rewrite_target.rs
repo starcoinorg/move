@@ -146,12 +146,12 @@ impl RewriteTargets {
             use RewriteState::*;
             use RewriteTarget::*;
             match (target, state) {
-                (_, Unchanged) => {},
+                (_, Unchanged) => {}
                 (MoveFun(fnid), Def(def)) => env.set_function_def(fnid, def),
                 (SpecFun(fnid), Def(def)) => env.get_spec_fun_mut(fnid).body = Some(def),
                 (SpecBlock(sb_target), Spec(spec)) => {
                     *env.get_spec_block_mut(&sb_target) = spec;
-                },
+                }
                 _ => panic!("unexpected rewrite target and result combination"),
             }
         }
@@ -180,7 +180,7 @@ impl RewriteTarget {
             SpecBlock(target) => {
                 let spec = env.get_spec_block(target);
                 spec.called_funs_with_callsites()
-            },
+            }
         }
     }
 

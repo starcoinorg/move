@@ -166,7 +166,7 @@ impl ResolvingGraph {
                                     addr_name, name
                                 ));
                                 None
-                            },
+                            }
                             Some(addr) => Some((addr_name, addr)),
                         }
                     })
@@ -223,7 +223,7 @@ impl ResolvingGraph {
                     other.source_package.package.name,
                     package.package.name,
                 )
-            },
+            }
         };
 
         let mut renaming = BTreeMap::new();
@@ -332,10 +332,10 @@ impl ResolvingGraph {
                             name, package_name
                         )
                     })?;
-                },
+                }
                 None => {
                     resolution_table.insert(name, ResolvingNamedAddress::new(addr_opt));
-                },
+                }
             }
         }
 
@@ -366,7 +366,7 @@ impl ResolvingGraph {
                                 name, package_name
                             )
                         })?;
-                    },
+                    }
                     None => {
                         bail!(
                             "Found unbound dev address assignment '{} = 0x{}' in root package '{}'. \
@@ -375,7 +375,7 @@ impl ResolvingGraph {
                             addr.short_str_lossless(),
                             package_name
                         );
-                    },
+                    }
                 }
 
                 if let Some(conflicts) = addr_to_name_mapping.insert(addr, vec![name]) {
@@ -451,7 +451,7 @@ impl ResolvingGraph {
                         resolved_pkg.source_digest
                     )
                 }
-            },
+            }
         }
 
         let resolving_dep = &self.package_table[&dep_name_in_pkg];
@@ -484,7 +484,7 @@ impl ResolvingGraph {
                                 dep_name_in_pkg,
                             );
                         }
-                    },
+                    }
                     SubstOrRename::Assign(value) => {
                         resolution_table
                             .get(&name)
@@ -496,7 +496,7 @@ impl ResolvingGraph {
                                     name, dep_name_in_pkg
                                 )
                             })?;
-                    },
+                    }
                 }
             }
         }
@@ -534,7 +534,7 @@ impl ResolvingGraph {
                 let source_package: SourceManifest =
                     parse_move_manifest_string(contents).and_then(parse_source_manifest)?;
                 Ok((source_package, root_path))
-            },
+            }
             Err(_) => Err(anyhow::format_err!(
                 "Unable to find package manifest for '{}' at {:?}",
                 dep_name,
@@ -981,6 +981,6 @@ fn confirm_git_available() -> Result<()> {
                     e
                 );
             }
-        },
+        }
     }
 }

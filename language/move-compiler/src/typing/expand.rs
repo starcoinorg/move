@@ -94,7 +94,7 @@ fn unfold_type_or_last_var(subst: &Subst, sp!(loc, t_): Type) -> Result<Type, Sp
                 Some(inner) => Ok(inner.clone()),
                 None => Err(sp(loc, last_tvar)),
             }
-        },
+        }
         _ => Ok(sp(loc, t_)),
     }
 }
@@ -117,13 +117,13 @@ fn type_with_context_msg(context: &mut Context, ty: &mut Type, msg_uninferred: &
                         .env
                         .add_diag(diag!(TypeSafety::UninferredType, (loc, msg_uninferred)));
                     sp(loc, UnresolvedError)
-                },
+                }
                 Ok(sp!(_, Var(_))) => panic!("ICE unfold_type_base failed to expand"),
                 Ok(t) => t,
             };
             *ty = replacement;
             type_(context, ty);
-        },
+        }
         Apply(Some(_), sp!(_, TypeName_::Builtin(_)), tys) => types(context, tys),
         Apply(Some(_), _, _) => panic!("ICE expanding pre expanded type"),
         Apply(None, ty_name, _) => {
@@ -135,10 +135,10 @@ fn type_with_context_msg(context: &mut Context, ty: &mut Type, msg_uninferred: &
                     for (i, ty) in tys.iter_mut().enumerate() {
                         type_struct_ty_param(context, ty, i, &ty_name.value)
                     }
-                },
+                }
                 _ => panic!("ICE impossible. tapply switched to nontapply"),
             }
-        },
+        }
     }
 }
 
@@ -171,7 +171,7 @@ fn sequence_item(context: &mut Context, item: &mut T::SequenceItem) {
             lvalues(context, tbind);
             expected_types(context, tys);
             exp(context, te)
-        },
+        }
     }
 }
 
@@ -186,10 +186,10 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
                 mut t => {
                     // report errors if there is an uninferred type argument somewhere
                     type_(context, &mut t);
-                },
+                }
             }
             e.ty = sp(e.ty.loc, Type_::Anything)
-        },
+        }
         // Loop's default type is ()
         E::Loop {
             has_break: false, ..
@@ -200,10 +200,10 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
                 mut t => {
                     // report errors if there is an uninferred type argument somewhere
                     type_(context, &mut t);
-                },
+                }
             }
             e.ty = sp(e.ty.loc, Type_::Anything)
-        },
+        }
         _ => type_(context, &mut e.ty),
     }
     match &mut e.exp.value {
@@ -216,7 +216,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             } else {
                 E::Move { from_user, var }
             }
-        },
+        }
         E::Value(sp!(vloc, Value_::InferredNum(v))) => {
             use BuiltinTypeName_ as BT;
             let bt = match e.ty.value.builtin_name() {
@@ -282,7 +282,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
                 E::Value(sp(*vloc, value_))
             };
             e.exp.value = new_exp;
-        },
+        }
 
         E::Spec(anchor) => {
             anchor
@@ -292,7 +292,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             if !anchor.used_lambda_funs.is_empty() {
                 panic!("ICE spec anchor should not have lambda bindings in typing stage")
             }
-        },
+        }
 
         E::Unit { .. }
         | E::Value(_)
@@ -309,32 +309,32 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Builtin(b, args) => {
             builtin_function(context, b);
             exp(context, args);
-        },
+        }
         E::Vector(_vec_loc, _n, ty_arg, args) => {
             type_(context, ty_arg);
             exp(context, args);
-        },
+        }
 
         E::IfElse(eb, et, ef) => {
             exp(context, eb);
             exp(context, et);
             exp(context, ef);
-        },
+        }
         E::While(eb, eloop) => {
             exp(context, eb);
             exp(context, eloop);
-        },
+        }
         E::Loop { body: eloop, .. } => exp(context, eloop),
         E::Block(seq) => sequence(context, seq),
         E::Lambda(args, body) => {
             lvalues(context, args);
             exp(context, body);
-        },
+        }
         E::Assign(assigns, tys, er) => {
             lvalues(context, assigns);
             expected_types(context, tys);
             exp(context, er);
-        },
+        }
 
         E::Return(er)
         | E::Abort(er)
@@ -345,12 +345,12 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Mutate(el, er) => {
             exp(context, el);
             exp(context, er)
-        },
+        }
         E::BinopExp(el, _, operand_ty, er) => {
             exp(context, el);
             exp(context, er);
             type_(context, operand_ty);
-        },
+        }
 
         E::Pack(mod_id, struct_name, bs, fields) => {
             for (i, b) in bs.iter_mut().enumerate() {
@@ -364,12 +364,12 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
                 );
                 exp(context, fe)
             }
-        },
+        }
         E::ExpList(el) => exp_list(context, el),
         E::Cast(el, rhs_ty) | E::Annotate(el, rhs_ty) => {
             exp(context, el);
             type_(context, rhs_ty);
-        },
+        }
     }
 }
 
@@ -386,7 +386,7 @@ fn lvalue(context: &mut Context, b: &mut T::LValue) {
         L::Var(_, ty) => {
             type_(context, ty);
             core::check_non_fun(context, ty.as_ref())
-        },
+        }
         L::BorrowUnpack(_, mod_id, struct_name, bts, fields)
         | L::Unpack(mod_id, struct_name, bts, fields) => {
             for (i, b) in bts.iter_mut().enumerate() {
@@ -396,7 +396,7 @@ fn lvalue(context: &mut Context, b: &mut T::LValue) {
                 type_(context, bt);
                 lvalue(context, innerb)
             }
-        },
+        }
     }
 }
 
@@ -422,7 +422,7 @@ fn builtin_function(context: &mut Context, b: &mut T::BuiltinFunction) {
                 bt,
                 &format!("Cannot infer a type parameter for built-in function `{f_name}`"),
             );
-        },
+        }
         B::Assert(_) => (),
     }
 }
@@ -439,10 +439,10 @@ fn exp_list_item(context: &mut Context, item: &mut T::ExpListItem) {
         I::Single(e, st) => {
             exp(context, e);
             type_(context, st);
-        },
+        }
         I::Splat(_, e, ss) => {
             exp(context, e);
             types(context, ss);
-        },
+        }
     }
 }

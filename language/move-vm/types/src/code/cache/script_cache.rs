@@ -89,7 +89,7 @@ where
                 } else {
                     entry.get().verified().clone()
                 }
-            },
+            }
             Vacant(entry) => entry
                 .insert(Code::from_verified(verified_script))
                 .verified()
@@ -166,7 +166,7 @@ where
                 } else {
                     entry.get().verified().clone()
                 }
-            },
+            }
             Vacant(entry) => entry
                 .insert(CachePadded::new(Code::from_verified(verified_script)))
                 .verified()

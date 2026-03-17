@@ -258,7 +258,7 @@ impl<'env> Docgen<'env> {
                             &format!("cannot read root template `{}`", file_name),
                         );
                         None
-                    },
+                    }
                 }
             })
             .collect_vec();
@@ -281,10 +281,10 @@ impl<'env> Docgen<'env> {
                     Some(out) => {
                         out.push_str("\n\n");
                         out.push_str(&self.writer.extract_result());
-                    },
+                    }
                     None => {
                         self.output.insert(path, self.writer.extract_result());
-                    },
+                    }
                 }
             }
         }
@@ -403,7 +403,7 @@ impl<'env> Docgen<'env> {
                     } else {
                         emitln!(self.writer, "> undefined move-include `{}`", name);
                     }
-                },
+                }
                 TemplateElement::IncludeToc => {
                     if toc_label.is_none() {
                         toc_label = Some(self.writer.create_label());
@@ -411,10 +411,10 @@ impl<'env> Docgen<'env> {
                         // CodeWriter can only maintain one label at a time.
                         emitln!(self.writer, ">> duplicate move-toc (technical restriction)");
                     }
-                },
+                }
                 TemplateElement::Index => {
                     self.gen_index();
-                },
+                }
             }
         }
         if let Some(label) = toc_label {
@@ -563,26 +563,26 @@ impl<'env> Docgen<'env> {
                     let value_string = self.gen_attributes(attribute_vector).iter().join(", ");
                     format!("{}({})", symbol_string, value_string)
                 }
-            },
+            }
             Attribute::Assign(_node_id, symbol, attribute_value) => {
                 let symbol_string = self.name_string(*symbol).to_string();
                 match attribute_value {
                     AttributeValue::Value(_node_id, value) => {
                         let value_string = self.env.display(value);
                         format!("{} = {}", symbol_string, value_string)
-                    },
+                    }
                     AttributeValue::Name(_node_id, module_name_option, symbol2) => {
                         let symbol2_name = self.name_string(*symbol2).to_string();
                         let module_prefix = match module_name_option {
                             None => "".to_string(),
                             Some(ref module_name) => {
                                 format!("{}::", module_name.display_full(self.env))
-                            },
+                            }
                         };
                         format!("{} = {}{}", symbol_string, module_prefix, symbol2_name)
-                    },
+                    }
                 }
-            },
+            }
         };
         annotation_body
     }
@@ -751,8 +751,8 @@ impl<'env> Docgen<'env> {
                         &spec_block_map,
                     );
                     self.decrement_section_nest();
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
@@ -860,10 +860,10 @@ impl<'env> Docgen<'env> {
         match links.len() {
             0 => {
                 self.doc_text_general(false, "");
-            },
+            }
             1 => {
                 self.doc_text_general(false, &format!("// This enforces {}:", links[0]));
-            },
+            }
             _ => {
                 let last_link = links.pop().unwrap();
                 let links_str = links.join(", ");
@@ -871,7 +871,7 @@ impl<'env> Docgen<'env> {
                     false,
                     &format!("// This enforces {} and {}:", links_str, last_link),
                 );
-            },
+            }
         }
     }
 
@@ -1047,7 +1047,7 @@ impl<'env> Docgen<'env> {
                     &format!("The Graphviz tool \"dot\" is not available. {}", e),
                 );
                 return;
-            },
+            }
         };
 
         if let Err(e) = child
@@ -1073,10 +1073,10 @@ impl<'env> Docgen<'env> {
                         ),
                     );
                 }
-            },
+            }
             Err(e) => {
                 self.env.error(&self.env.unknown_loc(), &format!("{}", e));
-            },
+            }
         }
     }
 
@@ -1507,7 +1507,7 @@ impl<'env> Docgen<'env> {
                     // we consider it as a marker to switch doc context back to module level,
                     // otherwise (the case in this branch), we merge it with the predecessor.
                     true
-                },
+                }
                 _ => false,
             };
             if !may_merge_with_current
@@ -2027,7 +2027,7 @@ impl<'env> Docgen<'env> {
                 } else {
                     None
                 }
-            },
+            }
             (None, 2) => {
                 // A qualified name, but without the address. This must be an item in a module
                 // denoted by the first name.
@@ -2041,7 +2041,7 @@ impl<'env> Docgen<'env> {
                 } else {
                     None
                 }
-            },
+            }
             (_, _) => None,
         }
     }

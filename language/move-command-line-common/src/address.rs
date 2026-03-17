@@ -32,7 +32,7 @@ impl ParsedAddress {
         match self {
             Self::Named(n) => {
                 mapping(n.as_str()).ok_or_else(|| anyhow!("Unbound named address: '{}'", n))
-            },
+            }
             Self::Numerical(a) => Ok(a.into_inner()),
         }
     }
@@ -80,7 +80,7 @@ impl NumericalAddress {
                     The maximum size is {} bytes",
                     AccountAddress::LENGTH,
                 ))
-            },
+            }
         }
     }
 }
@@ -97,7 +97,7 @@ impl fmt::Display for NumericalAddress {
             NumberFormat::Decimal => {
                 let n = BigUint::from_bytes_be(self.bytes.as_ref());
                 write!(f, "{}", n)
-            },
+            }
             NumberFormat::Hex => write!(f, "{:#X}", self),
         }
     }

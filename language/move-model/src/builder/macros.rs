@@ -17,7 +17,7 @@ impl<'env> ModelBuilder<'env> {
             _ => {
                 self.error(&self.to_loc(&loc), &format!("unknown macro `{}`", name));
                 EA::Exp_::UnresolvedError
-            },
+            }
         };
         sp(loc, expansion_)
     }

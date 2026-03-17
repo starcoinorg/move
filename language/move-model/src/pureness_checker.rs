@@ -86,18 +86,18 @@ where
                 Assign(id, ..) if self.mode == FunctionPurenessCheckerMode::Specification => {
                     (self.impure_action)(*id, "assigns variable", &self.visiting);
                     self.is_impure = true
-                },
+                }
                 Mutate(id, ..) => {
                     (self.impure_action)(*id, "mutates reference", &self.visiting);
                     self.is_impure = true;
-                },
+                }
                 Return(id, ..) if self.mode == FunctionPurenessCheckerMode::Specification => {
                     (self.impure_action)(
                         *id,
                         "return not allowed in specifications",
                         &self.visiting,
                     );
-                },
+                }
                 Block(id, _, None, _)
                     if self.mode == FunctionPurenessCheckerMode::Specification =>
                 {
@@ -106,11 +106,11 @@ where
                         "uninitialized let not allowed in specifications",
                         &self.visiting,
                     );
-                },
+                }
                 Call(id, Borrow(ReferenceKind::Mutable), ..) => {
                     (self.impure_action)(*id, "mutably borrows value", &self.visiting);
                     self.is_impure = true;
-                },
+                }
                 Call(id, BorrowGlobal(ReferenceKind::Mutable), ..) => {
                     (self.impure_action)(
                         *id,
@@ -118,7 +118,7 @@ where
                         &self.visiting,
                     );
                     self.is_impure = true;
-                },
+                }
                 Call(id, MoveFunction(mid, sid), ..) => {
                     let qid = mid.qualified(*sid);
                     // false positive: can't use entry because of borrow conflict
@@ -139,8 +139,8 @@ where
                         );
                         self.is_impure = true
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
             // Stop traversal if we have shown the expression is impure
             !self.is_impure

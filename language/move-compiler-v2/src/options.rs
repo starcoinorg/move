@@ -144,7 +144,7 @@ impl Options {
                     DefaultValue::Given(on) => *on,
                     DefaultValue::Inherited(other_name) => {
                         self.experiment_on_recursive(other_name, visited)
-                    },
+                    }
                 }
             };
             self.experiment_cache

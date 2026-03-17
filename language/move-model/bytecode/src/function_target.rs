@@ -389,18 +389,18 @@ impl<'env> FunctionTarget<'env> {
             match bc {
                 Bytecode::Call(_, _, Operation::BorrowLoc, args, _) => {
                     result.insert(args[0]);
-                },
+                }
                 Bytecode::Call(_, _, Operation::Drop, args, _) if include_drop => {
                     result.insert(args[0]);
-                },
+                }
                 Bytecode::SpecBlock(_, spec) => {
                     // All Temporaries used in specs need to be pinned.
                     result.append(&mut spec.used_temporaries());
-                },
+                }
                 Bytecode::Prop(_, _, exp) => {
                     result.append(&mut exp.used_temporaries());
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
         result

@@ -119,7 +119,7 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
         (Some(mut left), Some(right)) => {
             left.push_str(&right);
             Some(left)
-        },
+        }
     }
 }
 
@@ -301,7 +301,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                             named_addr_opt.map(|n| n.value),
                             annot_module.named_module.module,
                         )
-                    },
+                    }
                     AnnotatedCompiledUnit::Script(_) => panic!(
                         "Expected a module text block, not a script, following 'publish' \
                          starting on lines {}-{}",
@@ -309,11 +309,11 @@ pub trait MoveTestAdapter<'a>: Sized {
                     ),
                 };
                 (named_addr_opt, module, opt_model, warnings_opt)
-            },
+            }
             SyntaxChoice::IR => {
                 let module = compile_ir_module(state.dep_modules(), data_path)?;
                 (None, module, None, None)
-            },
+            }
         };
         self.register_temp_filename(&data);
         Ok((data, named_addr_opt, module, opt_model, warnings_opt))
@@ -382,11 +382,11 @@ pub trait MoveTestAdapter<'a>: Sized {
                         start_line, command_lines_stop
                     ),
                 }
-            },
+            }
             SyntaxChoice::IR => {
                 let script = compile_ir_script(state.dep_modules(), data_path)?;
                 (script, None, None)
-            },
+            }
         };
         Ok((script, opt_model, warning_opt))
     }
@@ -418,7 +418,7 @@ pub trait MoveTestAdapter<'a>: Sized {
         match command {
             TaskCommand::Init { .. } => {
                 panic!("The 'init' command is optional. But if used, it must be the first command")
-            },
+            }
             TaskCommand::PrintBytecode(PrintBytecodeCommand { input, syntax }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 let result = match input {
@@ -426,15 +426,15 @@ pub trait MoveTestAdapter<'a>: Sized {
                         let (script, _warning_opt) =
                             self.compile_script(syntax, data, start_line, command_lines_stop)?;
                         disassembler_for_view(BinaryIndexedView::Script(&script)).disassemble()?
-                    },
+                    }
                     PrintBytecodeInputChoice::Module => {
                         let (_data, _named_addr_opt, module, _warnings_opt) =
                             self.compile_module(syntax, data, start_line, command_lines_stop)?;
                         disassembler_for_view(BinaryIndexedView::Module(&module)).disassemble()?
-                    },
+                    }
                 };
                 Ok(Some(result))
-            },
+            }
             TaskCommand::Publish(
                 PublishCommand {
                     gas_budget,
@@ -475,10 +475,10 @@ pub trait MoveTestAdapter<'a>: Sized {
                     SyntaxChoice::IR => {
                         self.compiled_state()
                             .add_and_generate_interface_file(module);
-                    },
+                    }
                 };
                 Ok(merge_output(warnings_opt, output))
-            },
+            }
             TaskCommand::Run(
                 RunCommand {
                     signers,
@@ -505,13 +505,13 @@ pub trait MoveTestAdapter<'a>: Sized {
                 };
                 let args = self.compiled_state().resolve_args(args)?;
                 let type_args = self.compiled_state().resolve_type_args(type_args)?;
-                let mut output=
+                let mut output =
                     self.execute_script(script, type_args, signers, args, gas_budget, extra_args)?;
                 if print_bytecode {
                     output = merge_output(output, printed);
                 }
                 Ok(merge_output(warning_opt, output))
-            },
+            }
             TaskCommand::Run(
                 RunCommand {
                     signers,
@@ -543,7 +543,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 )?;
                 let rendered_return_value = display_return_values(return_values);
                 Ok(merge_output(output, rendered_return_value))
-            },
+            }
             TaskCommand::View(ViewCommand { address, resource }) => {
                 let state: &CompiledState<'a> = self.compiled_state();
                 let StructTag {
@@ -556,14 +556,10 @@ pub trait MoveTestAdapter<'a>: Sized {
                     .unwrap();
                 let module_id = ModuleId::new(module_addr, module);
                 let address = self.compiled_state().resolve_address(&address);
-                let output = self.view_data(
-                    address,
-                    &module_id,
-                    name.as_ident_str(),
-                    type_arguments,
-                )?;
+                let output =
+                    self.view_data(address, &module_id, name.as_ident_str(), type_arguments)?;
                 Ok(Some(output))
-            },
+            }
             TaskCommand::Subcommand(c) => self.handle_subcommand(TaskInput {
                 command: c,
                 name,
@@ -918,7 +914,7 @@ fn compile_source_unit(
             }
 
             Err(anyhow!(rendered_diags(&files, diags).unwrap()))
-        },
+        }
         Ok((mut units, warnings)) => {
             let warnings = rendered_diags(&files, warnings);
             let len = units.len();
@@ -958,7 +954,7 @@ fn compile_source_unit(
                 None
             };
             Ok((unit, opt_model, warnings))
-        },
+        }
     }
 }
 
@@ -1011,10 +1007,13 @@ where
     } = config.clone()
     {
         (
-            vec![TestRunConfig::CompilerV1, TestRunConfig::CompilerV2 {
-                language_version,
-                v2_experiments,
-            }],
+            vec![
+                TestRunConfig::CompilerV1,
+                TestRunConfig::CompilerV2 {
+                    language_version,
+                    v2_experiments,
+                },
+            ],
             true,
         )
     } else {
@@ -1053,7 +1052,7 @@ where
             _ => {
                 tasks.push_front(first_task);
                 None
-            },
+            }
         };
         let (mut adapter, result_opt) = Adapter::init(
             default_syntax,

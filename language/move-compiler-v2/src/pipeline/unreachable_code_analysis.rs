@@ -48,7 +48,7 @@ impl AbstractDomain for ReachableState {
             (No, Maybe) => {
                 *self = Maybe;
                 JoinResult::Changed
-            },
+            }
             (Maybe, _) | (No, No) => JoinResult::Unchanged,
         }
     }

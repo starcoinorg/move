@@ -55,7 +55,7 @@ pub fn expect_no_verification_errors_unless_bogus_storage(err: VMError) -> VMErr
                 .at_indices(indices)
                 .at_code_offsets(offsets)
                 .finish(location)
-        },
+        }
         _ => err,
     }
 }

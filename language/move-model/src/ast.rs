@@ -216,22 +216,22 @@ impl std::fmt::Display for ConditionKind {
             GlobalInvariant(ty_params) => {
                 write!(f, "invariant")?;
                 display_ty_params(f, ty_params)
-            },
+            }
             GlobalInvariantUpdate(ty_params) => {
                 write!(f, "invariant")?;
                 display_ty_params(f, ty_params)?;
                 write!(f, " update")
-            },
+            }
             SchemaInvariant => {
                 write!(f, "invariant")
-            },
+            }
             Axiom(ty_params) => {
                 write!(f, "axiom")?;
                 display_ty_params(f, ty_params)
-            },
+            }
             Update => {
                 write!(f, "update")
-            },
+            }
         }
     }
 }
@@ -534,7 +534,7 @@ impl ResourceSpecifier {
                     // If the specified instance has no parameters, every type instance is
                     // allowed, otherwise only the given one.
                     && (spec_struct_id.inst.is_empty() || spec_struct_id.inst == struct_id.inst)
-            },
+            }
         }
     }
 }
@@ -843,17 +843,17 @@ impl ExpData {
                     // Add declared variables to shadow; in the Block case,
                     // do it only after processing bindings.
                     for_syms_in_pat_shadow_or_unshadow(pat, true, &mut shadow_map);
-                },
+                }
                 (Lambda(_, pat, _), Post) | (Block(_, pat, _, _), Post) => {
                     // Remove declared variables from shadow
                     for_syms_in_pat_shadow_or_unshadow(pat, false, &mut shadow_map);
-                },
+                }
                 (Quant(_, _, ranges, ..), Pre) => {
                     for_syms_in_ranges_shadow_or_unshadow(ranges, true, &mut shadow_map);
-                },
+                }
                 (Quant(_, _, ranges, ..), Post) => {
                     for_syms_in_ranges_shadow_or_unshadow(ranges, false, &mut shadow_map);
-                },
+                }
                 (Assign(_, pat, _), Pre) => {
                     // Visit the Assigned pat vars on the way down, before visiting the RHS expression
                     for (id, sym) in pat.vars().iter() {
@@ -861,13 +861,13 @@ impl ExpData {
                             node_symbol_visitor(*id, *sym);
                         }
                     }
-                },
+                }
                 (LocalVar(id, sym), Pre) => {
                     if is_sym_free(sym, &shadow_map) {
                         node_symbol_visitor(*id, *sym);
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             };
             true // keep going
         };
@@ -911,7 +911,7 @@ impl ExpData {
                     let inst = &env.get_node_instantiation(*id);
                     let (mid, sid, sinst) = inst[0].require_struct();
                     result.insert((mid.qualified_inst(sid, sinst.to_owned()), label.to_owned()));
-                },
+                }
                 Call(id, SpecFunction(mid, fid, labels), _) => {
                     let inst = &env.get_node_instantiation(*id);
                     let module = env.get_module(*mid);
@@ -922,8 +922,8 @@ impl ExpData {
                             labels.as_ref().map(|l| l[i]),
                         ));
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
             true // keep going
         };
@@ -942,8 +942,8 @@ impl ExpData {
                     let inst = &env.get_node_instantiation(*id);
                     let (mid, sid, sinst) = inst[0].require_struct();
                     result.insert(mid.qualified_inst(sid, sinst.to_owned()));
-                },
-                _ => {},
+                }
+                _ => {}
             }
             true // keep going
         };
@@ -987,8 +987,8 @@ impl ExpData {
                 ExpData::Call(_, Operation::MoveFunction(mid, fid), _)
                 | ExpData::Call(_, Operation::Closure(mid, fid), _) => {
                     called.insert(mid.qualified(*fid));
-                },
-                _ => {},
+                }
+                _ => {}
             }
             true // keep going
         };
@@ -1005,8 +1005,8 @@ impl ExpData {
                 ExpData::Call(id, Operation::SpecFunction(mid, fid, _), _) => {
                     let inst = env.get_node_instantiation(*id);
                     called.insert(mid.qualified_inst(*fid, inst));
-                },
-                _ => {},
+                }
+                _ => {}
             }
             true // keep going
         };
@@ -1043,8 +1043,8 @@ impl ExpData {
                 ExpData::LoopCont(_, _) if loop_count == 0 => {
                     has_exit = true;
                     return false; // found an exit, exit visit early
-                },
-                _ => {},
+                }
+                _ => {}
             }
             true
         };
@@ -1061,7 +1061,7 @@ impl ExpData {
         let mut valid = true;
         let mut visitor = |e: &ExpData| {
             match e {
-                ExpData::Value(..) | ExpData::Invalid(_) | ExpData::Sequence(_, _) => {},
+                ExpData::Value(..) | ExpData::Invalid(_) | ExpData::Sequence(_, _) => {}
                 ExpData::Call(id, oper, _args) => {
                     // Note that _args are visited separately.  No need to check them here.
                     if !oper.is_builtin_op() {
@@ -1071,7 +1071,7 @@ impl ExpData {
                         ));
                         valid = false;
                     }
-                },
+                }
                 _ => {
                     let id = e.node_id();
                     reasons.push((
@@ -1079,7 +1079,7 @@ impl ExpData {
                         "Invalid statement or expression in constant".to_owned(),
                     ));
                     valid = false;
-                },
+                }
             }
             true // Always keep going, to add all problematic subexpressions to reasons.
         };
@@ -1223,13 +1223,13 @@ impl ExpData {
                 for exp in args {
                     exp.visit_positions_impl(visitor)?;
                 }
-            },
+            }
             Invoke(_, target, args) => {
                 target.visit_positions_impl(visitor)?;
                 for exp in args {
                     exp.visit_positions_impl(visitor)?;
                 }
-            },
+            }
             Lambda(_, _, body) => body.visit_positions_impl(visitor)?,
             Quant(_, _, ranges, triggers, condition, body) => {
                 for (_, range) in ranges {
@@ -1244,21 +1244,21 @@ impl ExpData {
                     exp.visit_positions_impl(visitor)?;
                 }
                 body.visit_positions_impl(visitor)?;
-            },
+            }
             Block(_, _, binding, body) => {
                 if let Some(exp) = binding {
                     exp.visit_positions_impl(visitor)?;
                 }
                 visitor(VisitorPosition::BeforeBody, self)?;
                 body.visit_positions_impl(visitor)?;
-            },
+            }
             IfElse(_, c, t, e) => {
                 c.visit_positions_impl(visitor)?;
                 visitor(VisitorPosition::BeforeThen, self)?;
                 t.visit_positions_impl(visitor)?;
                 visitor(VisitorPosition::BeforeElse, self)?;
                 e.visit_positions_impl(visitor)?;
-            },
+            }
             Loop(_, e) => e.visit_positions_impl(visitor)?,
             Return(_, e) => e.visit_positions_impl(visitor)?,
             Sequence(_, es) => {
@@ -1273,16 +1273,16 @@ impl ExpData {
                         e.visit_positions_impl(visitor)?;
                     }
                 }
-            },
+            }
             Assign(_, _, e) => e.visit_positions_impl(visitor)?,
             Mutate(_, lhs, rhs) => {
                 rhs.visit_positions_impl(visitor)?;
                 visitor(VisitorPosition::MidMutate, self)?;
                 lhs.visit_positions_impl(visitor)?;
-            },
+            }
             SpecBlock(_, spec) => Self::visit_positions_spec_impl(spec, visitor)?,
             // Explicitly list all enum variants
-            LoopCont(..) | Value(..) | LocalVar(..) | Temporary(..) | Invalid(..) => {},
+            LoopCont(..) | Value(..) | LocalVar(..) | Temporary(..) | Invalid(..) => {}
         }
         visitor(VisitorPosition::Post, self)
     }
@@ -1443,8 +1443,8 @@ impl ExpData {
                     | Select(mid, ..)
                     | UpdateField(mid, ..) => {
                         usage.insert(*mid);
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
             true // keep going
@@ -1485,8 +1485,8 @@ impl ExpData {
                 match oper {
                     Select(mid, sid, ..) | UpdateField(mid, sid, ..) | Pack(mid, sid) => {
                         usage.insert(mid.qualified(*sid));
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
             true // keep going.
@@ -1501,8 +1501,8 @@ impl ExpData {
                 match oper {
                     Select(mid, sid, fid) | UpdateField(mid, sid, fid) => {
                         usage.insert((mid.qualified(*sid), *fid));
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
             true // keep going.
@@ -1518,8 +1518,8 @@ impl ExpData {
                     Index | Slice | ConcatVec | EmptyVec | SingleVec | UpdateVec | IndexOfVec
                     | ContainsVec | InRangeVec | RangeVec => {
                         usage.insert(oper.clone());
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
             true // keep going.
@@ -1733,9 +1733,9 @@ impl Pattern {
                 for arg in args {
                     Self::collect_vars(r, arg)
                 }
-            },
+            }
             Var(id, name) => r.push((*id, *name)),
-            _ => {},
+            _ => {}
         }
     }
 
@@ -1779,31 +1779,31 @@ impl Pattern {
                 } else {
                     Self::collect_vars_exprs_from_vector_none(r, args)
                 }
-            },
+            }
             Tuple(_, args) => {
                 if let Some(exp) = opt_exp {
                     match exp.as_ref() {
                         ExpData::Value(_, Value::Tuple(actuals)) => {
                             Self::collect_vars_exprs_from_vector_values(r, args, actuals)
-                        },
+                        }
                         ExpData::Call(_, Operation::Tuple, actuals) => {
                             Self::collect_vars_exprs_from_vector_exprs(r, args, actuals)
-                        },
+                        }
                         _ => Self::collect_vars_exprs_from_vector_none(r, args),
                     }
                 } else {
                     Self::collect_vars_exprs_from_vector_none(r, args)
                 }
-            },
+            }
             Var(_, name) => match opt_exp {
                 Some(exp) => {
                     r.push((*name, Some(exp.clone())));
                     true
-                },
+                }
                 None => {
                     r.push((*name, None));
                     false
-                },
+                }
             },
             _ => true,
         }
@@ -1830,20 +1830,20 @@ impl Pattern {
                     match value {
                         Value::Tuple(actuals) => {
                             Self::collect_vars_exprs_from_vector_values(r, args, actuals)
-                        },
+                        }
                         Value::Vector(actuals) => {
                             Self::collect_vars_exprs_from_vector_values(r, args, actuals)
-                        },
+                        }
                         _ => {
                             Self::collect_vars_exprs_from_vector_none(r, args);
                             false
-                        },
+                        }
                     }
                 } else {
                     Self::collect_vars_exprs_from_vector_none(r, args);
                     false
                 }
-            },
+            }
             Var(id, name) => {
                 if let Some(value) = opt_v {
                     r.push((*name, Some(ExpData::Value(*id, value.clone()).into_exp())));
@@ -1852,7 +1852,7 @@ impl Pattern {
                     r.push((*name, None));
                     false
                 }
-            },
+            }
             _ => true,
         }
     }
@@ -1874,11 +1874,11 @@ impl Pattern {
                 match pair {
                     EitherOrBoth::Both(pat, expr) => {
                         Self::collect_vars_exprs_from_expr(r, pat, Some(expr))
-                    },
+                    }
                     EitherOrBoth::Left(pat) => Self::collect_vars_exprs_from_expr(r, pat, None),
                     EitherOrBoth::Right(_) => {
                         false // there are extra exprs
-                    },
+                    }
                 }
             })
             .all(|b| b)
@@ -1901,7 +1901,7 @@ impl Pattern {
             .map(|pair| match pair {
                 EitherOrBoth::Both(pat, value) => {
                     Self::collect_vars_exprs_from_value(r, pat, Some(value))
-                },
+                }
                 EitherOrBoth::Left(pat) => Self::collect_vars_exprs_from_value(r, pat, None),
                 EitherOrBoth::Right(_) => false,
             })
@@ -1934,7 +1934,7 @@ impl Pattern {
                 } else {
                     Pattern::Var(id, var)
                 }
-            },
+            }
             Pattern::Tuple(id, patvec) => Pattern::Tuple(
                 id,
                 patvec
@@ -1975,7 +1975,7 @@ impl Pattern {
                 } else {
                     None
                 }
-            },
+            }
             Pattern::Tuple(_, patvec) | Pattern::Struct(_, _, patvec) => {
                 let pat_out: Vec<_> = patvec.iter().map(|pat| pat.replace_vars(var_map)).collect();
                 if pat_out.iter().any(|opt_pat| opt_pat.is_some()) {
@@ -1990,13 +1990,13 @@ impl Pattern {
                         Pattern::Tuple(id, _) => Some(Pattern::Tuple(*id, new_vec)),
                         Pattern::Struct(id, qsid, _) => {
                             Some(Pattern::Struct(*id, qsid.clone(), new_vec))
-                        },
+                        }
                         _ => None,
                     }
                 } else {
                     None
                 }
-            },
+            }
             Pattern::Error(..) | Pattern::Wildcard(..) => None,
         }
     }
@@ -2011,17 +2011,17 @@ impl Pattern {
         use Pattern::*;
         visitor(false, self);
         match self {
-            Var(..) | Wildcard(..) | Error(..) => {},
+            Var(..) | Wildcard(..) | Error(..) => {}
             Tuple(_, patvec) => {
                 for pat in patvec {
                     pat.visit_pre_post(visitor);
                 }
-            },
+            }
             Struct(_, _, patvec) => {
                 for pat in patvec {
                     pat.visit_pre_post(visitor);
                 }
-            },
+            }
         };
         visitor(true, self);
     }
@@ -2031,7 +2031,7 @@ impl Pattern {
             Pattern::Var(id, name) => {
                 let ty = env.get_node_type(*id);
                 format!("{}: {}", name.display(env.symbol_pool()), ty.display(tctx))
-            },
+            }
             Pattern::Tuple(_, args) => format!(
                 "({})",
                 args.iter().map(|pat| pat.to_string(env, tctx)).join(", ")
@@ -2066,7 +2066,7 @@ impl Pattern {
                     inst_str,
                     args_str
                 )
-            },
+            }
             Pattern::Wildcard(_) => "_".to_string(),
             Pattern::Error(_) => "<error>".to_string(),
         }
@@ -2142,13 +2142,13 @@ impl<'a> PatDisplay<'a> {
                     node_type.display(type_ctx)
                 )?;
                 showed_type = true;
-            },
+            }
             Wildcard(_) => write!(f, "_")?,
             Tuple(_, pattern_vec) => {
                 write!(f, "(")?;
                 self.fmt_patterns(f, pattern_vec)?;
                 write!(f, ")")?
-            },
+            }
             Struct(_, struct_qfid, pattern_vec) => {
                 let inst_str = if !struct_qfid.inst.is_empty() {
                     format!(
@@ -2188,7 +2188,7 @@ impl<'a> PatDisplay<'a> {
                     inst_str,
                     args_str
                 )?
-            },
+            }
             Error(_) => write!(f, "Pattern::Error")?,
         }
         if show_type && !showed_type {
@@ -2276,7 +2276,7 @@ impl Value {
                 // Symbolic addresses may be incomparable.
                 (Value::Address(addr1), Value::Address(addr2)) => {
                     unequal_addresses_equivalent(addr1, addr2)
-                },
+                }
                 (Value::Vector(x), Value::ByteArray(y))
                 | (Value::ByteArray(y), Value::Vector(x)) => {
                     if x.len() == y.len() {
@@ -2290,7 +2290,7 @@ impl Value {
                     } else {
                         Some(false)
                     }
-                },
+                }
                 (Value::Vector(x), Value::AddressArray(y))
                 | (Value::AddressArray(y), Value::Vector(x)) => {
                     if x.len() == y.len() {
@@ -2307,7 +2307,7 @@ impl Value {
                     } else {
                         Some(false)
                     }
-                },
+                }
                 (Value::AddressArray(x), Value::AddressArray(y)) => {
                     if x.len() == y.len() {
                         iter::zip(x, y)
@@ -2317,7 +2317,7 @@ impl Value {
                     } else {
                         Some(false)
                     }
-                },
+                }
                 (Value::Vector(x), Value::Vector(y)) | (Value::Tuple(x), Value::Tuple(y)) => {
                     if x.len() == y.len() {
                         iter::zip(x, y)
@@ -2327,7 +2327,7 @@ impl Value {
                     } else {
                         Some(false)
                     }
-                },
+                }
                 _ => Some(false),
             }
         } else {
@@ -2583,7 +2583,7 @@ impl ExpData {
                         is_pure = false;
                         return false; // done visiting
                     }
-                },
+                }
                 Call(_, oper, _) => match oper {
                     Exists(..) | Global(..) => is_pure = false,
                     SpecFunction(mid, fid, _) => {
@@ -2593,10 +2593,10 @@ impl ExpData {
                             is_pure = false;
                             return false; // done visiting
                         }
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 },
-                _ => {},
+                _ => {}
             }
             true // keep going
         };
@@ -2616,22 +2616,22 @@ impl ExpData {
                 Invalid(..) => {
                     // leave it alone to produce better errors.
                     is_pure = false;
-                },
-                Value(..) => {}, // Ok, keep going
+                }
+                Value(..) => {} // Ok, keep going
                 LocalVar(..) | Temporary(..) => {
                     // Use of a var could affect borrow semantics, so we cannot
                     // remove uses until borrow analysis produces warnings about user code
                     is_pure = false;
-                },
+                }
                 Call(_, oper, _) => {
                     if !oper.is_ok_to_remove_from_code() {
                         is_pure = false;
                     }
-                },
+                }
                 Invoke(..) => {
                     // Leave it alone for now, but with more analysis maybe we can do something.
                     is_pure = false;
-                },
+                }
                 Lambda(..) => {
                     // Lambda captures any side-effects.
                     if !post {
@@ -2639,23 +2639,23 @@ impl ExpData {
                     } else {
                         is_pure = pure_stack.pop().expect("unbalanced");
                     }
-                },
+                }
                 Quant(..) => {
                     // Technically pure, but we don't want to eliminate it.
                     is_pure = false;
-                },
-                Block(..) | IfElse(..) => {}, // depends on contents
+                }
+                Block(..) | IfElse(..) => {} // depends on contents
                 Return(..) => {
                     is_pure = false;
-                },
-                Sequence(..) => {}, // depends on contents
+                }
+                Sequence(..) => {} // depends on contents
                 Loop(..) | LoopCont(..) | Assign(..) | Mutate(..) => {
                     is_pure = false;
-                },
+                }
                 SpecBlock(..) => {
                     // Technically pure, but we don't want to eliminate it.
                     is_pure = false;
-                },
+                }
             }
             true
         };
@@ -2919,7 +2919,7 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
             Value(_, v) => write!(f, "{}", self.env.display(v)),
             LocalVar(_, name) => {
                 write!(f, "{}", name.display(self.env.symbol_pool()))
-            },
+            }
             Temporary(_, idx) => {
                 if let Some(name) = self
                     .fun_env
@@ -2934,7 +2934,7 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
                 } else {
                     write!(f, "$t{}", idx)
                 }
-            },
+            }
             Call(node_id, oper, args) => {
                 write!(
                     f,
@@ -2942,7 +2942,7 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
                     oper.display_for_exp(self, *node_id),
                     self.fmt_exps(args)
                 )
-            },
+            }
             Lambda(id, pat, body) => {
                 if self.verbose {
                     write!(
@@ -2960,7 +2960,7 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
                         body.display_cont(self)
                     )
                 }
-            },
+            }
             Block(id, pat, binding, body) => {
                 if self.verbose {
                     write!(
@@ -2988,7 +2988,7 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
                         indent(body.display_cont(self))
                     )
                 }
-            },
+            }
             Quant(_, kind, ranges, triggers, opt_where, body) => {
                 let triggers_str = triggers
                     .iter()
@@ -3009,10 +3009,10 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
                     where_str,
                     body.display_cont(self)
                 )
-            },
+            }
             Invoke(_, fun, args) => {
                 write!(f, "({})({})", fun.display_cont(self), self.fmt_exps(args))
-            },
+            }
             IfElse(_, cond, if_exp, else_exp) => {
                 write!(
                     f,
@@ -3021,7 +3021,7 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
                     indent(if_exp.display_cont(self)),
                     indent(else_exp.display_cont(self))
                 )
-            },
+            }
             Sequence(_, es) => {
                 for (i, e) in es.iter().enumerate() {
                     if i > 0 {
@@ -3030,10 +3030,10 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
                     write!(f, "{}", e.display_cont(self))?
                 }
                 Ok(())
-            },
+            }
             Loop(_, e) => {
                 write!(f, "loop {{\n  {}\n}}", indent(e.display_cont(self)))
-            },
+            }
             LoopCont(_, true) => write!(f, "continue"),
             LoopCont(_, false) => write!(f, "break"),
             Return(_, e) => write!(f, "return {}", e.display_cont(self)),
@@ -3044,13 +3044,13 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
                     lhs.display_for_exp(self),
                     rhs.display_cont(self)
                 )
-            },
+            }
             Mutate(_, lhs, rhs) => {
                 write!(f, "{} = {}", lhs.display_cont(self), rhs.display_cont(self))
-            },
+            }
             SpecBlock(_, spec) => {
                 write!(f, "{}", self.env.display(spec))
-            },
+            }
         }?;
         if self.verbose {
             let node_id = self.exp.node_id();
@@ -3161,7 +3161,7 @@ impl<'a> fmt::Display for OperationDisplay<'a> {
             Cast => {
                 let ty = self.env.get_node_type(self.node_id);
                 write!(f, "{:?}<{}>", self.oper, ty.display(&self.tctx))
-            },
+            }
             SpecFunction(mid, fid, labels_opt) => {
                 write!(f, "{}", self.fun_str(mid, fid))?;
                 if let Some(labels) = labels_opt {
@@ -3172,7 +3172,7 @@ impl<'a> fmt::Display for OperationDisplay<'a> {
                     )?;
                 }
                 Ok(())
-            },
+            }
             MoveFunction(mid, fid) => {
                 write!(
                     f,
@@ -3181,7 +3181,7 @@ impl<'a> fmt::Display for OperationDisplay<'a> {
                         .get_function(mid.qualified(*fid))
                         .get_full_name_str()
                 )
-            },
+            }
             Closure(mid, fid) => {
                 write!(
                     f,
@@ -3190,28 +3190,28 @@ impl<'a> fmt::Display for OperationDisplay<'a> {
                         .get_function(mid.qualified(*fid))
                         .get_full_name_str()
                 )
-            },
+            }
             Global(label_opt) => {
                 write!(f, "global")?;
                 if let Some(label) = label_opt {
                     write!(f, "[{}]", label)?
                 }
                 Ok(())
-            },
+            }
             Exists(label_opt) => {
                 write!(f, "exists")?;
                 if let Some(label) = label_opt {
                     write!(f, "[{}]", label)?
                 }
                 Ok(())
-            },
+            }
             Pack(mid, sid) => write!(f, "pack {}", self.struct_str(mid, sid)),
             Select(mid, sid, fid) => {
                 write!(f, "select {}", self.field_str(mid, sid, fid))
-            },
+            }
             UpdateField(mid, sid, fid) => {
                 write!(f, "update {}", self.field_str(mid, sid, fid))
-            },
+            }
             Result(t) => write!(f, "result{}", t),
             _ => write!(f, "{:?}", self.oper),
         }?;
@@ -3294,7 +3294,7 @@ impl<'a> fmt::Display for EnvDisplay<'a, Condition> {
                     write!(f, " if {}", exps[2].display(self.env))?;
                 }
                 write!(f, ";")?
-            },
+            }
             ConditionKind::Update => write!(
                 f,
                 "update {} = {};",

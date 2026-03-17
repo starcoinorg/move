@@ -158,11 +158,14 @@ fn access_to_matching_specifier_clause(
             address_to_matching_specifier(Just(inst.address)),
         )
             .prop_map(move |(kind, resource, address)| {
-                (inst.clone(), AccessSpecifierClause {
-                    kind,
-                    resource,
-                    address,
-                })
+                (
+                    inst.clone(),
+                    AccessSpecifierClause {
+                        kind,
+                        resource,
+                        address,
+                    },
+                )
             })
     })
 }

@@ -23,9 +23,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::{
-    gas::UnmeteredGasMeter,
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    gas::UnmeteredGasMeter, loaded_data::runtime_types::Type, natives::function::NativeResult,
     values::Value,
 };
 use std::{
@@ -199,10 +197,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
         })
     }
 
-    pub fn type_to_fully_annotated_layout(
-        &self,
-        ty: &Type,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
         let runtime_environment = self.resolver.loader().runtime_environment();
         let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, &*self.data_store);
         let module_storage = base_storage.as_unsync_module_storage();
@@ -255,7 +250,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
         let mut gas_meter = UnmeteredGasMeter;
         self.resolver
             .loader()
-            .load_module_v2(
+            .ensure_module_loaded_v2(
                 module,
                 self.data_store,
                 self.resolver.module_store(),

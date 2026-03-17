@@ -145,7 +145,7 @@ impl CompilerVersion {
                 } else {
                     Ok(())
                 }
-            },
+            }
             CompilerVersion::V2_0 => Ok(()),
         }
     }

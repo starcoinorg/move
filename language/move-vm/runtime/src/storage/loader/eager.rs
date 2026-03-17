@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    loader::{Function, Module, Script},
     check_dependencies_and_charge_gas,
+    loader::{Function, Module, Script},
     module_traversal::TraversalContext,
     storage::{
         dependencies_gas_charging::check_type_tag_dependencies_and_charge_gas,
@@ -28,9 +28,7 @@ use move_core_types::{
 use move_vm_types::{
     code::Code,
     gas::GasMeter,
-    loaded_data::{
-        runtime_types::{StructNameIndex, StructType, Type},
-    },
+    loaded_data::runtime_types::{StructNameIndex, StructType, Type},
     sha3_256,
 };
 use std::sync::Arc;
@@ -173,16 +171,14 @@ where
                 | StatusCode::UNEXPECTED_VERIFIER_ERROR
                 | StatusCode::UNEXPECTED_DESERIALIZATION_ERROR
                 | StatusCode::CODE_DESERIALIZATION_ERROR => err,
-                _ => {
-                    PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
-                        .with_message(format!(
-                            "Module or function do not exist for {}::{}::{}",
-                            module_id.address(),
-                            module_id.name(),
-                            function_name
-                        ))
-                        .finish(err.location().clone())
-                }
+                _ => PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
+                    .with_message(format!(
+                        "Module or function do not exist for {}::{}::{}",
+                        module_id.address(),
+                        module_id.name(),
+                        function_name
+                    ))
+                    .finish(err.location().clone()),
             })
     }
 }
@@ -271,7 +267,9 @@ where
             )?;
         }
         if config.charge_for_dependencies {
-            let module_id = traversal_context.referenced_module_ids.alloc(module_id.clone());
+            let module_id = traversal_context
+                .referenced_module_ids
+                .alloc(module_id.clone());
             check_dependencies_and_charge_gas(
                 self.module_storage,
                 gas_meter,
@@ -319,7 +317,8 @@ where
                 self.module_storage,
                 gas_meter,
                 traversal_context,
-                ids.into_iter().map(|module_id| (module_id.address(), module_id.name())),
+                ids.into_iter()
+                    .map(|module_id| (module_id.address(), module_id.name())),
             )?;
         }
         self.build_instantiated_script(gas_meter, traversal_context, script, ty_args)

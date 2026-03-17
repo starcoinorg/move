@@ -15,13 +15,12 @@ use move_core_types::{
 use move_vm_types::gas::GasMeter;
 use std::collections::BTreeSet;
 
-fn collect_struct_tag_deps(
-    ordered_ty_tags: &mut BTreeSet<ModuleId>,
-    ty_tag: &TypeTag,
-) {
+fn collect_struct_tag_deps(ordered_ty_tags: &mut BTreeSet<ModuleId>, ty_tag: &TypeTag) {
     match ty_tag {
         TypeTag::Vector(inner) => collect_struct_tag_deps(ordered_ty_tags, inner),
-        TypeTag::Struct(struct_tag) => collect_struct_tag_deps_from_struct(ordered_ty_tags, struct_tag),
+        TypeTag::Struct(struct_tag) => {
+            collect_struct_tag_deps_from_struct(ordered_ty_tags, struct_tag)
+        }
         TypeTag::Bool
         | TypeTag::U8
         | TypeTag::U16
@@ -30,7 +29,7 @@ fn collect_struct_tag_deps(
         | TypeTag::U128
         | TypeTag::U256
         | TypeTag::Address
-        | TypeTag::Signer => {},
+        | TypeTag::Signer => {}
     }
 }
 
@@ -50,7 +49,9 @@ pub fn check_type_tag_dependencies_and_charge_gas<'a>(
     traversal_context: &mut TraversalContext<'a>,
     ty_tags: &[TypeTag],
 ) -> VMResult<()> {
-    let ordered_ty_tags = ty_tags.iter().fold(BTreeSet::new(), |mut ordered_ty_tags, ty_tag| {
+    let ordered_ty_tags = ty_tags
+        .iter()
+        .fold(BTreeSet::new(), |mut ordered_ty_tags, ty_tag| {
             collect_struct_tag_deps(&mut ordered_ty_tags, ty_tag);
             ordered_ty_tags
         });
@@ -85,15 +86,11 @@ where
     while let Some((addr, name)) = stack.pop() {
         let size = module_storage.unmetered_get_existing_module_size(addr, name)?;
         gas_meter
-            .charge_dependency(
-                false,
-                addr,
-                name,
-                NumBytes::new(size as u64),
-            )
+            .charge_dependency(false, addr, name, NumBytes::new(size as u64))
             .map_err(|err| err.finish(Location::Module(ModuleId::new(*addr, name.to_owned()))))?;
 
-        let compiled_module = module_storage.unmetered_get_existing_deserialized_module(addr, name)?;
+        let compiled_module =
+            module_storage.unmetered_get_existing_deserialized_module(addr, name)?;
         let compiled_module = traversal_context.referenced_modules.alloc(compiled_module);
         let imm_deps_and_friends = compiled_module
             .immediate_dependencies_iter()

@@ -419,7 +419,7 @@ impl<'env> ModelBuilder<'env> {
                                 .receiver_functions
                                 .insert(name.symbol, name.clone());
                         }
-                    },
+                    }
                     Type::Vector(elem_ty) => {
                         // Vector receiver functions can only be defined in the well-known vector module
                         if name.module_name.addr() != &self.env.get_stdlib_address()
@@ -436,7 +436,7 @@ impl<'env> ModelBuilder<'env> {
                             self.vector_receiver_functions
                                 .insert(name.symbol, name.clone());
                         }
-                    },
+                    }
                     _ => diag(
                         "is not suitable for receiver functions. \
                     Only structs and vectors can have receiver functions",
@@ -458,7 +458,7 @@ impl<'env> ModelBuilder<'env> {
             EA::Address::NamedUnassigned(name) => {
                 self.error(loc, &format!("Undeclared address `{}`", name));
                 NumericalAddress::DEFAULT_ERROR_ADDRESS
-            },
+            }
         }
     }
 

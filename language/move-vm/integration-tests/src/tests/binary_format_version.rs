@@ -43,17 +43,19 @@ fn test_staging_publish_module_with_custom_max_binary_format_version() {
         let storage = initialize_storage_with_binary_format_version(VERSION_MAX);
         let module_storage = storage.as_unsync_module_storage();
 
-        let staged_storage =
-            StagingModuleStorage::create(m.self_addr(), &module_storage, vec![b_new.clone().into()])
-                .expect("new module should be publishable");
+        let staged_storage = StagingModuleStorage::create(
+            m.self_addr(),
+            &module_storage,
+            vec![b_new.clone().into()],
+        )
+        .expect("new module should be publishable");
         StagingModuleStorage::create(m.self_addr(), &staged_storage, vec![b_old.clone().into()])
             .expect("old module should be publishable");
     }
 
     {
-        let storage = initialize_storage_with_binary_format_version(
-            VERSION_MAX.checked_sub(1).unwrap(),
-        );
+        let storage =
+            initialize_storage_with_binary_format_version(VERSION_MAX.checked_sub(1).unwrap());
         let module_storage = storage.as_unsync_module_storage();
 
         let err = match StagingModuleStorage::create(
@@ -213,12 +215,8 @@ fn test_publish_module_with_custom_max_binary_format_version_lazy_loading() {
             StatusCode::UNKNOWN_VERSION
         );
 
-        sess.publish_module(
-            b_old,
-            *m.self_id().address(),
-            &mut UnmeteredGasMeter,
-        )
-        .unwrap();
+        sess.publish_module(b_old, *m.self_id().address(), &mut UnmeteredGasMeter)
+            .unwrap();
     }
 }
 

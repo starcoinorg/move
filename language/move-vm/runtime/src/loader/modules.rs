@@ -96,38 +96,9 @@ impl ModuleStorageAdapter {
         self.modules.fetch_module(id)
     }
 
-    pub(crate) fn module_at_by_ref(
-        &self,
-        addr: &AccountAddress,
-        name: &IdentStr,
-    ) -> Option<Arc<Module>> {
-        self.modules.fetch_module_by_ref(addr, name)
-    }
-
-    pub(crate) fn insert(
-        &self,
-        natives: &NativeFunctions,
-        id: ModuleId,
-        module_size: usize,
-        module: Arc<CompiledModule>,
-        name_cache: &StructNameCache,
-    ) -> VMResult<Arc<Module>> {
-        if let Some(cached) = self.module_at(&id) {
-            return Ok(cached);
-        }
-
-        let module = Module::new(natives, module_size, module, name_cache)
-            .map_err(|err| err.finish(Location::Undefined))?;
-        Ok(self.modules.store_module(&id, module))
-    }
-
     pub(crate) fn store_verified_module(&self, module: Arc<Module>) -> Arc<Module> {
         self.modules
             .store_module(module.self_id(), module.as_ref().clone())
-    }
-
-    pub(crate) fn has_module(&self, module_id: &ModuleId) -> bool {
-        self.modules.fetch_module(module_id).is_some()
     }
 
     // Given a ModuleId::struct_name, retrieve the `StructType` and the index associated.
@@ -171,7 +142,6 @@ impl ModuleStorageAdapter {
             ),
         }
     }
-
 }
 
 // A Module is very similar to a binary Module but data is "transformed" to a representation
@@ -182,9 +152,6 @@ impl ModuleStorageAdapter {
 pub struct Module {
     #[allow(dead_code)]
     id: ModuleId,
-
-    // size in bytes
-    pub(crate) size: usize,
 
     // primitive pools
     pub(crate) module: Arc<CompiledModule>,
@@ -258,7 +225,6 @@ pub(crate) struct FieldInstantiation {
 impl Module {
     pub(crate) fn new(
         natives: &NativeFunctions,
-        size: usize,
         module: Arc<CompiledModule>,
         name_cache: &StructNameCache,
     ) -> PartialVMResult<Self> {
@@ -362,7 +328,7 @@ impl Module {
                                                 expects one and only one signature token"
                                                     .to_owned(),
                                             ));
-                                        },
+                                        }
                                         Some(sig_token) => sig_token,
                                     };
                                     single_signature_token_map.insert(
@@ -374,8 +340,8 @@ impl Module {
                                         )?,
                                     );
                                 }
-                            },
-                            _ => {},
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -439,7 +405,6 @@ impl Module {
         create()?;
         Ok(Self {
             id,
-            size,
             module,
             structs,
             struct_instantiations,

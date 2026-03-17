@@ -11,7 +11,10 @@ use move_vm_types::{
     gas::GasMeter,
     loaded_data::runtime_types::{DepthFormula, StructNameIndex, Type},
 };
-use std::{cell::RefCell, collections::{BTreeMap, HashMap, HashSet}};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, HashMap, HashSet},
+};
 
 pub struct TypeDepthChecker<'a, T> {
     struct_definition_loader: &'a T,
@@ -25,7 +28,10 @@ where
 {
     pub(crate) fn new(struct_definition_loader: &'a T) -> Self {
         let vm_config = struct_definition_loader.runtime_environment().vm_config();
-        let maybe_max_depth = vm_config.enable_depth_checks.then_some(vm_config.max_value_nest_depth).flatten();
+        let maybe_max_depth = vm_config
+            .enable_depth_checks
+            .then_some(vm_config.max_value_nest_depth)
+            .flatten();
         Self {
             struct_definition_loader,
             maybe_max_depth,
@@ -104,15 +110,14 @@ where
             | Type::U256
             | Type::Address
             | Type::Signer => check_depth!(0),
-            Type::Reference(ty) | Type::MutableReference(ty) => {
-                self.recursive_check_depth_of_type(
+            Type::Reference(ty) | Type::MutableReference(ty) => self
+                .recursive_check_depth_of_type(
                     gas_meter,
                     traversal_context,
                     ty,
                     max_depth,
                     check_depth!(1),
-                )?
-            },
+                )?,
             Type::Vector(ty) => self.recursive_check_depth_of_type(
                 gas_meter,
                 traversal_context,
@@ -123,7 +128,7 @@ where
             Type::Struct { idx, .. } => {
                 let formula = visit_struct!(*idx);
                 check_depth!(formula.solve(&[]))
-            },
+            }
             Type::StructInstantiation { idx, ty_args, .. } => {
                 let ty_arg_depths = ty_args
                     .iter()
@@ -139,13 +144,13 @@ where
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let formula = visit_struct!(*idx);
                 check_depth!(formula.solve(&ty_arg_depths))
-            },
+            }
             Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Type parameter should be fully resolved".to_string()),
                 );
-            },
+            }
         };
 
         Ok(ty_depth)
@@ -165,14 +170,12 @@ where
                 .struct_name_index_map()
                 .idx_to_struct_name_ref(*idx)?;
             return Err(
-                PartialVMError::new(StatusCode::CYCLIC_MODULE_DEPENDENCY).with_message(
-                    format!(
-                        "Definition of struct {}::{}::{} is recursive",
-                        struct_name.module.address(),
-                        struct_name.module.name(),
-                        struct_name.name
-                    ),
-                ),
+                PartialVMError::new(StatusCode::CYCLIC_MODULE_DEPENDENCY).with_message(format!(
+                    "Definition of struct {}::{}::{} is recursive",
+                    struct_name.module.address(),
+                    struct_name.module.name(),
+                    struct_name.name
+                )),
             );
         }
 
@@ -181,9 +184,11 @@ where
         }
 
         assert!(currently_visiting.insert(*idx));
-        let struct_definition = self
-            .struct_definition_loader
-            .load_struct_definition(gas_meter, traversal_context, idx)?;
+        let struct_definition = self.struct_definition_loader.load_struct_definition(
+            gas_meter,
+            traversal_context,
+            idx,
+        )?;
         let formulas = struct_definition
             .field_tys
             .iter()
@@ -206,8 +211,9 @@ where
         if prev.is_some() {
             self.formula_cache.borrow_mut().clear();
             return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Depth formula for struct {:?} is already cached", idx)),
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Depth formula for struct {:?} is already cached", idx),
+                ),
             );
         }
         Ok(formula)
@@ -239,7 +245,7 @@ where
                 )?;
                 inner.scale(1);
                 inner
-            },
+            }
             Type::Reference(ty) | Type::MutableReference(ty) => {
                 let mut inner = self.calculate_type_depth_formula(
                     gas_meter,
@@ -249,7 +255,7 @@ where
                 )?;
                 inner.scale(1);
                 inner
-            },
+            }
             Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
             Type::Struct { idx, .. } => {
                 let mut struct_formula = self.calculate_struct_depth_formula(
@@ -261,7 +267,7 @@ where
                 debug_assert!(struct_formula.terms.is_empty());
                 struct_formula.scale(1);
                 struct_formula
-            },
+            }
             Type::StructInstantiation { idx, ty_args, .. } => {
                 let ty_arg_map = ty_args
                     .iter()
@@ -288,7 +294,7 @@ where
                 let mut subst_struct_formula = struct_formula.subst(ty_arg_map)?;
                 subst_struct_formula.scale(1);
                 subst_struct_formula
-            },
+            }
         })
     }
 }

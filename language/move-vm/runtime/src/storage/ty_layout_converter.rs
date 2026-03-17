@@ -6,6 +6,7 @@ use crate::{
     storage::{loader::traits::StructDefinitionLoader, ty_tag_converter::TypeTagConverter},
     RuntimeEnvironment,
 };
+use hashbrown::HashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -17,8 +18,10 @@ use move_vm_types::{
     gas::GasMeter,
     loaded_data::runtime_types::{StructIdentifier, StructNameIndex, Type},
 };
-use hashbrown::HashMap;
-use std::{cell::RefCell, hash::{Hash, Hasher}};
+use std::{
+    cell::RefCell,
+    hash::{Hash, Hasher},
+};
 
 pub const VALUE_DEPTH_MAX: u64 = 128;
 const MAX_TYPE_TO_LAYOUT_NODES: u64 = 1536;
@@ -89,22 +92,30 @@ where
         self.type_to_fully_annotated_layout_impl(gas_meter, traversal_context, ty, &mut count, 1)
     }
 
-    fn get_identifier_mapping_kind(&self, struct_name: &StructIdentifier) -> Option<IdentifierMappingKind> {
-        if !self.runtime_environment().vm_config().aggregator_v2_type_tagging {
+    fn get_identifier_mapping_kind(
+        &self,
+        struct_name: &StructIdentifier,
+    ) -> Option<IdentifierMappingKind> {
+        if !self
+            .runtime_environment()
+            .vm_config()
+            .aggregator_v2_type_tagging
+        {
             return None;
         }
 
-        let ident_str_to_kind = |ident_str: &move_core_types::identifier::IdentStr| -> Option<IdentifierMappingKind> {
-            if ident_str.eq(ident_str!("Aggregator")) {
-                Some(IdentifierMappingKind::Aggregator)
-            } else if ident_str.eq(ident_str!("AggregatorSnapshot")) {
-                Some(IdentifierMappingKind::Snapshot)
-            } else if ident_str.eq(ident_str!("DerivedStringSnapshot")) {
-                Some(IdentifierMappingKind::DerivedString)
-            } else {
-                None
-            }
-        };
+        let ident_str_to_kind =
+            |ident_str: &move_core_types::identifier::IdentStr| -> Option<IdentifierMappingKind> {
+                if ident_str.eq(ident_str!("Aggregator")) {
+                    Some(IdentifierMappingKind::Aggregator)
+                } else if ident_str.eq(ident_str!("AggregatorSnapshot")) {
+                    Some(IdentifierMappingKind::Snapshot)
+                } else if ident_str.eq(ident_str!("DerivedStringSnapshot")) {
+                    Some(IdentifierMappingKind::DerivedString)
+                } else {
+                    None
+                }
+            };
 
         (struct_name.module.address().eq(&AccountAddress::ONE)
             && struct_name.module.name().eq(ident_str!("aggregator_v2")))
@@ -126,16 +137,20 @@ where
                 )),
             );
         }
-        if depth > self
-            .runtime_environment()
-            .vm_config()
-            .layout_max_depth
-            .max(VALUE_DEPTH_MAX)
+        if depth
+            > self
+                .runtime_environment()
+                .vm_config()
+                .layout_max_depth
+                .max(VALUE_DEPTH_MAX)
         {
             return Err(
                 PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED).with_message(format!(
                     "Depth of a layout exceeded the maximum of {} during construction",
-                    self.runtime_environment().vm_config().layout_max_depth.max(VALUE_DEPTH_MAX)
+                    self.runtime_environment()
+                        .vm_config()
+                        .layout_max_depth
+                        .max(VALUE_DEPTH_MAX)
                 )),
             );
         }
@@ -155,49 +170,64 @@ where
             Type::Bool => {
                 *count += 1;
                 (MoveTypeLayout::Bool, false)
-            },
+            }
             Type::U8 => {
                 *count += 1;
                 (MoveTypeLayout::U8, false)
-            },
+            }
             Type::U16 => {
                 *count += 1;
                 (MoveTypeLayout::U16, false)
-            },
+            }
             Type::U32 => {
                 *count += 1;
                 (MoveTypeLayout::U32, false)
-            },
+            }
             Type::U64 => {
                 *count += 1;
                 (MoveTypeLayout::U64, false)
-            },
+            }
             Type::U128 => {
                 *count += 1;
                 (MoveTypeLayout::U128, false)
-            },
+            }
             Type::U256 => {
                 *count += 1;
                 (MoveTypeLayout::U256, false)
-            },
+            }
             Type::Address => {
                 *count += 1;
                 (MoveTypeLayout::Address, false)
-            },
+            }
             Type::Signer => {
                 *count += 1;
                 (MoveTypeLayout::Signer, false)
-            },
+            }
             Type::Vector(ty) => {
                 *count += 1;
-                let (layout, has_identifier_mappings) =
-                    self.type_to_type_layout_impl(gas_meter, traversal_context, ty, count, depth + 1)?;
-                (MoveTypeLayout::Vector(Box::new(layout)), has_identifier_mappings)
-            },
+                let (layout, has_identifier_mappings) = self.type_to_type_layout_impl(
+                    gas_meter,
+                    traversal_context,
+                    ty,
+                    count,
+                    depth + 1,
+                )?;
+                (
+                    MoveTypeLayout::Vector(Box::new(layout)),
+                    has_identifier_mappings,
+                )
+            }
             Type::Struct { idx, .. } => {
                 *count += 1;
-                self.struct_name_to_type_layout(gas_meter, traversal_context, idx, &[], count, depth + 1)?
-            },
+                self.struct_name_to_type_layout(
+                    gas_meter,
+                    traversal_context,
+                    idx,
+                    &[],
+                    count,
+                    depth + 1,
+                )?
+            }
             Type::StructInstantiation { idx, ty_args, .. } => {
                 *count += 1;
                 self.struct_name_to_type_layout(
@@ -208,13 +238,13 @@ where
                     count,
                     depth + 1,
                 )?
-            },
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(format!("No type layout for {:?}", ty)),
                 );
-            },
+            }
         })
     }
 
@@ -241,9 +271,11 @@ where
             .runtime_environment()
             .struct_name_index_map()
             .idx_to_struct_name_ref(*struct_idx)?;
-        let struct_type = self
-            .struct_definition_loader
-            .load_struct_definition(gas_meter, traversal_context, struct_idx)?;
+        let struct_type = self.struct_definition_loader.load_struct_definition(
+            gas_meter,
+            traversal_context,
+            struct_idx,
+        )?;
         let maybe_mapping = self.get_identifier_mapping_kind(struct_name.as_ref());
         let field_tys = struct_type
             .field_tys
@@ -306,34 +338,38 @@ where
             Type::U256 => MoveTypeLayout::U256,
             Type::Address => MoveTypeLayout::Address,
             Type::Signer => MoveTypeLayout::Signer,
-            Type::Vector(ty) => MoveTypeLayout::Vector(Box::new(
-                self.type_to_fully_annotated_layout_impl(
+            Type::Vector(ty) => {
+                MoveTypeLayout::Vector(Box::new(self.type_to_fully_annotated_layout_impl(
                     gas_meter,
                     traversal_context,
                     ty,
                     count,
                     depth + 1,
-                )?,
-            )),
-            Type::Struct { idx, .. } => {
-                self.struct_name_to_fully_annotated_layout(gas_meter, traversal_context, idx, &[], count, depth + 1)?
-            },
-            Type::StructInstantiation { idx, ty_args, .. } => {
-                self.struct_name_to_fully_annotated_layout(
+                )?))
+            }
+            Type::Struct { idx, .. } => self.struct_name_to_fully_annotated_layout(
+                gas_meter,
+                traversal_context,
+                idx,
+                &[],
+                count,
+                depth + 1,
+            )?,
+            Type::StructInstantiation { idx, ty_args, .. } => self
+                .struct_name_to_fully_annotated_layout(
                     gas_meter,
                     traversal_context,
                     idx,
                     ty_args,
                     count,
                     depth + 1,
-                )?
-            },
+                )?,
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(format!("No type layout for {:?}", ty)),
                 );
-            },
+            }
         })
     }
 
@@ -350,7 +386,12 @@ where
             idx: *struct_idx,
             ty_args: ty_args.to_vec(),
         };
-        if let Some(layout) = self.annotated_layout_cache.borrow().get(&cache_key).cloned() {
+        if let Some(layout) = self
+            .annotated_layout_cache
+            .borrow()
+            .get(&cache_key)
+            .cloned()
+        {
             return Ok(layout);
         }
 
@@ -358,16 +399,17 @@ where
             .runtime_environment()
             .struct_name_index_map()
             .idx_to_struct_name_ref(*struct_idx)?;
-        let struct_type = self
-            .struct_definition_loader
-            .load_struct_definition(gas_meter, traversal_context, struct_idx)?;
+        let struct_type = self.struct_definition_loader.load_struct_definition(
+            gas_meter,
+            traversal_context,
+            struct_idx,
+        )?;
         if struct_type.field_tys.len() != struct_type.field_names.len() {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                     format!(
                         "Field types did not match field names in {}::{}",
-                        struct_name.module,
-                        struct_name.name
+                        struct_name.module, struct_name.name
                     ),
                 ),
             );
@@ -395,7 +437,8 @@ where
                 Ok(MoveFieldLayout::new(field_name.clone(), layout))
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
-        let layout = MoveTypeLayout::Struct(MoveStructLayout::with_types(struct_tag, field_layouts));
+        let layout =
+            MoveTypeLayout::Struct(MoveStructLayout::with_types(struct_tag, field_layouts));
         self.annotated_layout_cache.borrow_mut().insert(
             StructLayoutKey {
                 idx: *struct_idx,

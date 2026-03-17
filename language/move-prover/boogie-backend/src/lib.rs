@@ -441,7 +441,7 @@ impl MapImpl {
                     mod_name,
                     fun_name
                 )
-            },
+            }
         }
     }
 }

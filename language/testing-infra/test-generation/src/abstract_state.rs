@@ -115,7 +115,7 @@ impl AbstractValue {
             SignatureToken::StructInstantiation(_, _) => true,
             SignatureToken::Reference(tok) | SignatureToken::MutableReference(tok) => {
                 Self::is_generic_token(tok)
-            },
+            }
             _ => false,
         }
     }
@@ -190,7 +190,7 @@ impl CallGraph {
                     let max = call_depths.iter().max().unwrap();
                     Some(max + 1)
                 }
-            },
+            }
         }
     }
 }
@@ -275,7 +275,7 @@ impl InstantiableModule {
                     .insert(instantiant.clone(), current_index);
                 self.sig_instance_for_offset.push(instantiant);
                 current_index
-            },
+            }
         }
     }
 
@@ -297,7 +297,7 @@ impl InstantiableModule {
                     .insert(instantiant.clone(), current_index);
                 self.struct_instance_for_offset.push(instantiant);
                 current_index
-            },
+            }
         }
     }
 
@@ -318,7 +318,7 @@ impl InstantiableModule {
                     .insert(instantiant.clone(), current_index);
                 self.func_instance_for_offset.push(instantiant);
                 current_index
-            },
+            }
         }
     }
 
@@ -339,7 +339,7 @@ impl InstantiableModule {
                     .insert(instantiant.clone(), current_index);
                 self.field_instance_for_offset.push(instantiant);
                 current_index
-            },
+            }
         }
     }
 
@@ -349,7 +349,7 @@ impl InstantiableModule {
             Some(vec) => vec,
             None => {
                 panic!("Unable to get instantiation at offset: {:#?}", index);
-            },
+            }
         }
     }
 
@@ -362,7 +362,7 @@ impl InstantiableModule {
             Some(struct_inst) => struct_inst,
             None => {
                 panic!("Unable to get instantiation at offset: {:#?}", index);
-            },
+            }
         }
     }
 
@@ -375,7 +375,7 @@ impl InstantiableModule {
             Some(func_inst) => func_inst,
             None => {
                 panic!("Unable to get instantiation at offset: {:#?}", index);
-            },
+            }
         }
     }
 
@@ -388,7 +388,7 @@ impl InstantiableModule {
             Some(field_inst) => field_inst,
             None => {
                 panic!("Unable to get instantiation at offset: {:#?}", index);
-            },
+            }
         }
     }
 
@@ -586,13 +586,13 @@ impl AbstractState {
             let ref_token = match mutability {
                 Mutability::Mutable => {
                     SignatureToken::MutableReference(Box::new(abstract_value.token.clone()))
-                },
+                }
                 Mutability::Immutable => {
                     SignatureToken::Reference(Box::new(abstract_value.token.clone()))
-                },
+                }
                 Mutability::Either => {
                     return Err(VMError::new("Mutability cannot be Either".to_string()))
-                },
+                }
             };
             self.register = Some(AbstractValue::new_reference(
                 ref_token,

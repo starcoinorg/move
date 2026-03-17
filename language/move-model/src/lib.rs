@@ -195,7 +195,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
             }
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);
-        },
+        }
         Ok(res) => res,
     };
     let (compiler, parsed_prog) = compiler.into_ast();
@@ -277,7 +277,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         Err(diags) => {
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);
-        },
+        }
         Ok(mut compiler) => {
             // There may have been errors but nevertheless a stepped compiler is returned.
             let compiler_env: &mut CompilationEnv = compiler.compilation_env();
@@ -288,7 +288,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                 }
             }
             compiler.into_ast()
-        },
+        }
     };
 
     // Extract the module/script closure
@@ -341,7 +341,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
             Err(diags) => {
                 add_move_lang_diagnostics(&mut env, diags);
                 return Ok(env);
-            },
+            }
             Ok(compiler) => compiler.into_ast(),
         };
 
@@ -352,10 +352,10 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                         &env.to_loc(&loc),
                         "unable to find matching module in inlining AST",
                     );
-                },
+                }
                 Some(inlining_module) => {
                     retrospective_lambda_lifting(inlining_module, expansion_module);
-                },
+                }
             }
         }
 
@@ -368,7 +368,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
             Err(diags) => {
                 add_move_lang_diagnostics(&mut env, diags);
                 return Ok(env);
-            },
+            }
             Ok(compiler) => {
                 let (units, warnings) = compiler.into_compiled_units();
                 if !warnings.is_empty() {
@@ -378,7 +378,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                     add_move_lang_diagnostics(&mut env, warnings);
                 }
                 units
-            },
+            }
         };
 
         // Check for bytecode verifier errors (there should not be any)
@@ -583,7 +583,7 @@ pub fn script_into_module(compiled_script: CompiledScript, name: &str) -> Compil
                 .identifiers
                 .push(Identifier::new(name.to_string()).unwrap());
             idx
-        },
+        }
     };
 
     // Add a dummy address if none exists.
@@ -598,7 +598,7 @@ pub fn script_into_module(compiled_script: CompiledScript, name: &str) -> Compil
             let idx = AddressIdentifierIndex::new(script.address_identifiers.len() as u16);
             script.address_identifiers.push(dummy_addr);
             idx
-        },
+        }
     };
 
     // Add a self module handle.
@@ -615,7 +615,7 @@ pub fn script_into_module(compiled_script: CompiledScript, name: &str) -> Compil
                 name: self_ident_idx,
             });
             idx
-        },
+        }
     };
 
     // Find the index to the empty signature [].
@@ -626,7 +626,7 @@ pub fn script_into_module(compiled_script: CompiledScript, name: &str) -> Compil
             let idx = SignatureIndex::new(script.signatures.len() as u16);
             script.signatures.push(Signature(vec![]));
             idx
-        },
+        }
     };
 
     // Create a function handle for the main function.
@@ -698,7 +698,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                             )
                         );
                         return;
-                    },
+                    }
                 };
                 modules.push((
                     module_ident,
@@ -707,7 +707,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                     annot_module.named_module.source_map,
                     annot_module.function_infos,
                 ));
-            },
+            }
             AnnotatedCompiledUnit::Script(AnnotatedCompiledScript {
                 loc: _loc,
                 named_script: script,
@@ -724,7 +724,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                             )
                         );
                         return;
-                    },
+                    }
                 };
 
                 // Convert the script into a module.
@@ -750,7 +750,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                     script.source_map,
                     function_infos,
                 ));
-            },
+            }
         }
     }
 
@@ -794,7 +794,7 @@ fn retrospective_lambda_lifting(
             T::FunctionBody_::Native => (),
             T::FunctionBody_::Defined(seq) => {
                 collect_lambda_lifted_functions_in_sequence(&mut lifted, seq);
-            },
+            }
         };
     }
 
@@ -915,7 +915,7 @@ fn collect_lambda_lifted_functions_in_sequence(
         match &stmt.value {
             T::SequenceItem_::Seq(exp) | T::SequenceItem_::Bind(_, _, exp) => {
                 collect_lambda_lifted_functions_in_exp(collection, exp.as_ref());
-            },
+            }
             T::SequenceItem_::Declare(_) => (),
         }
     }
@@ -930,7 +930,7 @@ fn collect_lambda_lifted_functions_in_exp(
     match &exp.exp.value {
         UnannotatedExp_::Spec(anchor) => {
             collection.extend(anchor.used_lambda_funs.values().cloned());
-        },
+        }
         UnannotatedExp_::Unit { .. }
         | UnannotatedExp_::Value(..)
         | UnannotatedExp_::Move { .. }
@@ -944,33 +944,33 @@ fn collect_lambda_lifted_functions_in_exp(
 
         UnannotatedExp_::ModuleCall(call) => {
             collect_lambda_lifted_functions_in_exp(collection, call.arguments.as_ref());
-        },
+        }
         UnannotatedExp_::VarCall(_, args) | UnannotatedExp_::Builtin(_, args) => {
             collect_lambda_lifted_functions_in_exp(collection, args.as_ref());
-        },
+        }
         UnannotatedExp_::Vector(_, _, _, args) => {
             collect_lambda_lifted_functions_in_exp(collection, args.as_ref());
-        },
+        }
 
         UnannotatedExp_::IfElse(cond, lhs, rhs) => {
             collect_lambda_lifted_functions_in_exp(collection, cond.as_ref());
             collect_lambda_lifted_functions_in_exp(collection, lhs.as_ref());
             collect_lambda_lifted_functions_in_exp(collection, rhs.as_ref());
-        },
+        }
         UnannotatedExp_::While(cond, body) => {
             collect_lambda_lifted_functions_in_exp(collection, cond.as_ref());
             collect_lambda_lifted_functions_in_exp(collection, body.as_ref());
-        },
+        }
         UnannotatedExp_::Loop { body, .. } => {
             collect_lambda_lifted_functions_in_exp(collection, body.as_ref());
-        },
+        }
 
         UnannotatedExp_::Block(seq) => {
             collect_lambda_lifted_functions_in_sequence(collection, seq);
-        },
+        }
         UnannotatedExp_::Lambda(_, body) => {
             collect_lambda_lifted_functions_in_exp(collection, body);
-        },
+        }
 
         UnannotatedExp_::Assign(_, _, val)
         | UnannotatedExp_::Return(val)
@@ -982,26 +982,26 @@ fn collect_lambda_lifted_functions_in_exp(
         | UnannotatedExp_::Borrow(_, val, _)
         | UnannotatedExp_::TempBorrow(_, val) => {
             collect_lambda_lifted_functions_in_exp(collection, val);
-        },
+        }
         UnannotatedExp_::Mutate(lhs, rhs) | UnannotatedExp_::BinopExp(lhs, _, _, rhs) => {
             collect_lambda_lifted_functions_in_exp(collection, lhs);
             collect_lambda_lifted_functions_in_exp(collection, rhs);
-        },
+        }
 
         UnannotatedExp_::Pack(_, _, _, fields) => {
             for (_, _, (_, (_, val))) in fields.iter() {
                 collect_lambda_lifted_functions_in_exp(collection, val);
             }
-        },
+        }
         UnannotatedExp_::ExpList(exprs) => {
             for e in exprs {
                 match e {
                     T::ExpListItem::Single(val, _) | T::ExpListItem::Splat(_, val, _) => {
                         collect_lambda_lifted_functions_in_exp(collection, val);
-                    },
+                    }
                 }
             }
-        },
+        }
     }
 }
 
@@ -1010,11 +1010,11 @@ fn downgrade_type_inlining_to_expansion(ty: &N::Type) -> E::Type {
         N::Type_::Unit => E::Type_::Unit,
         N::Type_::Ref(is_mut, base) => {
             E::Type_::Ref(*is_mut, downgrade_type_inlining_to_expansion(base).into())
-        },
+        }
         N::Type_::Param(param) => {
             let access = E::ModuleAccess_::Name(param.user_specified_name);
             E::Type_::Apply(sp(param.user_specified_name.loc, access), vec![])
-        },
+        }
         N::Type_::Apply(_, name, args) => {
             let rewritten_args: Vec<_> = args
                 .iter()
@@ -1027,20 +1027,20 @@ fn downgrade_type_inlining_to_expansion(ty: &N::Type) -> E::Type {
                         MoveSymbol::from(builtin.to_string()),
                     ));
                     E::Type_::Apply(sp(ty.loc, access), rewritten_args)
-                },
+                }
                 N::TypeName_::ModuleType(module_ident, struct_name) => {
                     let access = E::ModuleAccess_::ModuleAccess(*module_ident, struct_name.0);
                     E::Type_::Apply(sp(struct_name.loc(), access), rewritten_args)
-                },
+                }
                 N::TypeName_::Multiple(size) => {
                     assert_eq!(*size, rewritten_args.len());
                     E::Type_::Multiple(rewritten_args)
-                },
+                }
             }
-        },
+        }
         N::Type_::Anything | N::Type_::UnresolvedError | N::Type_::Var(_) => {
             panic!("ICE unresolved type")
-        },
+        }
     };
 
     sp(ty.loc, rewritten)
@@ -1064,7 +1064,7 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 Some(module_ident) => E::ModuleAccess_::ModuleAccess(*module_ident, name.0),
             };
             Exp_::Name(sp(name.loc(), access), None)
-        },
+        }
 
         UnannotatedExp_::ModuleCall(call) => {
             let T::ModuleCall {
@@ -1100,7 +1100,7 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 },
                 sp(exp.exp.loc, rewritten_arguments),
             )
-        },
+        }
         UnannotatedExp_::VarCall(target, arguments) => {
             let access = E::ModuleAccess_::Name(target.0);
             let rewritten_arguments = match downgrade_exp_inlining_to_expansion(arguments).value {
@@ -1114,7 +1114,7 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 None,
                 sp(exp.exp.loc, rewritten_arguments),
             )
-        },
+        }
         UnannotatedExp_::Builtin(builtin, arguments) => {
             let access = E::ModuleAccess_::Name(sp(
                 builtin.loc,
@@ -1131,7 +1131,7 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 None,
                 sp(exp.exp.loc, rewritten_arguments),
             )
-        },
+        }
         UnannotatedExp_::Vector(l, _, ty, arguments) => {
             let rewritten_arguments = match downgrade_exp_inlining_to_expansion(arguments).value {
                 Exp_::Unit { .. } => vec![],
@@ -1144,7 +1144,7 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 Some(vec![rewritten_ty]),
                 sp(exp.exp.loc, rewritten_arguments),
             )
-        },
+        }
 
         UnannotatedExp_::IfElse(cond, then_case, else_case) => Exp_::IfElse(
             downgrade_exp_inlining_to_expansion(cond).into(),
@@ -1157,14 +1157,14 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
         ),
         UnannotatedExp_::Loop { has_break: _, body } => {
             Exp_::Loop(downgrade_exp_inlining_to_expansion(body).into())
-        },
+        }
         UnannotatedExp_::Break => Exp_::Break,
         UnannotatedExp_::Continue => Exp_::Continue,
 
         UnannotatedExp_::Block(seq) => Exp_::Block(downgrade_sequence_inlining_to_expansion(seq)),
         UnannotatedExp_::Lambda(..) => {
             panic!("ICE unexpanded lambda after inlining");
-        },
+        }
 
         UnannotatedExp_::Assign(vlist, _, val) => Exp_::Assign(
             downgrade_lvalue_list_inlining_to_expansion(vlist),
@@ -1176,15 +1176,15 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
         ),
         UnannotatedExp_::Return(val) => {
             Exp_::Return(downgrade_exp_inlining_to_expansion(val).into())
-        },
+        }
         UnannotatedExp_::Abort(val) => Exp_::Abort(downgrade_exp_inlining_to_expansion(val).into()),
 
         UnannotatedExp_::Dereference(val) => {
             Exp_::Dereference(downgrade_exp_inlining_to_expansion(val).into())
-        },
+        }
         UnannotatedExp_::UnaryExp(op, val) => {
             Exp_::UnaryExp(*op, downgrade_exp_inlining_to_expansion(val).into())
-        },
+        }
         UnannotatedExp_::BinopExp(lhs, op, _, rhs) => Exp_::BinopExp(
             downgrade_exp_inlining_to_expansion(lhs).into(),
             *op,
@@ -1210,7 +1210,7 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 Some(rewritten_ty_args),
                 rewritten_fields,
             )
-        },
+        }
         UnannotatedExp_::ExpList(items) => Exp_::ExpList(downgrade_exp_list_to_expansion(items)),
 
         UnannotatedExp_::BorrowLocal(is_mut, var) => {
@@ -1219,10 +1219,10 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 *is_mut,
                 sp(var.loc(), Exp_::Name(sp(var.loc(), access), None)).into(),
             )
-        },
+        }
         UnannotatedExp_::TempBorrow(is_mut, target) => {
             Exp_::Borrow(*is_mut, downgrade_exp_inlining_to_expansion(target).into())
-        },
+        }
         UnannotatedExp_::Borrow(is_mut, target, field) => {
             let base = E::ExpDotted_::Exp(downgrade_exp_inlining_to_expansion(target));
             let dotted = Exp_::ExpDotted(
@@ -1233,7 +1233,7 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 .into(),
             );
             Exp_::Borrow(*is_mut, sp(exp.exp.loc, dotted).into())
-        },
+        }
 
         UnannotatedExp_::Cast(val, ty) => Exp_::Cast(
             downgrade_exp_inlining_to_expansion(val).into(),
@@ -1252,7 +1252,7 @@ fn downgrade_exp_inlining_to_expansion(exp: &T::Exp) -> E::Exp {
                 .map(|f| sp(exp.exp.loc, f.name))
                 .collect();
             Exp_::Spec(anchor.id, used_locals, used_lambdas)
-        },
+        }
 
         UnannotatedExp_::UnresolvedError => Exp_::UnresolvedError,
     };
@@ -1266,7 +1266,7 @@ fn downgrade_exp_list_to_expansion(items: &[T::ExpListItem]) -> Vec<E::Exp> {
         .map(|item| match item {
             T::ExpListItem::Single(e, _) | T::ExpListItem::Splat(_, e, _) => {
                 downgrade_exp_inlining_to_expansion(e)
-            },
+            }
         })
         .collect()
 }
@@ -1276,11 +1276,11 @@ fn downgrade_lvalue_inlining_to_expansion(val: &T::LValue) -> E::LValue {
         T::LValue_::Var(var, _) => {
             let access = E::ModuleAccess_::Name(var.0);
             E::LValue_::Var(sp(var.loc(), access), None)
-        },
+        }
         T::LValue_::Ignore => {
             let access = E::ModuleAccess_::Name(sp(val.loc, MoveSymbol::from("_")));
             E::LValue_::Var(sp(val.loc, access), None)
-        },
+        }
         T::LValue_::Unpack(module_ident, struct_name, ty_args, fields)
         | T::LValue_::BorrowUnpack(_, module_ident, struct_name, ty_args, fields) => {
             let access = E::ModuleAccess_::ModuleAccess(*module_ident, struct_name.0);
@@ -1306,7 +1306,7 @@ fn downgrade_lvalue_inlining_to_expansion(val: &T::LValue) -> E::LValue {
                 },
                 rewritten_fields,
             )
-        },
+        }
     };
 
     sp(val.loc, rewritten)
@@ -1327,10 +1327,10 @@ fn downgrade_sequence_inlining_to_expansion(seq: &T::Sequence) -> E::Sequence {
         let rewritten_stmt = match &stmt.value {
             T::SequenceItem_::Seq(exp) => {
                 E::SequenceItem_::Seq(downgrade_exp_inlining_to_expansion(exp))
-            },
+            }
             T::SequenceItem_::Declare(vlist) => {
                 E::SequenceItem_::Declare(downgrade_lvalue_list_inlining_to_expansion(vlist), None)
-            },
+            }
             T::SequenceItem_::Bind(vlist, _, exp) => E::SequenceItem_::Bind(
                 downgrade_lvalue_list_inlining_to_expansion(vlist),
                 downgrade_exp_inlining_to_expansion(exp),
