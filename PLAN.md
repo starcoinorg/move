@@ -62,10 +62,17 @@
   - `cargo test -p move-vm-runtime -p move-vm-test-utils -p move-vm-integration-tests -p move-unit-test`
   - `cargo test -p move-vm-transactional-tests`
   - 最近一次完整执行结果为绿色；`move-vm-integration-tests` 中仍有 9 个历史 `ignored` 用例，原因是依赖检查已移到 Move VM 外部，不是本次移植引入的新失败。
+- `module_storage_tests.rs` 风格 cache-state 断言已经落地到 integration tests，覆盖：
+  - module exists / missing module
+  - deserialized cache
+  - eager/lazy verified cache
+  - tree / DAG traversal
+  - cyclic dependency failure后的 cache state
+  - friend-only graph 不污染 module cache
+  - script cache 与 module cache 的联合状态
 - 测试手册与测试合约选型已整理到根目录 `LAZY_LOADER_TESTING.md`。
 
 ## Remaining Gaps
-- `PLAN` 中提到的 `module_storage_tests.rs` 风格 cache-state 断言还没有完整补齐；当前测试更偏功能与行为回归，而不是细粒度 deserialized/verified cache 状态校验。
 - 性能专项仍未闭环：性能专用 synthetic contracts 还没补，因此目前可以确认“功能正确、可正常运行”，但还不能把“性能提升已完成验收”视为已落地结论。
 
 ## Assumptions
