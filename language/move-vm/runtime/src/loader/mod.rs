@@ -8,8 +8,8 @@ use crate::{
     logging::{expect_no_verification_errors, expect_no_verification_errors_unless_bogus_storage},
     module_traversal::{TraversalContext, TraversalStorage}, native_functions::NativeFunctions,
     dispatch_loader, AsUnsyncCodeStorage, AsUnsyncModuleStorage, LegacyLoaderConfig,
-    FunctionDefinitionLoader, InstantiatedFunctionLoader, ModuleMetadataLoader, NativeModuleLoader,
-    ScriptLoader, StructDefinitionLoader, WithRuntimeEnvironment,
+    InstantiatedFunctionLoader, NativeModuleLoader, ScriptLoader, StructDefinitionLoader,
+    WithRuntimeEnvironment,
     ModuleStorage as LoaderV2ModuleStorage,
 };
 use hashbrown::Equivalent;
@@ -18,9 +18,9 @@ use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, CompiledScript, Constant, ConstantPoolIndex, FieldHandleIndex,
-        FieldInstantiationIndex, FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex,
-        StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
+        CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
+        FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex, StructDefInstantiationIndex,
+        StructDefinitionIndex, StructFieldInformation, TableIndex,
     },
     IndexKind,
 };
@@ -246,26 +246,6 @@ impl Loader {
         Ok((result, verified_modules_iter.collect()))
     }
 
-    fn with_code_storage<'a, T, R>(
-        &self,
-        data_store: &'a T,
-        f: impl FnOnce(
-            &crate::UnsyncCodeStorage<crate::UnsyncModuleStorage<'a, LoaderV2DataStore<'a, T>>>,
-        ) -> VMResult<R>,
-    ) -> VMResult<(R, Vec<(ModuleId, Arc<Module>)>)>
-    where
-        T: ModuleBytesStorage,
-    {
-        let runtime_environment = self.runtime_environment();
-        let base_storage = LoaderV2DataStore::new(runtime_environment, data_store);
-        let code_storage = base_storage.into_unsync_code_storage();
-        let result = f(&code_storage)?;
-        let (_ctx, verified_modules_iter) = code_storage
-            .into_module_storage()
-            .unpack_into_verified_modules_iter();
-        Ok((result, verified_modules_iter.collect()))
-    }
-
     fn sync_verified_modules(
         &self,
         module_store: &ModuleStorageAdapter,
@@ -274,21 +254,6 @@ impl Loader {
         for (_module_id, module) in verified_modules {
             module_store.store_verified_module(module);
         }
-    }
-
-    fn sync_verified_script(
-        &self,
-        data_store: &mut TransactionDataCache,
-        script_blob: &[u8],
-    ) -> VMResult<()> {
-        let mut sha3_256 = Sha3_256::new();
-        sha3_256.update(script_blob);
-        let hash_value: [u8; 32] = sha3_256.finalize().into();
-
-        let script = data_store.load_compiled_script_to_cache(script_blob, hash_value)?;
-        let script = Script::new(script, &hash_value, &self.name_cache)?;
-        self.scripts.write().insert(hash_value, script);
-        Ok(())
     }
 
     fn normalize_module_loading_error(
@@ -430,38 +395,6 @@ impl Loader {
         )
     }
 
-    pub(crate) fn ensure_function_loaded_v2(
-        &self,
-        module_id: &ModuleId,
-        function_name: &IdentStr,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        gas_meter: &mut impl GasMeter,
-        traversal_context: &mut TraversalContext,
-    ) -> VMResult<()> {
-        if module_store.module_at(module_id).is_some() {
-            return Ok(());
-        }
-
-        let result = self
-            .with_module_storage(data_store, |storage| {
-            dispatch_loader!(storage, loader, {
-                loader
-                    .load_function_definition(
-                        gas_meter,
-                        traversal_context,
-                        module_id,
-                        function_name,
-                    )
-                    .map(|_| ())
-            })
-        });
-        let (result, verified_modules) = result
-            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
-        self.sync_verified_modules(module_store, verified_modules);
-        Ok(result)
-    }
-
     pub(crate) fn load_module_v2(
         &self,
         module_id: &ModuleId,
@@ -492,28 +425,6 @@ impl Loader {
                         )
                         .map(|_| ())
                 }
-            })
-        });
-        let (result, verified_modules) = result
-            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
-        self.sync_verified_modules(module_store, verified_modules);
-        Ok(result)
-    }
-
-    pub(crate) fn load_module_for_metadata_v2(
-        &self,
-        module_id: &ModuleId,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-        gas_meter: &mut impl GasMeter,
-        traversal_context: &mut TraversalContext,
-    ) -> VMResult<Arc<CompiledModule>> {
-        let result = self
-            .with_module_storage(data_store, |storage| {
-            dispatch_loader!(storage, loader, {
-                loader
-                    .load_module_for_metadata(gas_meter, traversal_context, module_id)
-                    .map_err(|err| err.finish(Location::Undefined))
             })
         });
         let (result, verified_modules) = result
@@ -576,103 +487,6 @@ impl Loader {
         )?;
 
         Ok(())
-    }
-
-    // Scripts are verified and dependencies are loaded.
-    // Effectively that means modules are cached from leaf to root in the dependency DAG.
-    // If a dependency error is found, loading stops and the error is returned.
-    // However all modules cached up to that point stay loaded.
-
-    // Entry point for script execution (`MoveVM::execute_script`).
-    // Verifies the script if it is not in the cache of scripts loaded.
-    // Type parameters are checked as well after every type is loaded.
-    pub(crate) fn load_script(
-        &self,
-        script_blob: &[u8],
-        ty_args: &[TypeTag],
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<LoadedFunction> {
-        // Retrieve or load the script.
-        let mut sha3_256 = Sha3_256::new();
-        sha3_256.update(script_blob);
-        let hash_value: [u8; 32] = sha3_256.finalize().into();
-
-        let mut scripts = self.scripts.write();
-        let main = match scripts.get(&hash_value) {
-            Some(cached) => cached,
-            None => {
-                let ver_script = self.deserialize_and_verify_script(
-                    script_blob,
-                    hash_value,
-                    data_store,
-                    module_store,
-                )?;
-                let script = Script::new(ver_script, &hash_value, &self.name_cache)?;
-                scripts.insert(hash_value, script)
-            },
-        };
-
-        let ty_args = ty_args
-            .iter()
-            .map(|ty| self.load_type(ty, data_store, module_store))
-            .collect::<VMResult<Vec<_>>>()?;
-
-        #[allow(clippy::collapsible_if)]
-        if self.ty_builder().is_legacy() {
-            if ty_args.iter().map(legacy_count_type_nodes).sum::<u64>()
-                > TypeBuilder::LEGACY_MAX_TYPE_INSTANTIATION_NODES
-            {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES)
-                    .with_message(format!(
-                        "Too many type nodes when instantiating a type for script {}",
-                        &main.name
-                    ))
-                    .finish(Location::Script));
-            };
-        }
-
-        Type::verify_ty_arg_abilities(main.ty_param_abilities(), &ty_args).map_err(|e| {
-            e.with_message(format!(
-                "Failed to verify type arguments for script {}",
-                &main.name
-            ))
-            .finish(Location::Script)
-        })?;
-
-        Ok(LoadedFunction {
-            ty_args,
-            function: main,
-        })
-    }
-
-    // The process of deserialization and verification is not and it must not be under lock.
-    // So when publishing modules through the dependency DAG it may happen that a different
-    // thread had loaded the module after this process fetched it from storage.
-    // Caching will take care of that by asking for each dependency module again under lock.
-    fn deserialize_and_verify_script(
-        &self,
-        script: &[u8],
-        hash_value: [u8; 32],
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<Arc<CompiledScript>> {
-        let script = data_store.load_compiled_script_to_cache(script, hash_value)?;
-        let runtime_environment = &self.runtime_environment();
-        let locally_verified_script =
-            runtime_environment.build_locally_verified_script(script.clone())?;
-        let loaded_deps = locally_verified_script
-            .immediate_dependencies_iter()
-            .map(|(addr, name)| ModuleId::new(*addr, name.to_owned()))
-            .into_iter()
-            .map(|module_id| self.load_module(&module_id, data_store, module_store))
-            .collect::<VMResult<Vec<_>>>()?;
-        runtime_environment.build_verified_script(
-            locally_verified_script,
-            &loaded_deps,
-            &hash_value,
-        )?;
-        Ok(script)
     }
 
     pub(crate) fn runtime_environment(&self) -> crate::RuntimeEnvironment {
@@ -851,180 +665,6 @@ impl Loader {
             .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
 
         Ok(LoadedFunction { ty_args, function })
-    }
-
-    // Loading verifies the module if it was never loaded.
-    // Type parameters are checked as well after every type is loaded.
-    pub(crate) fn load_function(
-        &self,
-        module_id: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: &[TypeTag],
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<LoadedFunction> {
-        let function = self.load_function_without_type_args(
-            module_id,
-            function_name,
-            data_store,
-            module_store,
-        )?;
-
-        let ty_args = ty_args
-            .iter()
-            .map(|ty_arg| self.load_type(ty_arg, data_store, module_store))
-            .collect::<VMResult<Vec<_>>>()
-            .map_err(|mut err| {
-                // User provided type argument failed to load. Set extra sub status to distinguish from internal type loading error.
-                if StatusCode::TYPE_RESOLUTION_FAILURE == err.major_status() {
-                    err.set_sub_status(move_core_types::vm_status::sub_status::type_resolution_failure::EUSER_TYPE_LOADING_FAILURE);
-                }
-                err
-            })?;
-
-        Type::verify_ty_arg_abilities(function.ty_param_abilities(), &ty_args)
-            .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
-
-        Ok(LoadedFunction { ty_args, function })
-    }
-
-    // Entry point for module publishing (`MoveVM::publish_module_bundle`).
-    //
-    // All modules in the bundle to be published must be loadable. This function performs all
-    // verification steps to load these modules without actually loading them into the code cache.
-    pub(crate) fn verify_module_bundle_for_publication(
-        &self,
-        modules: &[CompiledModule],
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<()> {
-        fail::fail_point!("verifier-failpoint-1", |_| { Ok(()) });
-
-        let mut bundle_unverified: BTreeSet<_> = modules.iter().map(|m| m.self_id()).collect();
-        let mut bundle_verified = BTreeMap::new();
-        for module in modules {
-            let module_id = module.self_id();
-            bundle_unverified.remove(&module_id);
-
-            self.verify_module_for_publication(
-                module,
-                &bundle_verified,
-                &bundle_unverified,
-                data_store,
-                module_store,
-            )?;
-            bundle_verified.insert(module_id.clone(), module.clone());
-        }
-        Ok(())
-    }
-
-    // A module to be published must be loadable.
-    //
-    // This step performs all verification steps to load the module without loading it.
-    // The module is not added to the code cache. It is simply published to the data cache.
-    // See `verify_script()` for script verification steps.
-    //
-    // If a module `M` is published together with a bundle of modules (i.e., a vector of modules),
-    // - the `bundle_verified` argument tracks the modules that have already been verified in the
-    //   bundle. Basically, this represents the modules appears before `M` in the bundle vector.
-    // - the `bundle_unverified` argument tracks the modules that have not been verified when `M`
-    //   is being verified, i.e., the modules appears after `M` in the bundle vector.
-    fn verify_module_for_publication(
-        &self,
-        module: &CompiledModule,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
-        bundle_unverified: &BTreeSet<ModuleId>,
-        data_store: &mut TransactionDataCache,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<()> {
-        // Performs all verification steps to load the module without loading it, i.e., the new
-        // module will NOT show up in `module_cache`. In the module republishing case, it means
-        // that the old module is still in the `module_cache`, unless a new Loader is created,
-        // which means that a new MoveVM instance needs to be created.
-        move_bytecode_verifier::verify_module_with_config(&self.vm_config.verifier_config, module)?;
-        self.check_natives(module)?;
-
-        let mut visited = BTreeSet::new();
-        let mut friends_discovered = BTreeSet::new();
-        visited.insert(module.self_id());
-        friends_discovered.extend(module.immediate_friends());
-
-        // downward exploration of the module's dependency graph. Since we know nothing about this
-        // target module, we don't know what the module may specify as its dependencies and hence,
-        // we allow the loading of dependencies and the subsequent linking to fail.
-        self.load_and_verify_dependencies(
-            module,
-            bundle_verified,
-            data_store,
-            module_store,
-            &mut visited,
-            &mut friends_discovered,
-            /* allow_dependency_loading_failure */ true,
-        )?;
-
-        // upward exploration of the modules's dependency graph. Similar to dependency loading, as
-        // we know nothing about this target module, we don't know what the module may specify as
-        // its friends and hence, we allow the loading of friends to fail.
-        self.load_and_verify_friends(
-            friends_discovered,
-            bundle_verified,
-            bundle_unverified,
-            data_store,
-            module_store,
-            /* allow_friend_loading_failure */ true,
-        )?;
-
-        // make sure there is no cyclic dependency
-        self.verify_module_cyclic_relations(
-            module,
-            bundle_verified,
-            bundle_unverified,
-            module_store,
-        )
-    }
-
-    fn verify_module_cyclic_relations(
-        &self,
-        module: &CompiledModule,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
-        bundle_unverified: &BTreeSet<ModuleId>,
-        module_store: &ModuleStorageAdapter,
-    ) -> VMResult<()> {
-        // let module_cache = self.module_cache.read();
-        cyclic_dependencies::verify_module(
-            module,
-            |module_id| {
-                bundle_verified
-                    .get(module_id)
-                    .map(|module| module.immediate_dependencies())
-                    .or_else(|| {
-                        module_store
-                            .module_at(module_id)
-                            .map(|m| m.module.immediate_dependencies())
-                    })
-                    .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
-            },
-            |module_id| {
-                if bundle_unverified.contains(module_id) {
-                    // If the module under verification declares a friend which is also in the
-                    // bundle (and positioned after this module in the bundle), we defer the cyclic
-                    // relation checking when we verify that module.
-                    Ok(vec![])
-                } else {
-                    // Otherwise, we get all the information we need to verify whether this module
-                    // creates a cyclic relation.
-                    bundle_verified
-                        .get(module_id)
-                        .map(|module| module.immediate_friends())
-                        .or_else(|| {
-                            module_store
-                                .module_at(module_id)
-                                .map(|m| m.module.immediate_friends())
-                        })
-                        .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
-                }
-            },
-        )
     }
 
     fn check_natives(&self, module: &CompiledModule) -> VMResult<()> {
@@ -1249,6 +889,44 @@ impl Loader {
 
         let (module, size) = self.load_and_verify_module(id, data_store, allow_loading_failure)?;
         module_store.insert(&self.natives, id.clone(), size, module, &self.name_cache)
+    }
+
+    fn verify_module_cyclic_relations(
+        &self,
+        module: &CompiledModule,
+        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
+        bundle_unverified: &BTreeSet<ModuleId>,
+        module_store: &ModuleStorageAdapter,
+    ) -> VMResult<()> {
+        cyclic_dependencies::verify_module(
+            module,
+            |module_id| {
+                bundle_verified
+                    .get(module_id)
+                    .map(|module| module.immediate_dependencies())
+                    .or_else(|| {
+                        module_store
+                            .module_at(module_id)
+                            .map(|m| m.module.immediate_dependencies())
+                    })
+                    .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
+            },
+            |module_id| {
+                if bundle_unverified.contains(module_id) {
+                    Ok(vec![])
+                } else {
+                    bundle_verified
+                        .get(module_id)
+                        .map(|module| module.immediate_friends())
+                        .or_else(|| {
+                            module_store
+                                .module_at(module_id)
+                                .map(|m| m.module.immediate_friends())
+                        })
+                        .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
+                }
+            },
+        )
     }
 
     // Load, deserialize, and check the module with the bytecode verifier, without linking
@@ -1592,17 +1270,6 @@ impl<'a> Resolver<'a> {
     // Function resolution
     //
 
-    pub(crate) fn function_from_handle(
-        &self,
-        idx: FunctionHandleIndex,
-    ) -> PartialVMResult<Arc<Function>> {
-        let idx = match &self.binary {
-            BinaryType::Module(module) => module.function_at(idx.0),
-            BinaryType::Script(script) => script.function_at(idx.0),
-        };
-        self.module_store.function_at(idx)
-    }
-
     fn maybe_charge_and_load_module(
         &self,
         module_id: &ModuleId,
@@ -1648,17 +1315,6 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub(crate) fn function_from_instantiation(
-        &self,
-        idx: FunctionInstantiationIndex,
-    ) -> PartialVMResult<Arc<Function>> {
-        let func_inst = match &self.binary {
-            BinaryType::Module(module) => module.function_instantiation_at(idx.0),
-            BinaryType::Script(script) => script.function_instantiation_at(idx.0),
-        };
-        self.module_store.function_at(&func_inst.handle)
-    }
-
     pub(crate) fn function_from_instantiation_with_context(
         &self,
         idx: FunctionInstantiationIndex,
@@ -1685,15 +1341,6 @@ impl<'a> Resolver<'a> {
                     .map_err(|err| err.finish(Location::Undefined))
             },
         }
-    }
-
-    pub(crate) fn function_from_name(
-        &self,
-        module_id: &ModuleId,
-        func_name: &IdentStr,
-    ) -> PartialVMResult<Arc<Function>> {
-        self.module_store
-            .resolve_function_by_name(func_name, module_id)
     }
 
     pub(crate) fn function_from_name_with_context(
@@ -1950,60 +1597,6 @@ impl<'a> Resolver<'a> {
             },
             BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
         }
-    }
-
-    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
-        let loader = LoadedStructDefinitionLoader {
-            runtime_environment: self.loader.runtime_environment(),
-            loader: self.loader,
-            module_store: self.module_store,
-        };
-        let mut gas_meter = UnmeteredGasMeter;
-        let traversal_storage = TraversalStorage::new();
-        let mut traversal_context = TraversalContext::new(&traversal_storage);
-        LayoutConverter::new(&loader).type_to_type_layout(
-            &mut gas_meter,
-            &mut traversal_context,
-            ty,
-        )
-    }
-
-    pub(crate) fn type_to_type_layout_with_identifier_mappings(
-        &self,
-        ty: &Type,
-    ) -> PartialVMResult<(MoveTypeLayout, bool)> {
-        let loader = LoadedStructDefinitionLoader {
-            runtime_environment: self.loader.runtime_environment(),
-            loader: self.loader,
-            module_store: self.module_store,
-        };
-        let mut gas_meter = UnmeteredGasMeter;
-        let traversal_storage = TraversalStorage::new();
-        let mut traversal_context = TraversalContext::new(&traversal_storage);
-        LayoutConverter::new(&loader).type_to_type_layout_with_identifier_mappings(
-            &mut gas_meter,
-            &mut traversal_context,
-            ty,
-        )
-    }
-
-    pub(crate) fn type_to_fully_annotated_layout(
-        &self,
-        ty: &Type,
-    ) -> PartialVMResult<MoveTypeLayout> {
-        let loader = LoadedStructDefinitionLoader {
-            runtime_environment: self.loader.runtime_environment(),
-            loader: self.loader,
-            module_store: self.module_store,
-        };
-        let mut gas_meter = UnmeteredGasMeter;
-        let traversal_storage = TraversalStorage::new();
-        let mut traversal_context = TraversalContext::new(&traversal_storage);
-        LayoutConverter::new(&loader).type_to_fully_annotated_layout(
-            &mut gas_meter,
-            &mut traversal_context,
-            ty,
-        )
     }
 
     // get the loader

@@ -14,7 +14,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::{
-    gas::{GasMeter, UnmeteredGasMeter},
+    gas::GasMeter,
     loaded_data::runtime_types::{StructIdentifier, StructNameIndex, Type},
 };
 use hashbrown::HashMap;
@@ -56,10 +56,6 @@ where
 
     pub(crate) fn runtime_environment(&self) -> &RuntimeEnvironment {
         self.struct_definition_loader.runtime_environment()
-    }
-
-    pub(crate) fn is_lazy_loading_enabled(&self) -> bool {
-        self.struct_definition_loader.is_lazy_loading_enabled()
     }
 
     pub(crate) fn type_to_type_layout_with_identifier_mappings(
@@ -408,15 +404,5 @@ where
             layout.clone(),
         );
         Ok(layout)
-    }
-
-    pub(crate) fn type_to_type_layout_unmetered(
-        &self,
-        ty: &Type,
-    ) -> PartialVMResult<(MoveTypeLayout, bool)> {
-        let mut gas_meter = UnmeteredGasMeter;
-        let storage = crate::module_traversal::TraversalStorage::new();
-        let mut traversal_context = TraversalContext::new(&storage);
-        self.type_to_type_layout_with_identifier_mappings(&mut gas_meter, &mut traversal_context, ty)
     }
 }

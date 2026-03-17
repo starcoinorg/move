@@ -126,18 +126,6 @@ impl ModuleStorageAdapter {
             .store_module(module.self_id(), module.as_ref().clone())
     }
 
-    pub(crate) fn cache_verified_module(
-        &self,
-        id: &ModuleId,
-        module: Arc<Module>,
-    ) -> Arc<Module> {
-        if let Some(cached) = self.module_at(id) {
-            cached
-        } else {
-            self.modules.store_module(id, module.as_ref().clone())
-        }
-    }
-
     pub(crate) fn has_module(&self, module_id: &ModuleId) -> bool {
         self.modules.fetch_module(module_id).is_some()
     }
@@ -184,24 +172,6 @@ impl ModuleStorageAdapter {
         }
     }
 
-    pub(crate) fn function_at(&self, handle: &FunctionHandle) -> PartialVMResult<Arc<Function>> {
-        match handle {
-            FunctionHandle::Local(func) => Ok(func.clone()),
-            FunctionHandle::Remote { module, name } => {
-                self.modules
-                    .fetch_module(module)
-                    .and_then(|module| {
-                        let idx = module.function_map.get(name)?;
-                        module.function_defs.get(*idx).cloned()
-                    })
-                    .ok_or_else(|| {
-                        PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE).with_message(
-                            format!("Failed to resolve function: {:?}::{:?}", module, name),
-                        )
-                    })
-            },
-        }
-    }
 }
 
 // A Module is very similar to a binary Module but data is "transformed" to a representation

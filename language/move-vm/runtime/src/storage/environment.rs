@@ -253,43 +253,6 @@ impl WithRuntimeEnvironment for RuntimeEnvironment {
     }
 }
 
-pub struct WithRuntimeEnvironmentStorage<'env, T> {
-    runtime_environment: &'env RuntimeEnvironment,
-    storage: T,
-}
-
-impl<'env, T> WithRuntimeEnvironmentStorage<'env, T> {
-    pub fn new(runtime_environment: &'env RuntimeEnvironment, storage: T) -> Self {
-        Self {
-            runtime_environment,
-            storage,
-        }
-    }
-
-    pub fn into_inner(self) -> T {
-        self.storage
-    }
-}
-
-impl<T> WithRuntimeEnvironment for WithRuntimeEnvironmentStorage<'_, T> {
-    fn runtime_environment(&self) -> &RuntimeEnvironment {
-        self.runtime_environment
-    }
-}
-
-impl<T> ModuleBytesStorage for WithRuntimeEnvironmentStorage<'_, T>
-where
-    T: ModuleBytesStorage,
-{
-    fn fetch_module_bytes(
-        &self,
-        address: &AccountAddress,
-        module_name: &IdentStr,
-    ) -> VMResult<Option<Bytes>> {
-        self.storage.fetch_module_bytes(address, module_name)
-    }
-}
-
 pub struct RuntimeEnvironmentRef<'a, T> {
     runtime_environment: &'a RuntimeEnvironment,
     inner: &'a T,
