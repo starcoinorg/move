@@ -75,6 +75,9 @@ pub struct AdapterPublishArgs {
     #[clap(long)]
     /// is skip the check friend link, if true, treat `friend` as `private`
     pub skip_check_friend_linking: bool,
+    #[clap(long)]
+    /// enable VM lazy loading for this publish command
+    pub lazy_loading: bool,
     /// print more complete information for VMErrors on publish
     #[clap(long)]
     pub verbose: bool,
@@ -84,6 +87,9 @@ pub struct AdapterPublishArgs {
 pub struct AdapterExecuteArgs {
     #[clap(long, default_value = "true")]
     pub check_runtime_types: bool,
+    #[clap(long)]
+    /// enable VM lazy loading for this execution command
+    pub lazy_loading: bool,
     /// print more complete information for VMErrors on run
     #[clap(long)]
     pub verbose: bool,
@@ -216,7 +222,8 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         match self.perform_session_action(
             gas_budget,
             |session, gas_status| {
-                let compat = Compatibility::new(
+                let compat = Compatibility::custom(
+                    !extra_args.skip_check_struct_and_pub_function_linking,
                     !extra_args.skip_check_struct_layout,
                     !extra_args.skip_check_friend_linking,
                 );
@@ -228,7 +235,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                     compat,
                 )
             },
-            production_vm_config_with_paranoid_type_checks(),
+            vm_config_for_publish(&extra_args),
         ) {
             Ok(()) => Ok((None, module)),
             Err(vm_error) => Err(anyhow!(
@@ -572,8 +579,17 @@ impl From<AdapterExecuteArgs> for VMConfig {
     fn from(arg: AdapterExecuteArgs) -> VMConfig {
         VMConfig {
             paranoid_type_checks: arg.check_runtime_types,
+            enable_lazy_loading: arg.lazy_loading,
             ..Self::production()
         }
+    }
+}
+
+fn vm_config_for_publish(arg: &AdapterPublishArgs) -> VMConfig {
+    VMConfig {
+        paranoid_type_checks: true,
+        enable_lazy_loading: arg.lazy_loading,
+        ..VMConfig::production()
     }
 }
 

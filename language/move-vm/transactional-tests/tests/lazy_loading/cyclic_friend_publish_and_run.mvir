@@ -1,0 +1,45 @@
+//# publish --lazy-loading
+module 0x42.A {
+  public ping() {
+  label b0:
+    return;
+  }
+}
+
+//# publish --lazy-loading
+module 0x42.B {
+  friend 0x42.A;
+  import 0x42.A;
+
+  public from_b() {
+  label b0:
+    A.ping();
+    return;
+  }
+}
+
+//# publish --lazy-loading
+module 0x42.C {
+  friend 0x42.B;
+  import 0x42.B;
+
+  public from_c() {
+  label b0:
+    B.from_b();
+    return;
+  }
+}
+
+//# publish --lazy-loading
+module 0x42.A {
+  friend 0x42.C;
+  import 0x42.C;
+
+  public ping() {
+  label b0:
+    C.from_c();
+    return;
+  }
+}
+
+//# run --lazy-loading 0x42::A::ping

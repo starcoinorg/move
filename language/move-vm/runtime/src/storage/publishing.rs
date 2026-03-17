@@ -17,6 +17,7 @@ use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, VMResult},
     normalized, CompiledModule, IndexKind,
 };
+use move_bytecode_verifier::cyclic_dependencies;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -25,7 +26,7 @@ use move_core_types::{
 };
 use move_vm_types::{code::ModuleBytesStorage, module_linker_error, sha3_256};
 use std::{
-    collections::{btree_map, BTreeMap},
+    collections::{btree_map, BTreeMap, BTreeSet},
     sync::Arc,
 };
 
@@ -80,6 +81,78 @@ pub struct StagingModuleStorage<'a, M> {
 impl<M> NoOpLayoutCache for StagingModuleStorage<'_, M> {}
 
 impl<'a, M: ModuleStorage> StagingModuleStorage<'a, M> {
+    fn get_staged_module(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> Option<Arc<CompiledModule>> {
+        self.storage
+            .byte_storage()
+            .staged_modules
+            .get(address)
+            .and_then(|account_storage| account_storage.get(module_name))
+            .map(|(_, module)| module.clone())
+    }
+
+    fn get_existing_or_staged_module(
+        &self,
+        module_id: &ModuleId,
+    ) -> VMResult<Option<Arc<CompiledModule>>> {
+        if let Some(module) = self.get_staged_module(module_id.address(), module_id.name()) {
+            return Ok(Some(module));
+        }
+        self.unmetered_get_deserialized_module(module_id.address(), module_id.name())
+    }
+
+    fn eager_verify_friend_closure(
+        &self,
+        module: &CompiledModule,
+        visited: &mut BTreeSet<ModuleId>,
+    ) -> VMResult<()> {
+        for friend in module.immediate_friends() {
+            if !visited.insert(friend.clone()) {
+                continue;
+            }
+            self.unmetered_get_existing_eagerly_verified_module(friend.address(), friend.name())?;
+            let friend_module = self
+                .get_existing_or_staged_module(&friend)?
+                .ok_or_else(|| module_linker_error!(friend.address(), friend.name()))?;
+            self.eager_verify_friend_closure(friend_module.as_ref(), visited)?;
+        }
+        Ok(())
+    }
+
+    fn verify_module_cyclic_relations(&self, module: &CompiledModule) -> VMResult<()> {
+        let lookup_module_relations =
+            |module_id: &ModuleId, include_friends: bool| -> move_binary_format::errors::PartialVMResult<Vec<ModuleId>> {
+                let maybe_module = self
+                    .get_existing_or_staged_module(module_id)
+                    .map_err(|err| {
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!(
+                                "failed to fetch {} while checking module cycles: {err}",
+                                module_id
+                            ))
+                    })?;
+                let compiled_module = maybe_module.ok_or_else(|| {
+                    PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+                        .with_message(format!("Missing dependency {module_id}"))
+                })?;
+                let ids = if include_friends {
+                    compiled_module.immediate_friends()
+                } else {
+                    compiled_module.immediate_dependencies()
+                };
+                Ok(ids)
+            };
+
+        cyclic_dependencies::verify_module(
+            module,
+            |module_id| lookup_module_relations(module_id, false),
+            |module_id| lookup_module_relations(module_id, true),
+        )
+    }
+
     pub fn create(
         sender: &AccountAddress,
         existing_module_storage: &'a M,
@@ -218,7 +291,7 @@ impl<'a, M: ModuleStorage> StagingModuleStorage<'a, M> {
                     &verified_dependencies,
                 )?;
             } else {
-                staged_module_storage
+                let verified_module = staged_module_storage
                     .unmetered_get_eagerly_verified_module(addr, name)?
                     .ok_or_else(|| {
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -229,6 +302,10 @@ impl<'a, M: ModuleStorage> StagingModuleStorage<'a, M> {
                             ))
                             .finish(Location::Undefined)
                     })?;
+                let mut visited_friends = BTreeSet::from([verified_module.self_id().clone()]);
+                staged_module_storage
+                    .eager_verify_friend_closure(compiled_module.as_ref(), &mut visited_friends)?;
+                staged_module_storage.verify_module_cyclic_relations(compiled_module)?;
             }
 
             for (friend_addr, friend_name) in compiled_module.immediate_friends_iter() {
