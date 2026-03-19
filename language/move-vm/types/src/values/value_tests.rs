@@ -4,7 +4,7 @@
 
 use crate::{loaded_data::runtime_types::TypeBuilder, values::*, views::*};
 use move_binary_format::errors::*;
-use move_core_types::{account_address::AccountAddress, u256::U256};
+use move_core_types::{account_address::AccountAddress, u256::U256, vm_status::StatusCode};
 
 #[test]
 fn locals() -> PartialVMResult<()> {
@@ -229,6 +229,22 @@ fn test_vm_value_vector_u64_casting() {
     );
 }
 
+#[test]
+fn test_check_depth_of_value_struct() {
+    let value = Value::struct_(Struct::pack([Value::u64(7)]));
+    assert!(value.check_depth_of_value(1).is_ok());
+    let err = value.check_depth_of_value(0).unwrap_err();
+    assert_eq!(err.major_status(), StatusCode::VM_MAX_VALUE_DEPTH_REACHED);
+}
+
+#[test]
+fn test_check_depth_of_value_typed_vector() {
+    let value = Value::vector_u64([1, 2, 3]);
+    assert!(value.check_depth_of_value(1).is_ok());
+    let err = value.check_depth_of_value(0).unwrap_err();
+    assert_eq!(err.major_status(), StatusCode::VM_MAX_VALUE_DEPTH_REACHED);
+}
+
 #[cfg(test)]
 mod native_values {
     use super::*;
@@ -357,14 +373,12 @@ mod native_values {
     }
 
     impl ValueToIdentifierMapping for Mapping {
-        type Identifier = DelayedFieldID;
-
         fn value_to_identifier(
             &self,
             kind: &IdentifierMappingKind,
             layout: &MoveTypeLayout,
             value: Value,
-        ) -> PartialVMResult<Self::Identifier> {
+        ) -> PartialVMResult<DelayedFieldID> {
             assert_eq!(layout, &MoveTypeLayout::U64);
             assert!(matches!(
                 kind,
@@ -377,7 +391,7 @@ mod native_values {
         fn identifier_to_value(
             &self,
             _layout: &MoveTypeLayout,
-            _identifier: Self::Identifier,
+            _identifier: DelayedFieldID,
         ) -> PartialVMResult<Value> {
             unreachable!("tests only need value_to_identifier path")
         }

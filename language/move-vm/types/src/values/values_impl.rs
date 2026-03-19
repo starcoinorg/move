@@ -3123,7 +3123,7 @@ pub mod debug {
  *   is to involve an explicit representation of the type layout.
  *
  **************************************************************************************/
-use crate::value_serde::{CustomDeserializer, CustomSerializer, RelaxedCustomSerDe};
+use crate::value_serde::ValueSerDeContext;
 use serde::{
     de::Error as DeError,
     ser::{Error as SerError, SerializeSeq, SerializeTuple},
@@ -3132,19 +3132,17 @@ use serde::{
 
 impl Value {
     pub fn simple_deserialize(blob: &[u8], layout: &MoveTypeLayout) -> Option<Value> {
-        let seed = DeserializationSeed {
-            custom_deserializer: None::<&RelaxedCustomSerDe>,
-            layout,
-        };
+        let ctx = ValueSerDeContext::new(None);
+        let seed = DeserializationSeed { ctx: &ctx, layout };
         bcs::from_bytes_seed(seed, blob).ok()
     }
 
     pub fn simple_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
+        let ctx = ValueSerDeContext::new(None);
         bcs::to_bytes(&SerializationReadyValue {
-            custom_serializer: None::<&RelaxedCustomSerDe>,
+            ctx: &ctx,
             layout,
             value: &self.0,
-            max_value_nest_depth: None,
             depth: 1,
         })
         .ok()
@@ -3153,19 +3151,17 @@ impl Value {
 
 impl Struct {
     pub fn simple_deserialize(blob: &[u8], layout: &MoveStructLayout) -> Option<Struct> {
-        let seed = DeserializationSeed {
-            custom_deserializer: None::<&RelaxedCustomSerDe>,
-            layout,
-        };
+        let ctx = ValueSerDeContext::new(None);
+        let seed = DeserializationSeed { ctx: &ctx, layout };
         bcs::from_bytes_seed(seed, blob).ok()
     }
 
     pub fn simple_serialize(&self, layout: &MoveStructLayout) -> Option<Vec<u8>> {
+        let ctx = ValueSerDeContext::new(None);
         bcs::to_bytes(&SerializationReadyValue {
-            custom_serializer: None::<&RelaxedCustomSerDe>,
+            ctx: &ctx,
             layout,
             value: &self.fields,
-            max_value_nest_depth: None,
             depth: 1,
         })
         .ok()
@@ -3174,15 +3170,13 @@ impl Struct {
 
 // Wrapper around value with additional information which can be used by the
 // serializer.
-pub(crate) struct SerializationReadyValue<'c, 'l, 'v, L, V, C> {
-    // Allows to perform a custom serialization for delayed values.
-    pub(crate) custom_serializer: Option<&'c C>,
+pub(crate) struct SerializationReadyValue<'c, 'l, 'v, L, V> {
+    // Contains the current (possibly custom) serialization context.
+    pub(crate) ctx: &'c ValueSerDeContext<'c>,
     // Layout for guiding serialization.
     pub(crate) layout: &'l L,
     // Value to serialize.
     pub(crate) value: &'v V,
-    // Maximum allowed depth of the value graph.
-    pub(crate) max_value_nest_depth: Option<u64>,
     // Current depth for this node.
     pub(crate) depth: u64,
 }
@@ -3193,19 +3187,10 @@ fn invariant_violation<S: serde::Serializer>(message: String) -> S::Error {
     )
 }
 
-fn check_depth(depth: u64, max_depth: Option<u64>) -> PartialVMResult<()> {
-    if max_depth.is_some_and(|limit| depth > limit) {
-        return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
-    }
-    Ok(())
-}
-
-impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
-    for SerializationReadyValue<'c, 'l, 'v, MoveTypeLayout, ValueImpl, C>
-{
+impl serde::Serialize for SerializationReadyValue<'_, '_, '_, MoveTypeLayout, ValueImpl> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use MoveTypeLayout as L;
-        check_depth(self.depth, self.max_value_nest_depth).map_err(S::Error::custom)?;
+        self.ctx.check_depth(self.depth).map_err(S::Error::custom)?;
 
         match (self.layout, self.value) {
             // Primitive types.
@@ -3221,10 +3206,9 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
             // Structs.
             (L::Struct(struct_layout), ValueImpl::Container(Container::Struct(r))) => {
                 (SerializationReadyValue {
-                    custom_serializer: self.custom_serializer,
+                    ctx: self.ctx,
                     layout: struct_layout,
                     value: &*r.borrow(),
-                    max_value_nest_depth: self.max_value_nest_depth,
                     depth: self.depth,
                 })
                 .serialize(serializer)
@@ -3247,10 +3231,9 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
                         let mut t = serializer.serialize_seq(Some(v.len()))?;
                         for value in v.iter() {
                             t.serialize_element(&SerializationReadyValue {
-                                custom_serializer: self.custom_serializer,
+                                ctx: self.ctx,
                                 layout,
                                 value,
-                                max_value_nest_depth: self.max_value_nest_depth,
                                 depth: self.depth + 1,
                             })?;
                         }
@@ -3273,10 +3256,9 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
                     )));
                 }
                 (SerializationReadyValue {
-                    custom_serializer: self.custom_serializer,
+                    ctx: self.ctx,
                     layout: &L::Address,
                     value: &v[0],
-                    max_value_nest_depth: self.max_value_nest_depth,
                     depth: self.depth,
                 })
                 .serialize(serializer)
@@ -3285,9 +3267,32 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
             // Delayed values. For their serialization, we must have custom
             // serialization available, otherwise an error is returned.
             (L::Native(kind, layout), ValueImpl::DelayedFieldID { id }) => {
-                match self.custom_serializer {
-                    Some(custom_serializer) => {
-                        custom_serializer.custom_serialize(serializer, kind, layout, *id)
+                match &self.ctx.delayed_fields_extension {
+                    Some(delayed_fields_extension) => {
+                        delayed_fields_extension
+                            .inc_and_check_delayed_fields_count()
+                            .map_err(S::Error::custom)?;
+
+                        let value = match delayed_fields_extension.mapping {
+                            Some(mapping) => mapping
+                                .identifier_to_value(layout, *id)
+                                .map_err(|e| S::Error::custom(format!("{}", e)))?,
+                            None => crate::delayed_values::delayed_field_id::TryIntoMoveValue::try_into_move_value(*id, layout).map_err(|_| {
+                                S::Error::custom(format!(
+                                    "Custom serialization failed for {:?} with layout {}",
+                                    kind, layout
+                                ))
+                            })?,
+                        };
+
+                        let ctx = self.ctx.clone_without_delayed_fields();
+                        let value = SerializationReadyValue {
+                            ctx: &ctx,
+                            layout: layout.as_ref(),
+                            value: &value.0,
+                            depth: self.depth,
+                        };
+                        value.serialize(serializer)
                     }
                     None => {
                         // If no custom serializer, it is not known how the
@@ -3310,9 +3315,7 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
     }
 }
 
-impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
-    for SerializationReadyValue<'c, 'l, 'v, MoveStructLayout, Vec<ValueImpl>, C>
-{
+impl serde::Serialize for SerializationReadyValue<'_, '_, '_, MoveStructLayout, Vec<ValueImpl>> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let values = &self.value;
         let field_layouts = struct_field_layout_refs(self.layout);
@@ -3325,10 +3328,9 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
         let mut t = serializer.serialize_tuple(values.len())?;
         for (field_layout, value) in field_layouts.iter().zip(values.iter()) {
             t.serialize_element(&SerializationReadyValue {
-                custom_serializer: self.custom_serializer,
+                ctx: self.ctx,
                 layout: *field_layout,
                 value,
-                max_value_nest_depth: self.max_value_nest_depth,
                 depth: self.depth + 1,
             })?;
         }
@@ -3338,17 +3340,14 @@ impl<'c, 'l, 'v, C: CustomSerializer> serde::Serialize
 
 // Seed used by deserializer to ensure there is information about the value
 // being deserialized.
-pub(crate) struct DeserializationSeed<'c, L, C> {
-    // Allows to deserialize delayed values in the custom format using external
-    // deserializer.
-    pub(crate) custom_deserializer: Option<&'c C>,
+pub(crate) struct DeserializationSeed<'c, L> {
+    // Holds extensions external to the deserializer.
+    pub(crate) ctx: &'c ValueSerDeContext<'c>,
     // Layout to guide deserialization.
     pub(crate) layout: L,
 }
 
-impl<'d, 'c, C: CustomDeserializer> serde::de::DeserializeSeed<'d>
-    for DeserializationSeed<'c, &MoveTypeLayout, C>
-{
+impl<'d> serde::de::DeserializeSeed<'d> for DeserializationSeed<'_, &MoveTypeLayout> {
     type Value = Value;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
@@ -3372,7 +3371,7 @@ impl<'d, 'c, C: CustomDeserializer> serde::de::DeserializeSeed<'d>
             // Structs.
             L::Struct(struct_layout) => {
                 let seed = DeserializationSeed {
-                    custom_deserializer: self.custom_deserializer,
+                    ctx: self.ctx,
                     layout: struct_layout,
                 };
                 Ok(Value::struct_(seed.deserialize(deserializer)?))
@@ -3390,7 +3389,7 @@ impl<'d, 'c, C: CustomDeserializer> serde::de::DeserializeSeed<'d>
                 L::Address => Value::vector_address(Vec::deserialize(deserializer)?),
                 layout => {
                     let seed = DeserializationSeed {
-                        custom_deserializer: self.custom_deserializer,
+                        ctx: self.ctx,
                         layout,
                     };
                     let vector = deserializer.deserialize_seq(VectorElementVisitor(seed))?;
@@ -3402,9 +3401,32 @@ impl<'d, 'c, C: CustomDeserializer> serde::de::DeserializeSeed<'d>
 
             // Delayed values should always use custom deserialization.
             L::Native(kind, layout) => {
-                match self.custom_deserializer {
-                    Some(native_deserializer) => {
-                        native_deserializer.custom_deserialize(deserializer, kind, layout)
+                match &self.ctx.delayed_fields_extension {
+                    Some(delayed_fields_extension) => {
+                        delayed_fields_extension
+                            .inc_and_check_delayed_fields_count()
+                            .map_err(D::Error::custom)?;
+
+                        let value = DeserializationSeed {
+                            ctx: &self.ctx.clone_without_delayed_fields(),
+                            layout: layout.as_ref(),
+                        }
+                        .deserialize(deserializer)?;
+                        let id = match delayed_fields_extension.mapping {
+                            Some(mapping) => mapping
+                                .value_to_identifier(kind, layout, value)
+                                .map_err(|e| D::Error::custom(format!("{}", e)))?,
+                            None => {
+                                let (id, _) = crate::delayed_values::delayed_field_id::TryFromMoveValue::try_from_move_value(layout, value, &()).map_err(|_| {
+                                    D::Error::custom(format!(
+                                        "Custom deserialization failed for {:?} with layout {}",
+                                        kind, layout
+                                    ))
+                                })?;
+                                id
+                            }
+                        };
+                        Ok(Value::delayed_value(id))
                     }
                     None => {
                         // If no custom deserializer, it is not known how the
@@ -3424,9 +3446,7 @@ impl<'d, 'c, C: CustomDeserializer> serde::de::DeserializeSeed<'d>
     }
 }
 
-impl<'d, C: CustomDeserializer> serde::de::DeserializeSeed<'d>
-    for DeserializationSeed<'_, &MoveStructLayout, C>
-{
+impl<'d> serde::de::DeserializeSeed<'d> for DeserializationSeed<'_, &MoveStructLayout> {
     type Value = Struct;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
@@ -3436,15 +3456,15 @@ impl<'d, C: CustomDeserializer> serde::de::DeserializeSeed<'d>
         let field_layouts = struct_field_layout_refs(self.layout);
         let fields = deserializer.deserialize_tuple(
             field_layouts.len(),
-            StructFieldVisitor(self.custom_deserializer, field_layouts),
+            StructFieldVisitor(self.ctx, field_layouts),
         )?;
         Ok(Struct::pack(fields))
     }
 }
 
-struct VectorElementVisitor<'c, 'l, C>(DeserializationSeed<'c, &'l MoveTypeLayout, C>);
+struct VectorElementVisitor<'c, 'l>(DeserializationSeed<'c, &'l MoveTypeLayout>);
 
-impl<'d, 'c, 'l, C: CustomDeserializer> serde::de::Visitor<'d> for VectorElementVisitor<'c, 'l, C> {
+impl<'d, 'c, 'l> serde::de::Visitor<'d> for VectorElementVisitor<'c, 'l> {
     type Value = Vec<ValueImpl>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3457,7 +3477,7 @@ impl<'d, 'c, 'l, C: CustomDeserializer> serde::de::Visitor<'d> for VectorElement
     {
         let mut vals = Vec::new();
         while let Some(elem) = seq.next_element_seed(DeserializationSeed {
-            custom_deserializer: self.0.custom_deserializer,
+            ctx: self.0.ctx,
             layout: self.0.layout,
         })? {
             vals.push(elem.0)
@@ -3466,9 +3486,9 @@ impl<'d, 'c, 'l, C: CustomDeserializer> serde::de::Visitor<'d> for VectorElement
     }
 }
 
-struct StructFieldVisitor<'c, 'l, C>(Option<&'c C>, Vec<&'l MoveTypeLayout>);
+struct StructFieldVisitor<'c, 'l>(&'c ValueSerDeContext<'c>, Vec<&'l MoveTypeLayout>);
 
-impl<'d, 'c, 'l, C: CustomDeserializer> serde::de::Visitor<'d> for StructFieldVisitor<'c, 'l, C> {
+impl<'d, 'c, 'l> serde::de::Visitor<'d> for StructFieldVisitor<'c, 'l> {
     type Value = Vec<Value>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3482,7 +3502,7 @@ impl<'d, 'c, 'l, C: CustomDeserializer> serde::de::Visitor<'d> for StructFieldVi
         let mut val = Vec::new();
         for (i, field_layout) in self.1.iter().enumerate() {
             if let Some(elem) = seq.next_element_seed(DeserializationSeed {
-                custom_deserializer: self.0,
+                ctx: self.0,
                 layout: *field_layout,
             })? {
                 val.push(elem)
@@ -3805,6 +3825,145 @@ impl GlobalValue {
             G::None | G::Deleted => None,
             G::Cached { fields, .. } | G::Fresh { fields } => Some(Wrapper(fields)),
         }
+    }
+}
+
+struct DepthCheckingVisitor {
+    max_depth: u64,
+    error: Option<PartialVMError>,
+}
+
+impl DepthCheckingVisitor {
+    fn new(max_depth: u64) -> Self {
+        Self {
+            max_depth,
+            error: None,
+        }
+    }
+
+    fn check(&mut self, depth: usize) -> bool {
+        let exceeds = match u64::try_from(depth) {
+            Ok(depth) => depth > self.max_depth,
+            Err(_) => true,
+        };
+        if exceeds {
+            if self.error.is_none() {
+                self.error = Some(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+            }
+            return false;
+        }
+        true
+    }
+
+    fn check_typed_vec(&mut self, depth: usize, len: usize) {
+        if !self.check(depth) || len == 0 {
+            return;
+        }
+        let child_depth = depth.saturating_add(1);
+        if child_depth == depth {
+            if self.error.is_none() {
+                self.error = Some(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+            }
+            return;
+        }
+        let _ = self.check(child_depth);
+    }
+
+    fn finish(self) -> PartialVMResult<()> {
+        match self.error {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    }
+}
+
+impl ValueVisitor for DepthCheckingVisitor {
+    fn visit_delayed(&mut self, depth: usize, _id: DelayedFieldID) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u8(&mut self, depth: usize, _val: u8) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u16(&mut self, depth: usize, _val: u16) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u32(&mut self, depth: usize, _val: u32) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u64(&mut self, depth: usize, _val: u64) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u128(&mut self, depth: usize, _val: u128) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_u256(&mut self, depth: usize, _val: u256::U256) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_bool(&mut self, depth: usize, _val: bool) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_address(&mut self, depth: usize, _val: AccountAddress) {
+        let _ = self.check(depth);
+    }
+
+    fn visit_struct(&mut self, depth: usize, _len: usize) -> bool {
+        self.check(depth)
+    }
+
+    fn visit_vec(&mut self, depth: usize, _len: usize) -> bool {
+        self.check(depth)
+    }
+
+    fn visit_ref(&mut self, depth: usize, _is_global: bool) -> bool {
+        self.check(depth)
+    }
+
+    fn visit_vec_u8(&mut self, depth: usize, vals: &[u8]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u16(&mut self, depth: usize, vals: &[u16]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u32(&mut self, depth: usize, vals: &[u32]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u64(&mut self, depth: usize, vals: &[u64]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u128(&mut self, depth: usize, vals: &[u128]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_u256(&mut self, depth: usize, vals: &[u256::U256]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_bool(&mut self, depth: usize, vals: &[bool]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+
+    fn visit_vec_address(&mut self, depth: usize, vals: &[AccountAddress]) {
+        self.check_typed_vec(depth, vals.len());
+    }
+}
+
+impl Value {
+    pub fn check_depth_of_value(&self, max_depth: u64) -> PartialVMResult<()> {
+        let mut visitor = DepthCheckingVisitor::new(max_depth);
+        self.visit(&mut visitor);
+        visitor.finish()
     }
 }
 
