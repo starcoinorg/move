@@ -348,7 +348,7 @@ impl LifetimeState {
                 btree_map::Entry::Vacant(entry) => {
                     entry.insert(*other_label);
                     change = JoinResult::Changed;
-                },
+                }
                 btree_map::Entry::Occupied(entry) => {
                     let label = entry.get();
                     if label != other_label {
@@ -358,7 +358,7 @@ impl LifetimeState {
                         renaming.insert(*other_label, *label);
                         change = JoinResult::Changed;
                     }
-                },
+                }
             }
         }
         change
@@ -494,11 +494,14 @@ impl LifetimeState {
 impl LifetimeState {
     /// Creates a new node with the given label and location information.
     fn new_node(&mut self, assigned_label: LifetimeLabel, location: MemoryLocation) {
-        self.graph.insert(assigned_label, LifetimeNode {
-            locations: iter::once(location).collect(),
-            children: Default::default(),
-            parents: Default::default(),
-        });
+        self.graph.insert(
+            assigned_label,
+            LifetimeNode {
+                locations: iter::once(location).collect(),
+                children: Default::default(),
+                parents: Default::default(),
+            },
+        );
     }
 
     /// Returns reference to node.
@@ -750,11 +753,11 @@ impl LifetimeState {
                     match location {
                         Local(temp) => {
                             self.temp_to_label_map.remove(&temp);
-                        },
+                        }
                         Global(qid) => {
                             self.global_to_label_map.remove(&qid);
-                        },
-                        External | Derived => {},
+                        }
+                        External | Derived => {}
                     }
                 }
             }
@@ -1014,7 +1017,7 @@ impl<'env, 'state> LifetimeAnalysisStep<'env, 'state> {
                     } else {
                         true
                     }
-                },
+                }
                 ReadMode::Move => {
                     // Any borrow not allowed
                     self.error_with_hints(
@@ -1029,7 +1032,7 @@ impl<'env, 'state> LifetimeAnalysisStep<'env, 'state> {
                             .chain(usage_info()),
                     );
                     false
-                },
+                }
                 ReadMode::Argument => {
                     // Mutable borrow not allowed
                     if self.state.has_mut_edges(label) {
@@ -1049,7 +1052,7 @@ impl<'env, 'state> LifetimeAnalysisStep<'env, 'state> {
                     } else {
                         true
                     }
-                },
+                }
             }
         } else {
             true
@@ -1432,13 +1435,18 @@ impl<'env, 'state> LifetimeAnalysisStep<'env, 'state> {
         let mut_prefix = if e.kind.is_mut() { "mutable " } else { "" };
         (
             e.loc.clone(),
-            format!("{}{}{}", prefix, mut_prefix, match &e.kind {
-                BorrowLocal(_) => "local borrow",
-                BorrowGlobal(..) => "global borrow",
-                BorrowField(..) => "field borrow",
-                Call(..) => "call result",
-                Freeze => "freeze",
-            },),
+            format!(
+                "{}{}{}",
+                prefix,
+                mut_prefix,
+                match &e.kind {
+                    BorrowLocal(_) => "local borrow",
+                    BorrowGlobal(..) => "global borrow",
+                    BorrowField(..) => "field borrow",
+                    Call(..) => "call result",
+                    Freeze => "freeze",
+                },
+            ),
         )
     }
 
@@ -1520,7 +1528,7 @@ impl<'env, 'state> LifetimeAnalysisStep<'env, 'state> {
                     } else {
                         self.state.copy_ref(dest, src)
                     }
-                },
+                }
                 AssignKind::Store => panic!("unexpected assign kind"),
             }
         } else {
@@ -1742,11 +1750,14 @@ impl<'env, 'state> LifetimeAnalysisStep<'env, 'state> {
     ) {
         let label = *self.state.label_for_temp(src).expect("label for reference");
         let target = self.state.replace_ref(dest, code_offset, 0);
-        self.state.add_edge(label, BorrowEdge {
-            kind: BorrowEdgeKind::Freeze,
-            loc: self.cur_loc(),
-            target,
-        });
+        self.state.add_edge(
+            label,
+            BorrowEdge {
+                kind: BorrowEdgeKind::Freeze,
+                loc: self.cur_loc(),
+                target,
+            },
+        );
         if let Some(label) = self.state.label_for_temp(src) {
             // Handle case (a): search for any siblings which mutably borrow the same
             // parent.
@@ -1896,8 +1907,8 @@ impl<'env, 'state> LifetimeAnalysisStep<'env, 'state> {
                                             self.borrow_info(&root, |_| true).into_iter(),
                                         )
                                     }
-                                },
-                                MemoryLocation::External | MemoryLocation::Derived => {},
+                                }
+                                MemoryLocation::External | MemoryLocation::Derived => {}
                             }
                         }
                     }
@@ -1963,8 +1974,8 @@ impl<'env> TransferFunctions for LifeTimeAnalysis<'env> {
                         .cloned()
                         .collect_vec();
                     step.check_borrow_safety(&exclusive_refs)
-                },
-                _ => {},
+                }
+                _ => {}
             },
             Ret(_, srcs) => {
                 let exclusive_refs = srcs
@@ -1973,28 +1984,28 @@ impl<'env> TransferFunctions for LifeTimeAnalysis<'env> {
                     .cloned()
                     .collect_vec();
                 step.check_borrow_safety(&exclusive_refs)
-            },
+            }
             Assign(_, _, src, _) if step.ty(*src).is_mutable_reference() => {
                 step.check_borrow_safety(&[*src])
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         // Process the instruction
         match instr {
             Assign(_, dest, src, kind) => {
                 step.assign(*dest, *src, *kind);
-            },
+            }
             Ret(_, srcs) => step.return_(srcs),
             Call(_, dests, oper, srcs, _) => {
                 use Operation::*;
                 match oper {
                     BorrowLoc => {
                         step.borrow_local(dests[0], srcs[0]);
-                    },
+                    }
                     BorrowGlobal(mid, sid, inst) => {
                         step.borrow_global(mid.qualified_inst(*sid, inst.clone()), dests[0]);
-                    },
+                    }
                     BorrowField(mid, sid, inst, field_offs) => {
                         let (dest, src) = (dests[0], srcs[0]);
                         step.borrow_field(
@@ -2003,19 +2014,19 @@ impl<'env> TransferFunctions for LifeTimeAnalysis<'env> {
                             dest,
                             src,
                         );
-                    },
+                    }
                     ReadRef => step.read_ref(dests[0], srcs[0]),
                     WriteRef => step.write_ref(srcs[0], srcs[1]),
                     FreezeRef(explicit) => {
                         step.freeze_ref(code_offset, *explicit, dests[0], srcs[0])
-                    },
+                    }
                     MoveFrom(mid, sid, inst) => {
                         step.move_from(dests[0], &mid.qualified_inst(*sid, inst.clone()), srcs[0])
-                    },
+                    }
                     _ => step.call_operation(oper.clone(), dests, srcs),
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         // Some instructions may not have released inputs, do so now. The operation
@@ -2106,11 +2117,14 @@ impl FunctionTargetProcessor for ReferenceSafetyProcessor {
                     false,
                 );
                 label_counter += 1;
-                state.add_edge(label, BorrowEdge {
-                    kind: BorrowEdgeKind::BorrowLocal(ty.is_mutable_reference()),
-                    loc,
-                    target,
-                })
+                state.add_edge(
+                    label,
+                    BorrowEdge {
+                        kind: BorrowEdgeKind::BorrowLocal(ty.is_mutable_reference()),
+                        loc,
+                        target,
+                    },
+                )
             }
         }
         let state_map = analyzer.analyze_function(state, target.get_bytecode(), &cfg);

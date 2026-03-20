@@ -27,22 +27,22 @@ pub fn intern_type(
         SignatureToken::Vector(inner_tok) => {
             let inner_type = intern_type(module, inner_tok, struct_name_table)?;
             Type::Vector(TriompheArc::new(inner_type))
-        },
+        }
         SignatureToken::Reference(inner_tok) => {
             let inner_type = intern_type(module, inner_tok, struct_name_table)?;
             Type::Reference(Box::new(inner_type))
-        },
+        }
         SignatureToken::MutableReference(inner_tok) => {
             let inner_type = intern_type(module, inner_tok, struct_name_table)?;
             Type::MutableReference(Box::new(inner_type))
-        },
+        }
         SignatureToken::Struct(sh_idx) => {
             let struct_handle = module.struct_handle_at(*sh_idx);
             Type::Struct {
                 idx: struct_name_table[sh_idx.0 as usize],
                 ability: AbilityInfo::struct_(struct_handle.abilities),
             }
-        },
+        }
         SignatureToken::StructInstantiation(sh_idx, tys) => {
             let type_args: Vec<_> = tys
                 .iter()
@@ -61,7 +61,7 @@ pub fn intern_type(
                         .collect(),
                 ),
             }
-        },
+        }
     };
     Ok(res)
 }

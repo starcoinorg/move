@@ -102,16 +102,16 @@ impl TransferFunctions for ExitStateAnalysis {
         match instr {
             Bytecode::Abort(..) => {
                 *state = ExitState::singleton(ExitStatus::Abort);
-            },
+            }
             Bytecode::Ret(..) => {
                 *state = ExitState::singleton(ExitStatus::Return);
-            },
+            }
             Bytecode::Call(_, _, op, _, _) => {
                 if op.can_abort() {
                     state.join(&ExitState::singleton(ExitStatus::Abort));
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 }

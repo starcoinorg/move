@@ -73,7 +73,7 @@ fn runtime_reentrancy_check() {
 
     let code_1 = format!(
         r#"
-        module 0x{0}::B {{
+        module {0}::B {{
             public fun foo1() {{ Self::dispatch(0); return }}
             public fun foo2() {{ Self::load_c(); Self::dispatch_c(0); return }}
             public fun foo3() {{ Self::dispatch_d(0); return }}
@@ -91,15 +91,15 @@ fn runtime_reentrancy_check() {
 
     let code_2 = format!(
         r#"
-    module 0x{0}::A {{
-        use 0x{0}::B;
+    module {0}::A {{
+        use {0}::B;
         public fun foo1() {{ B::foo1(); return }}
         public fun foo2() {{ B::foo2(); return }}
         public fun foo3() {{ B::foo3(); return }}
 
         public fun foo() {{ return }}
     }}
-    module 0x{0}::B {{
+    module {0}::B {{
         public fun foo1() {{ Self::dispatch(0); return }}
         public fun foo2() {{ Self::load_c(); Self::dispatch_c(0); return }}
         public fun foo3() {{ Self::dispatch_d(0); return }}
@@ -117,7 +117,7 @@ fn runtime_reentrancy_check() {
 
     let code_3 = format!(
         r#"
-        module 0x{0}::C {{
+        module {0}::C {{
             public fun foo() {{ return }}
         }}
 "#,

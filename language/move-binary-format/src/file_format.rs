@@ -1083,17 +1083,17 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIter<'a> {
                 match tok {
                     Reference(inner_tok) | MutableReference(inner_tok) | Vector(inner_tok) => {
                         self.stack.push(inner_tok)
-                    },
+                    }
 
                     StructInstantiation(_, inner_toks) => {
                         self.stack.extend(inner_toks.iter().rev())
-                    },
+                    }
 
                     Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Struct(_)
                     | TypeParameter(_) => (),
                 }
                 Some(tok)
-            },
+            }
             None => None,
         }
     }
@@ -1116,7 +1116,7 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIterWithDepth<'a> {
                 match tok {
                     Reference(inner_tok) | MutableReference(inner_tok) | Vector(inner_tok) => {
                         self.stack.push((inner_tok, depth + 1))
-                    },
+                    }
 
                     StructInstantiation(_, inner_toks) => self
                         .stack
@@ -1126,7 +1126,7 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIterWithDepth<'a> {
                     | TypeParameter(_) => (),
                 }
                 Some((tok, depth))
-            },
+            }
             None => None,
         }
     }
@@ -1185,7 +1185,7 @@ impl std::fmt::Debug for SignatureToken {
             SignatureToken::Struct(idx) => write!(f, "Struct({:?})", idx),
             SignatureToken::StructInstantiation(idx, types) => {
                 write!(f, "StructInstantiation({:?}, {:?})", idx, types)
-            },
+            }
             SignatureToken::Reference(boxed) => write!(f, "Reference({:?})", boxed),
             SignatureToken::MutableReference(boxed) => write!(f, "MutableReference({:?})", boxed),
             SignatureToken::TypeParameter(idx) => write!(f, "TypeParameter({:?})", idx),
@@ -1942,7 +1942,7 @@ impl Bytecode {
         match self {
             Bytecode::BrFalse(offset) | Bytecode::BrTrue(offset) | Bytecode::Branch(offset) => {
                 Some(offset)
-            },
+            }
             _ => None,
         }
     }

@@ -107,11 +107,14 @@ fn script_large_ty() {
     CompiledModule::deserialize(&module).unwrap();
 
     let mut storage = InMemoryStorage::new();
-    let move_vm = MoveVM::new_with_config(vec![], VMConfig {
-        verifier_config,
-        paranoid_type_checks: true,
-        ..Default::default()
-    })
+    let move_vm = MoveVM::new_with_config(
+        vec![],
+        VMConfig {
+            verifier_config,
+            paranoid_type_checks: true,
+            ..Default::default()
+        },
+    )
     .unwrap();
 
     let module_address = AccountAddress::from_hex_literal("0x42").unwrap();

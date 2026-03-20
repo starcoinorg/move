@@ -40,7 +40,7 @@ impl std::fmt::Display for VerificationFlavor {
             VerificationFlavor::Regular => write!(f, ""),
             VerificationFlavor::Instantiated(index) => {
                 write!(f, "instantiated_{}", index)
-            },
+            }
             VerificationFlavor::Inconsistency(flavor) => write!(f, "inconsistency_{}", flavor),
         }
     }
@@ -399,7 +399,7 @@ impl FunctionTargetPipeline {
                     [node_idx] => {
                         // If the SCC has only one node, it is not recursive, or is only self-recursive.
                         Either::Left(graph[*node_idx])
-                    },
+                    }
                     _ => Either::Right(scc.iter().map(|node_idx| graph[*node_idx]).collect_vec()),
                 }
             })
@@ -435,7 +435,7 @@ impl FunctionTargetPipeline {
                         Either::Left(fid) => {
                             let func_env = env.get_function(*fid);
                             targets.process(&func_env, processor.as_ref(), None);
-                        },
+                        }
                         Either::Right(scc) => 'fixedpoint: loop {
                             let scc_env: Vec<_> =
                                 scc.iter().map(|fid| env.get_function(*fid)).collect();
@@ -546,11 +546,14 @@ impl FunctionTargetPipeline {
         register_annotations: &impl Fn(&FunctionTarget),
         verbose: bool,
     ) -> String {
-        let mut dump = format!("{}", ProcessorResultDisplay {
-            env,
-            targets,
-            processor,
-        });
+        let mut dump = format!(
+            "{}",
+            ProcessorResultDisplay {
+                env,
+                targets,
+                processor,
+            }
+        );
         if !processor.is_single_run() {
             if !dump.is_empty() {
                 dump = format!("\n\n{}", dump);

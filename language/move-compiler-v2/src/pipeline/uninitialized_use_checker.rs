@@ -312,7 +312,7 @@ fn format_initialized_state(state: &InitializedState, target: &FunctionTarget) -
         match v {
             Initialized::No => nos.push(i),
             Initialized::Maybe => maybes.push(i),
-            Initialized::Yes => {},
+            Initialized::Yes => {}
         }
     }
     let mut all_initialized = true;

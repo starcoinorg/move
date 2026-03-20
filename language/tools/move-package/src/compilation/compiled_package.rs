@@ -252,7 +252,7 @@ impl OnDiskCompiledPackage {
                     source_map,
                 });
                 Ok(CompiledUnitWithSource { unit, source_path })
-            },
+            }
             Err(_) => {
                 let module = CompiledModule::deserialize(&bytecode_bytes)?;
                 let (address_bytes, module_name) = {
@@ -272,7 +272,7 @@ impl OnDiskCompiledPackage {
                     source_map,
                 });
                 Ok(CompiledUnitWithSource { unit, source_path })
-            },
+            }
         }
     }
 
@@ -604,12 +604,12 @@ impl CompiledPackage {
                     Architecture::Move => (),
                     Architecture::AsyncMove => {
                         flags = flags.set_flavor("async");
-                    },
+                    }
                     Architecture::Ethereum => {
                         flags = flags.set_flavor("evm");
-                    },
+                    }
                 };
-            },
+            }
             None => (),
         };
         attr_derivation::add_attributes_for_flavor(&flags, &mut known_attributes);
@@ -645,7 +645,7 @@ impl CompiledPackage {
                 let compiler =
                     Compiler::from_package_paths(paths, bytecode_deps, flags, &known_attributes);
                 compiler_driver_v1(compiler)?
-            },
+            }
             CompilerVersion::V2_0 => {
                 let to_str_vec = |ps: &[Symbol]| {
                     ps.iter()
@@ -697,7 +697,7 @@ impl CompiledPackage {
                 };
                 options = options.set_experiment(Experiment::ATTACH_COMPILED_MODULE, true);
                 compiler_driver_v2(options)?
-            },
+            }
         };
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
@@ -721,10 +721,10 @@ impl CompiledPackage {
             let package_name = match &annot_unit {
                 compiled_unit::CompiledUnitEnum::Module(m) => {
                     obtain_package_name(m.named_module.package_name, source_path_str)?
-                },
+                }
                 compiled_unit::CompiledUnitEnum::Script(s) => {
                     obtain_package_name(s.named_script.package_name, source_path_str)?
-                },
+                }
             };
             let unit = CompiledUnitWithSource {
                 unit: annot_unit.into_compiled_unit(),
@@ -1121,7 +1121,7 @@ pub fn build_and_report_v2_driver(options: move_compiler_v2::Options) -> Compile
         Err(_) => {
             // Error reported, exit
             std::process::exit(1);
-        },
+        }
     }
 }
 

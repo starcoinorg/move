@@ -85,11 +85,11 @@ impl ReducedDefUseGraph {
                 Assign(_, dst, src, _) if dst == src => {
                     self_assigns.push(offset as CodeOffset);
                     self.incorporate_definition(*dst, offset as CodeOffset, live_vars);
-                },
+                }
                 Assign(_, dst, ..) | Load(_, dst, _) => {
                     self.incorporate_definition(*dst, offset as CodeOffset, live_vars);
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
         // Stage 2: Disconnect dead defs (which are guaranteed to be leaves) from the graph.
@@ -125,11 +125,11 @@ impl ReducedDefUseGraph {
                 match self.children.get(&parent) {
                     Some(children) if children.is_empty() => {
                         def_leaves.insert(parent);
-                    },
+                    }
                     None => {
                         def_leaves.insert(parent);
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
         }

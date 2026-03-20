@@ -69,13 +69,13 @@ impl VMError {
             (StatusCode::EXECUTED, sub_status, _) => {
                 debug_assert!(sub_status.is_none());
                 VMStatus::Executed
-            },
+            }
             (StatusCode::ABORTED, Some(code), Location::Script) => {
                 VMStatus::MoveAbort(vm_status::AbortLocation::Script, code)
-            },
+            }
             (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
                 VMStatus::MoveAbort(vm_status::AbortLocation::Module(id), code)
-            },
+            }
 
             (StatusCode::ABORTED, sub_status, location) => {
                 debug_assert!(
@@ -88,7 +88,7 @@ impl VMError {
                     sub_status,
                     message,
                 }
-            },
+            }
 
             (major_status, sub_status, location)
                 if major_status.status_type() == StatusType::Execution =>
@@ -102,7 +102,7 @@ impl VMError {
                             sub_status,
                             message,
                         };
-                    },
+                    }
                 };
                 // Errors for OUT_OF_GAS do not always have index set: if it does not, it should already return above.
                 debug_assert!(
@@ -123,7 +123,7 @@ impl VMError {
                             sub_status,
                             message,
                         };
-                    },
+                    }
                     Some((fdef_idx, code_offset)) => (fdef_idx.0, code_offset),
                 };
                 VMStatus::ExecutionFailure {
@@ -134,7 +134,7 @@ impl VMError {
                     sub_status,
                     message,
                 }
-            },
+            }
 
             (major_status, sub_status, _) => VMStatus::Error {
                 status_code: major_status,
@@ -245,7 +245,7 @@ impl VMError {
             Location::Script => "script".to_owned(),
             Location::Module(id) => {
                 format!("0x{}::{}", id.address().short_str_lossless(), id.name())
-            },
+            }
         };
         let indices = if comparison_mode {
             // During comparison testing, abstract this data.
@@ -519,7 +519,7 @@ impl PartialVMError {
                     msg.push(separator);
                 }
                 msg.push_str(&additional_message);
-            },
+            }
             None => self.0.message = Some(additional_message),
         };
         self

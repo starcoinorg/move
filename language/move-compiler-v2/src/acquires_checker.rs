@@ -120,8 +120,8 @@ impl AcquiredResources {
                         other_fun,
                     ));
                     changed = true;
-                },
-                Occupied(_) => {},
+                }
+                Occupied(_) => {}
             }
         }
         changed
@@ -237,15 +237,15 @@ fn get_callees_and_acquired_resources(
                     }
                 }
                 true
-            },
+            }
             ExpData::SpecBlock(..) => {
                 match pos {
                     VisitorPosition::Pre => in_spec_block = true,
                     VisitorPosition::Post => in_spec_block = false,
-                    _ => {},
+                    _ => {}
                 }
                 true
-            },
+            }
             _ => true,
         };
         let mut in_spec_block = false;
@@ -262,20 +262,20 @@ fn get_callees_and_acquired_resources(
                                     resources.entry(*sid).or_insert(loc);
                                 }
                             }
-                        },
-                        _ => {},
+                        }
+                        _ => {}
                     }
                 }
                 true
-            },
+            }
             ExpData::SpecBlock(..) => {
                 match pos {
                     VisitorPosition::Pre => in_spec_block = true,
                     VisitorPosition::Post => in_spec_block = false,
-                    _ => {},
+                    _ => {}
                 }
                 true
-            },
+            }
             _ => true,
         };
         fun_body.visit_positions(&mut |pos, e| {

@@ -53,11 +53,11 @@ pub fn run_spec_rewriter(env: &mut GlobalEnv) {
         RewriteTarget::MoveFun(fid) => {
             let fun = env.get_function(*fid);
             fun.module_env.is_target() && !fun.is_inline() && !fun.is_native()
-        },
+        }
         RewriteTarget::SpecFun(fid) => {
             let fun = env.get_spec_fun(*fid);
             !fun.is_native
-        },
+        }
         RewriteTarget::SpecBlock(_) => true,
     });
 
@@ -77,7 +77,7 @@ pub fn run_spec_rewriter(env: &mut GlobalEnv) {
                 } else {
                     BTreeSet::new()
                 }
-            },
+            }
             RewriteTarget::SpecFun(_) | RewriteTarget::SpecBlock(_) => target
                 .called_funs_with_call_sites(env)
                 .into_keys()
@@ -123,7 +123,7 @@ pub fn run_spec_rewriter(env: &mut GlobalEnv) {
                 if !ExpData::ptr_eq(&new_exp, &exp) {
                     *targets.state_mut(&target) = Def(new_exp)
                 }
-            },
+            }
             (SpecFun(id), Def(exp)) => {
                 let mut converter = SpecConverter::new(env, &function_mapping, true)
                     .symbolized_parameters(get_param_names(&env.get_spec_fun(*id).params));
@@ -131,15 +131,15 @@ pub fn run_spec_rewriter(env: &mut GlobalEnv) {
                 if !ExpData::ptr_eq(&new_exp, &exp) {
                     *targets.state_mut(&target) = Def(new_exp)
                 }
-            },
+            }
             (SpecBlock(sb_target), Spec(spec)) => {
                 let mut converter = SpecConverter::new(env, &function_mapping, true);
                 let (changed, new_spec) = converter.rewrite_spec_descent(sb_target, &spec);
                 if changed {
                     *targets.state_mut(&target) = Spec(new_spec)
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
     targets.write_to_env(env);
@@ -327,11 +327,11 @@ impl<'a> ExpRewriterFunctions for SpecConverter<'a> {
                     // The code pattern produced by an `assert!`: `if (c) () else abort`.
                     // Reduce to unit
                     Call(*id, Tuple, vec![]).into_exp()
-                },
+                }
                 Temporary(id, _) | LocalVar(id, _) => {
                     self.reference_strip_exempted.insert(*id);
                     exp
-                },
+                }
                 _ => exp,
             };
 
@@ -347,15 +347,15 @@ impl<'a> ExpRewriterFunctions for SpecConverter<'a> {
                     } else {
                         exp.clone()
                     }
-                },
+                }
                 Call(id, BorrowGlobal(ReferenceKind::Immutable), args) => {
                     // Map borrow_global to specification global
                     Call(*id, Global(None), args.clone()).into_exp()
-                },
+                }
                 Call(_, Borrow(_), args) | Call(_, Deref, args) => {
                     // Skip local borrow
                     args[0].clone()
-                },
+                }
                 Call(id, MoveFunction(mid, fid), args) => {
                     // Rewrite to associated spec function
                     let spec_fun_id = self
@@ -374,12 +374,12 @@ impl<'a> ExpRewriterFunctions for SpecConverter<'a> {
                         args.clone(),
                     )
                     .into_exp()
-                },
+                }
                 // Deal with removing various occurrences of Abort and spec blocks
                 Call(id, Abort, _) | SpecBlock(id, ..) => {
                     // Replace direct call by unit
                     Call(*id, Tuple, vec![]).into_exp()
-                },
+                }
                 IfElse(id, _, if_true, if_false)
                     if matches!(if_true.as_ref(), Call(_, Tuple, _))
                         && matches!(if_false.as_ref(), Call(_, Abort, _)) =>
@@ -387,7 +387,7 @@ impl<'a> ExpRewriterFunctions for SpecConverter<'a> {
                     // The code pattern produced by an `assert!`: `if (c) () else abort`.
                     // Reduce to unit as well
                     Call(*id, Tuple, vec![]).into_exp()
-                },
+                }
                 Sequence(id, exps) => {
                     // Remove aborts, units, and spec blocks
                     let mut reduced_exps = exps
@@ -414,7 +414,7 @@ impl<'a> ExpRewriterFunctions for SpecConverter<'a> {
                     } else {
                         exp.clone()
                     }
-                },
+                }
                 _ => exp.clone(),
             }
         }

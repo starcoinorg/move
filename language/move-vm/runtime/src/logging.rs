@@ -9,6 +9,25 @@ use move_core_types::vm_status::{StatusCode, StatusType};
 //
 
 pub fn expect_no_verification_errors(err: VMError) -> VMError {
+    expect_no_verification_errors_unless_bogus_storage(err)
+}
+
+pub fn expect_no_verification_errors_unless_bogus_storage(err: VMError) -> VMError {
+    match err.major_status() {
+        StatusCode::FUNCTION_RESOLUTION_FAILURE
+        | StatusCode::NUMBER_OF_ARGUMENTS_MISMATCH
+        | StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT
+        | StatusCode::MISSING_DEPENDENCY
+        | StatusCode::UNKNOWN_BINARY_ERROR
+        | StatusCode::UNKNOWN_VALIDATION_STATUS
+        | StatusCode::INVALID_SIGNATURE
+        | StatusCode::UNKNOWN_VERIFICATION_ERROR
+        | StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
+        | StatusCode::UNKNOWN_RUNTIME_STATUS
+        | StatusCode::UNKNOWN_STATUS => return err,
+        _ => {}
+    }
+
     match err.status_type() {
         status_type @ StatusType::Deserialization | status_type @ StatusType::Verification => {
             let message = format!(
@@ -36,7 +55,7 @@ pub fn expect_no_verification_errors(err: VMError) -> VMError {
                 .at_indices(indices)
                 .at_code_offsets(offsets)
                 .finish(location)
-        },
+        }
         _ => err,
     }
 }

@@ -178,7 +178,7 @@ impl FatType {
                             idx
                         )),
                     );
-                },
+                }
             },
 
             Bool => Bool,
@@ -221,7 +221,7 @@ impl FatType {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(format!("cannot derive type tag for {:?}", self)),
                 )
-            },
+            }
         };
 
         Ok(res)
@@ -300,7 +300,7 @@ impl TryInto<MoveTypeLayout> for &FatType {
             FatType::Signer => MoveTypeLayout::Signer,
             FatType::Reference(_) | FatType::MutableReference(_) | FatType::TyParam(_) => {
                 return Err(PartialVMError::new(StatusCode::ABORT_TYPE_MISMATCH_ERROR))
-            },
+            }
         })
     }
 }

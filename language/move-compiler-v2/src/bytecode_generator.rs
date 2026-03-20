@@ -349,7 +349,7 @@ impl<'env> Generator<'env> {
                 } else {
                     self.release_temps(targets)
                 }
-            },
+            }
             ExpData::Block(_, pat, opt_binding, body) => {
                 // Declare all variables bound by the pattern
                 let mut scope = BTreeMap::new();
@@ -375,7 +375,7 @@ impl<'env> Generator<'env> {
                 self.scopes.push(scope);
                 self.gen(targets, body);
                 self.scopes.pop();
-            },
+            }
             ExpData::Mutate(id, lhs, rhs) => {
                 // Notice that we cannot be in reference mode here for reasons
                 // of typing: the result of the Mutate operator is `()` and cannot
@@ -400,16 +400,19 @@ impl<'env> Generator<'env> {
                         ),
                     );
                 }
-                self.emit_call(*id, targets, BytecodeOperation::WriteRef, vec![
-                    lhs_temp, rhs_temp,
-                ])
-            },
+                self.emit_call(
+                    *id,
+                    targets,
+                    BytecodeOperation::WriteRef,
+                    vec![lhs_temp, rhs_temp],
+                )
+            }
             ExpData::Assign(id, lhs, rhs) => self.gen_assign(*id, lhs, rhs, None),
             ExpData::Return(id, exp) => {
                 let results = self.results.clone();
                 self.gen(results.clone(), exp);
                 self.emit_with(*id, |attr| Bytecode::Ret(attr, results))
-            },
+            }
             ExpData::IfElse(id, cond, then_exp, else_exp) => {
                 let cond_temp = self.gen_escape_auto_ref_arg(cond, false);
                 let then_label = self.new_label(*id);
@@ -426,7 +429,7 @@ impl<'env> Generator<'env> {
                 self.emit_with(else_id, |attr| Bytecode::Label(attr, else_label));
                 self.gen(targets, else_exp);
                 self.emit_with(else_id, |attr| Bytecode::Label(attr, end_label));
-            },
+            }
             ExpData::Loop(id, body) => {
                 let continue_label = self.new_label(*id);
                 let break_label = self.new_label(*id);
@@ -439,7 +442,7 @@ impl<'env> Generator<'env> {
                 self.loops.pop();
                 self.emit_with(*id, |attr| Bytecode::Jump(attr, continue_label));
                 self.emit_with(*id, |attr| Bytecode::Label(attr, break_label));
-            },
+            }
             ExpData::LoopCont(id, do_continue) => {
                 if let Some(LoopContext {
                     continue_label,
@@ -455,7 +458,7 @@ impl<'env> Generator<'env> {
                 } else {
                     self.error(*id, "missing enclosing loop statement")
                 }
-            },
+            }
             ExpData::SpecBlock(id, spec) => {
                 // Map locals in spec to assigned temporaries.
                 let mut replacer = |id, target| {
@@ -468,13 +471,13 @@ impl<'env> Generator<'env> {
                 let (_, spec) = ExpRewriter::new(self.env(), &mut replacer)
                     .rewrite_spec_descent(&SpecBlockTarget::Inline, spec);
                 self.emit_with(*id, |attr| Bytecode::SpecBlock(attr, spec));
-            },
+            }
             ExpData::Invoke(id, _, _) | ExpData::Lambda(id, _, _) => {
                 self.internal_error(*id, format!("not yet implemented: {:?}", exp))
-            },
+            }
             ExpData::Quant(id, _, _, _, _, _) => {
                 self.internal_error(*id, "unsupported specification construct")
-            },
+            }
         }
     }
 }
@@ -500,25 +503,25 @@ impl<'env> Generator<'env> {
                 Type::Primitive(PrimitiveType::U8) => Constant::U8(x.to_u8().unwrap_or_default()),
                 Type::Primitive(PrimitiveType::U16) => {
                     Constant::U16(x.to_u16().unwrap_or_default())
-                },
+                }
                 Type::Primitive(PrimitiveType::U32) => {
                     Constant::U32(x.to_u32().unwrap_or_default())
-                },
+                }
                 Type::Primitive(PrimitiveType::U64) => {
                     Constant::U64(x.to_u64().unwrap_or_default())
-                },
+                }
                 Type::Primitive(PrimitiveType::U128) => {
                     Constant::U128(x.to_u128().unwrap_or_default())
-                },
+                }
                 Type::Primitive(PrimitiveType::U256) => {
                     // No direct way to go from BigInt to ethnum::U256...
                     let x = U256::from_str_radix(&x.to_str_radix(16), 16).unwrap();
                     Constant::U256(x)
-                },
+                }
                 ty => {
                     self.internal_error(id, format!("inconsistent numeric constant: {:?}", ty));
                     Constant::Bool(false)
-                },
+                }
             },
             Value::Bool(x) => Constant::Bool(*x),
             Value::ByteArray(x) => Constant::ByteArray(x.clone()),
@@ -534,7 +537,7 @@ impl<'env> Generator<'env> {
                     self.internal_error(id, format!("inconsistent tuple type: {:?}", ty));
                     Constant::Bool(false)
                 }
-            },
+            }
             Value::Vector(x) => {
                 if let Some(inner_ty) = ty.get_vector_element_type() {
                     Constant::Vector(
@@ -546,7 +549,7 @@ impl<'env> Generator<'env> {
                     self.internal_error(id, format!("inconsistent vector type: {:?}", ty));
                     Constant::Bool(false)
                 }
-            },
+            }
         }
     }
 }
@@ -579,7 +582,7 @@ impl<'env> Generator<'env> {
             Operation::Vector => self.gen_op_call(targets, id, BytecodeOperation::Vector, args),
             Operation::Freeze(explicit) => {
                 self.gen_op_call(targets, id, BytecodeOperation::FreezeRef(*explicit), args)
-            },
+            }
             Operation::Tuple => {
                 if targets.len() != args.len() {
                     self.internal_error(
@@ -595,11 +598,11 @@ impl<'env> Generator<'env> {
                         self.gen(vec![target], arg)
                     }
                 }
-            },
+            }
             Operation::Pack(mid, sid) => {
                 let inst = self.env().get_node_instantiation(id);
                 self.gen_op_call(targets, id, BytecodeOperation::Pack(*mid, *sid, inst), args)
-            },
+            }
             Operation::Select(mid, sid, fid) => {
                 let target = self.require_unary_target(id, targets);
                 let arg = self.require_unary_arg(id, args);
@@ -620,7 +623,7 @@ impl<'env> Generator<'env> {
                 } else {
                     self.internal_error(id, "inconsistent type in select expression")
                 }
-            },
+            }
             Operation::Exists(None)
             | Operation::BorrowGlobal(_)
             | Operation::MoveFrom
@@ -643,7 +646,7 @@ impl<'env> Generator<'env> {
                 );
                 self.env()
                     .diag_with_labels(Severity::Error, &err_loc, &err_msg, reasons)
-            },
+            }
             Operation::Exists(None) => {
                 let inst = self.env().get_node_instantiation(id);
                 let (mid, sid, inst) = inst[0].require_struct();
@@ -653,7 +656,7 @@ impl<'env> Generator<'env> {
                     BytecodeOperation::Exists(mid, sid, inst.to_owned()),
                     args,
                 )
-            },
+            }
             Operation::BorrowGlobal(_) => {
                 let inst = self.env().get_node_instantiation(id);
                 let (mid, sid, inst) = inst[0].require_struct();
@@ -663,7 +666,7 @@ impl<'env> Generator<'env> {
                     BytecodeOperation::BorrowGlobal(mid, sid, inst.to_owned()),
                     args,
                 )
-            },
+            }
             Operation::MoveTo => {
                 let inst = self.env().get_node_instantiation(id);
                 let (mid, sid, inst) = inst[0].require_struct();
@@ -673,7 +676,7 @@ impl<'env> Generator<'env> {
                     BytecodeOperation::MoveTo(mid, sid, inst.to_owned()),
                     args,
                 )
-            },
+            }
             Operation::MoveFrom => {
                 let inst = self.env().get_node_instantiation(id);
                 let (mid, sid, inst) = inst[0].require_struct();
@@ -683,7 +686,7 @@ impl<'env> Generator<'env> {
                     BytecodeOperation::MoveFrom(mid, sid, inst.to_owned()),
                     args,
                 )
-            },
+            }
             Operation::Copy | Operation::Move => {
                 let target = self.require_unary_target(id, targets);
                 let arg = self.gen_escape_auto_ref_arg(&self.require_unary_arg(id, args), false);
@@ -693,7 +696,7 @@ impl<'env> Generator<'env> {
                     AssignKind::Move
                 };
                 self.emit_with(id, |attr| Bytecode::Assign(attr, target, arg, assign_kind))
-            },
+            }
             Operation::Borrow(kind) => {
                 let target = self.require_unary_target(id, targets);
                 let arg = self.require_unary_arg(id, args);
@@ -706,16 +709,16 @@ impl<'env> Generator<'env> {
                     self.temps[target] = Type::Reference(*kind, ty.clone());
                 }
                 self.gen_borrow(target, id, *kind, &arg)
-            },
+            }
             Operation::Abort => {
                 let arg = self.require_unary_arg(id, args);
                 let temp = self.gen_escape_auto_ref_arg(&arg, false);
                 self.emit_with(id, |attr| Bytecode::Abort(attr, temp))
-            },
+            }
             Operation::Deref => self.gen_op_call(targets, id, BytecodeOperation::ReadRef, args),
             Operation::MoveFunction(m, f) => {
                 self.gen_function_call(targets, id, m.qualified(*f), args)
-            },
+            }
             Operation::Cast => self.gen_cast_call(targets, id, args),
             Operation::Add => self.gen_op_call(targets, id, BytecodeOperation::Add, args),
             Operation::Sub => self.gen_op_call(targets, id, BytecodeOperation::Sub, args),
@@ -737,7 +740,7 @@ impl<'env> Generator<'env> {
             Operation::Ge => self.gen_op_call(targets, id, BytecodeOperation::Ge, args),
             Operation::Not => self.gen_op_call(targets, id, BytecodeOperation::Not, args),
 
-            Operation::NoOp => {}, // do nothing
+            Operation::NoOp => {} // do nothing
 
             Operation::Closure(..) => self.internal_error(id, "closure not yet implemented"),
 
@@ -804,7 +807,7 @@ impl<'env> Generator<'env> {
             _ => {
                 self.internal_error(id, "inconsistent type");
                 return;
-            },
+            }
         };
         self.gen_op_call(targets, id, bytecode_op, args)
     }
@@ -958,7 +961,7 @@ impl<'env> Generator<'env> {
                 let temp = self.new_temp(ty);
                 self.gen(vec![temp], exp);
                 temp
-            },
+            }
             _ => {
                 // Otherwise, introduce a temporary
                 let id = exp.node_id();
@@ -971,7 +974,7 @@ impl<'env> Generator<'env> {
                 let temp = self.new_temp(ty);
                 self.gen(vec![temp], exp);
                 temp
-            },
+            }
         }
     }
 
@@ -1027,10 +1030,10 @@ impl<'env> Generator<'env> {
                     *fid,
                     &self.require_unary_arg(id, args),
                 )
-            },
+            }
             ExpData::LocalVar(_arg_id, sym) => return self.gen_borrow_local(target, id, *sym),
             ExpData::Temporary(_arg_id, temp) => return self.gen_borrow_temp(target, id, *temp),
-            _ => {},
+            _ => {}
         }
         // Borrow the temporary, allowing to do e.g. `&(1+2)`. Note to match
         // this capability in the stack machine, we need to keep those temps in locals
@@ -1148,9 +1151,12 @@ impl<'env> Generator<'env> {
             vec![oper_temp],
         );
         if need_read_ref {
-            self.emit_call(id, vec![target], BytecodeOperation::ReadRef, vec![
-                borrow_dest,
-            ])
+            self.emit_call(
+                id,
+                vec![target],
+                BytecodeOperation::ReadRef,
+                vec![borrow_dest],
+            )
         }
     }
 }
@@ -1204,7 +1210,7 @@ impl<'env> Generator<'env> {
                         self.gen_assign(id, pat, exp, next_scope)
                     }
                 }
-            },
+            }
             _ => {
                 // The type checker has ensured that this expression represents  tuple
                 let (temps, cont_assigns) = self.flatten_patterns(pats, next_scope);
@@ -1212,7 +1218,7 @@ impl<'env> Generator<'env> {
                 for (cont_id, cont_pat, cont_temp) in cont_assigns {
                     self.gen_assign_from_temp(cont_id, &cont_pat, cont_temp, next_scope)
                 }
-            },
+            }
         }
     }
 
@@ -1274,13 +1280,13 @@ impl<'env> Generator<'env> {
                 self.emit_with(id, |attr| {
                     Bytecode::Assign(attr, temp, arg, AssignKind::Inferred)
                 })
-            },
+            }
             Pattern::Var(var_id, sym) => {
                 let local = self.find_local_for_pattern(*var_id, *sym, next_scope);
                 self.emit_with(id, |attr| {
                     Bytecode::Assign(attr, local, arg, AssignKind::Inferred)
                 })
-            },
+            }
             Pattern::Struct(id, str, args) => {
                 let (temps, cont_assigns) = self.flatten_patterns(args, next_scope);
                 let ty = self.temp_type(arg);
@@ -1302,7 +1308,7 @@ impl<'env> Generator<'env> {
                 for (cont_id, cont_pat, cont_temp) in cont_assigns {
                     self.gen_assign_from_temp(cont_id, &cont_pat, cont_temp, next_scope)
                 }
-            },
+            }
             Pattern::Tuple(id, _) => self.error(*id, "tuple not allowed here"),
             Pattern::Error(_) => self.internal_error(id, "unexpected error pattern"),
         }
@@ -1325,12 +1331,12 @@ impl<'env> Generator<'env> {
                 // if its dropped afterwards.
                 let temp = self.new_temp(self.get_node_type(*id));
                 (temp, None)
-            },
+            }
             Pattern::Var(id, sym) => {
                 // Variable pattern: no continuation assignment needed as it is already in
                 // the expected form.
                 (self.find_local_for_pattern(*id, *sym, next_scope), None)
-            },
+            }
             _ => {
                 // Pattern is not flat: create a new temporary and an Assignment of this
                 // temporary to the pattern.
@@ -1338,7 +1344,7 @@ impl<'env> Generator<'env> {
                 let ty = self.get_node_type(id);
                 let temp = self.new_temp(ty);
                 (temp, Some((id, pat.clone(), temp)))
-            },
+            }
         }
     }
 

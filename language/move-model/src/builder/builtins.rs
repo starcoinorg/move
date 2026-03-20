@@ -89,18 +89,21 @@ pub(crate) fn declare_builtins(trans: &mut ModelBuilder) {
                                param_type2: &Type,
                                result_type: &Type,
                                visibility: EntryVisibility| {
-            trans.define_spec_or_builtin_fun(trans.bin_op_symbol(&op), SpecOrBuiltinFunEntry {
-                loc: loc.clone(),
-                oper,
-                type_params: type_params.to_vec(),
-                type_param_constraints: type_params_constraints.to_owned(),
-                params: vec![
-                    mk_param(trans, 1, param_type1.clone()),
-                    mk_param(trans, 2, param_type2.clone()),
-                ],
-                result_type: result_type.clone(),
-                visibility,
-            });
+            trans.define_spec_or_builtin_fun(
+                trans.bin_op_symbol(&op),
+                SpecOrBuiltinFunEntry {
+                    loc: loc.clone(),
+                    oper,
+                    type_params: type_params.to_vec(),
+                    type_param_constraints: type_params_constraints.to_owned(),
+                    params: vec![
+                        mk_param(trans, 1, param_type1.clone()),
+                        mk_param(trans, 2, param_type2.clone()),
+                    ],
+                    result_type: result_type.clone(),
+                    visibility,
+                },
+            );
         };
         let declare_bin = |trans: &mut ModelBuilder,
                            op: PA::BinOp_,

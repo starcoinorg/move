@@ -270,10 +270,10 @@ impl LiveVarAnalysisProcessor {
             match m1.entry(*k) {
                 Entry::Vacant(e) => {
                     e.insert(v.clone());
-                },
+                }
                 Entry::Occupied(mut e) => {
                     e.get_mut().join(v);
-                },
+                }
             }
         }
     }
@@ -300,7 +300,7 @@ impl LiveVarState {
         match self.livevars.entry(t) {
             ImEntry::Vacant(entry) => {
                 entry.insert(info);
-            },
+            }
             ImEntry::Occupied(mut entry) => {
                 let value = entry.get_mut();
                 if track_all_usages {
@@ -308,7 +308,7 @@ impl LiveVarState {
                 } else {
                     entry.insert(info); // primary use takes precedence
                 }
-            },
+            }
         }
     }
 }
@@ -346,10 +346,10 @@ impl<'a> TransferFunctions for LiveVarAnalysis<'a> {
             Assign(id, dst, src, _) => {
                 state.livevars.remove(dst);
                 state.insert_or_update(*src, self.livevar_info(id, offset), self.track_all_usages);
-            },
+            }
             Load(_, dst, _) => {
                 state.livevars.remove(dst);
-            },
+            }
             Call(id, dsts, _, srcs, _) => {
                 for dst in dsts {
                     state.livevars.remove(dst);
@@ -361,29 +361,29 @@ impl<'a> TransferFunctions for LiveVarAnalysis<'a> {
                         self.track_all_usages,
                     );
                 }
-            },
+            }
             Ret(id, srcs) => {
                 for src in srcs {
                     state.livevars.insert(*src, self.livevar_info(id, offset));
                 }
-            },
+            }
             Abort(id, src) => {
                 state.livevars.insert(*src, self.livevar_info(id, offset));
-            },
+            }
             Branch(id, _, _, src) => {
                 state.insert_or_update(*src, self.livevar_info(id, offset), self.track_all_usages);
-            },
+            }
             Prop(id, _, exp) if self.track_all_usages => {
                 for idx in exp.used_temporaries() {
                     state.insert_or_update(idx, self.livevar_info(id, offset), true);
                 }
-            },
+            }
             SpecBlock(id, spec) if self.track_all_usages => {
                 for idx in spec.used_temporaries() {
                     state.insert_or_update(idx, self.livevar_info(id, offset), true);
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 }

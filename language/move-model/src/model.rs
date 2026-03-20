@@ -1549,7 +1549,7 @@ impl GlobalEnv {
                         Bytecode::Call(i) => Some(*i),
                         Bytecode::CallGeneric(i) => {
                             Some(module.function_instantiation_at(*i).handle)
-                        },
+                        }
                         _ => None,
                     };
                     handle_idx.map(|idx| {
@@ -1612,12 +1612,15 @@ impl GlobalEnv {
         let field_name = self.symbol_pool.make("v");
         let mut field_data = BTreeMap::new();
         let field_id = FieldId::new(field_name);
-        field_data.insert(field_id, FieldData {
-            name: field_name,
-            loc: loc.clone(),
-            offset: 0,
-            ty,
-        });
+        field_data.insert(
+            field_id,
+            FieldData {
+                name: field_name,
+                loc: loc.clone(),
+                offset: 0,
+                ty,
+            },
+        );
         StructData {
             name: self.ghost_memory_name(var_name),
             loc,
@@ -1848,7 +1851,7 @@ impl GlobalEnv {
                 // Schemas are expanded, inline spec blocks are part of the AST,
                 // and function code is nested inside of a function spec block
                 panic!("spec not available for schema or inline blocks")
-            },
+            }
         }
     }
 
@@ -1874,7 +1877,7 @@ impl GlobalEnv {
                 // Schemas are expanded, inline spec blocks are part of the AST,
                 // and function code is nested inside of a function spec block
                 panic!("spec not available for schema or inline blocks")
-            },
+            }
         }
     }
 
@@ -2385,23 +2388,23 @@ impl GlobalEnv {
                             "0x{}::*",
                             addr.expect_numerical().short_str_lossless()
                         )
-                    },
+                    }
                     ResourceSpecifier::DeclaredInModule(mid) => {
                         emit!(writer, "{}::*", self.get_module(*mid).get_full_name_str())
-                    },
+                    }
                     ResourceSpecifier::Resource(sid) => {
                         emit!(writer, "{}", sid.to_type().display(tctx))
-                    },
+                    }
                 }
                 emit!(writer, "(");
                 match &spec.address.1 {
                     AddressSpecifier::Any => emit!(writer, "*"),
                     AddressSpecifier::Address(addr) => {
                         emit!(writer, "0x{}", addr.expect_numerical().short_str_lossless())
-                    },
+                    }
                     AddressSpecifier::Parameter(sym) => {
                         emit!(writer, "{}", sym.display(self.symbol_pool()))
-                    },
+                    }
                     AddressSpecifier::Call(fun, sym) => emit!(
                         writer,
                         "{}({})",
@@ -2978,7 +2981,7 @@ impl<'env> ModuleEnv<'env> {
             SignatureToken::TypeParameter(index) => Type::TypeParameter(*index),
             SignatureToken::Vector(bt) => {
                 Type::Vector(Box::new(self.internal_globalize_signature(module, bt)))
-            },
+            }
             SignatureToken::Struct(handle_idx) => {
                 let struct_view =
                     StructHandleView::new(module, module.struct_handle_at(*handle_idx));
@@ -2990,7 +2993,7 @@ impl<'env> ModuleEnv<'env> {
                     .find_struct(self.env.symbol_pool.make(struct_view.name().as_str()))
                     .expect("undefined struct");
                 Type::Struct(declaring_module_env.data.id, struct_env.get_id(), vec![])
-            },
+            }
             SignatureToken::StructInstantiation(handle_idx, args) => {
                 let struct_view =
                     StructHandleView::new(module, module.struct_handle_at(*handle_idx));
@@ -3006,7 +3009,7 @@ impl<'env> ModuleEnv<'env> {
                     struct_env.get_id(),
                     self.internal_globalize_signatures(module, args),
                 )
-            },
+            }
         }
     }
 
@@ -3033,7 +3036,7 @@ impl<'env> ModuleEnv<'env> {
             Some(idx) => {
                 let actuals = &module.signature_at(idx).0;
                 self.globalize_signatures(actuals)
-            },
+            }
             None => Some(vec![]),
         }
     }
@@ -3113,12 +3116,15 @@ impl<'env> ModuleEnv<'env> {
     pub fn disassemble(&self) -> Option<String> {
         let view = BinaryIndexedView::Module(self.get_verified_module()?);
         let smap = self.data.source_map.as_ref().expect("source map").clone();
-        let disas = Disassembler::new(SourceMapping::new(smap, view), DisassemblerOptions {
-            only_externally_visible: false,
-            print_code: true,
-            print_basic_blocks: true,
-            print_locals: true,
-        });
+        let disas = Disassembler::new(
+            SourceMapping::new(smap, view),
+            DisassemblerOptions {
+                only_externally_visible: false,
+                print_code: true,
+                print_basic_blocks: true,
+                print_locals: true,
+            },
+        );
         Some(
             disas
                 .disassemble()
@@ -3947,7 +3953,7 @@ impl<'env> FunctionEnv<'env> {
                     module_name,
                     self.symbol_pool().string(qsym.symbol)
                 )))
-            },
+            }
             _ => None,
         }
     }
@@ -3964,7 +3970,7 @@ impl<'env> FunctionEnv<'env> {
                 } else {
                     None
                 }
-            },
+            }
             _ => None,
         }
     }

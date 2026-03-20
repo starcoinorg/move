@@ -393,7 +393,7 @@ impl<'env> Inliner<'env> {
                 if let Some(new_def) = func_env.get_def().and_then(|def| self.do_rewrite_exp(def)) {
                     *self.inline_targets.state_mut(&target) = Def(new_def)
                 }
-            },
+            }
             SpecFun(func_id) => {
                 let func_env = self.env.get_spec_fun(*func_id);
                 if let Some(new_def) = func_env
@@ -403,13 +403,13 @@ impl<'env> Inliner<'env> {
                 {
                     *self.inline_targets.state_mut(&target) = Def(new_def);
                 }
-            },
+            }
             SpecBlock(sb_target) => {
                 let spec = self.env.get_spec_block(sb_target);
                 if let Some(new_spec) = self.do_rewrite_spec(sb_target, &spec) {
                     *self.inline_targets.state_mut(&target) = Spec(new_spec)
                 }
-            },
+            }
         }
     }
 
@@ -788,10 +788,10 @@ impl<'env, 'rewriter> InlinedRewriter<'env, 'rewriter> {
             match e {
                 ExpData::Loop(..) if !post => {
                     in_loop += 1;
-                },
+                }
                 ExpData::Loop(..) if post => {
                     in_loop -= 1;
-                },
+                }
                 ExpData::Return(node_id, _) if !post => {
                     let node_loc = env.get_node_loc(*node_id);
                     env.error(
@@ -799,7 +799,7 @@ impl<'env, 'rewriter> InlinedRewriter<'env, 'rewriter> {
                         "Return not currently supported in function-typed arguments \
                          (lambda expressions)",
                     )
-                },
+                }
                 ExpData::LoopCont(node_id, is_continue) if !post && in_loop == 0 => {
                     let node_loc = env.get_node_loc(*node_id);
                     env.error(
@@ -810,8 +810,8 @@ impl<'env, 'rewriter> InlinedRewriter<'env, 'rewriter> {
                             if *is_continue { "Continue" } else { "Break" }
                         ),
                     )
-                },
-                _ => {},
+                }
+                _ => {}
             }
             true // keep going
         });
@@ -964,7 +964,7 @@ impl<'env, 'rewriter> InlinedRewriter<'env, 'rewriter> {
                 InlinedRewriter::check_params_args_types_vectors_need_freezeref(
                     type_vec, args_types,
                 )
-            },
+            }
             _ => None,
         }
     }
@@ -1041,11 +1041,11 @@ impl<'env, 'rewriter> ExpRewriterFunctions for InlinedRewriter<'env, 'rewriter> 
                     "Return not currently supported in inline functions",
                 );
                 false
-            },
+            }
             ExpData::Loop(..) => {
                 self.in_loop += 1;
                 true
-            },
+            }
             ExpData::LoopCont(node_id, is_continue) if self.in_loop == 0 => {
                 let node_loc = self.env.get_node_loc(*node_id);
                 self.env.error(
@@ -1056,7 +1056,7 @@ impl<'env, 'rewriter> ExpRewriterFunctions for InlinedRewriter<'env, 'rewriter> 
                     ),
                 );
                 false
-            },
+            }
             _ => false,
         };
 
@@ -1149,7 +1149,7 @@ impl<'env, 'rewriter> ExpRewriterFunctions for InlinedRewriter<'env, 'rewriter> 
                 } else {
                     None
                 }
-            },
+            }
             // FUTURE TODO: uncomment this for more functionality
             // ExpData::Lambda(..) => Some(Target),
             _ => None,
@@ -1194,7 +1194,7 @@ impl<'env, 'rewriter> ExpRewriterFunctions for InlinedRewriter<'env, 'rewriter> 
             Pattern::Struct(_, struct_id, pattern_vec) => {
                 let new_struct_id = struct_id.clone().instantiate(self.type_args);
                 Some(Pattern::Struct(new_id, new_struct_id, pattern_vec.clone()))
-            },
+            }
             Pattern::Wildcard(_) => None,
             Pattern::Error(_) => None,
         }

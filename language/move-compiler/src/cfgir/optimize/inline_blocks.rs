@@ -47,7 +47,7 @@ fn find_single_target_labels(start: Label, blocks: &BasicBlocks) -> BTreeSet<Lab
             } => {
                 *counts.entry(*if_true).or_insert(0) += 1;
                 *counts.entry(*if_false).or_insert(0) += 1
-            },
+            }
             C::Jump { target, .. } => *counts.entry(*target).or_insert(0) += 1,
             _ => (),
         }
@@ -87,7 +87,7 @@ fn inline_single_target_blocks(
             None => {
                 next = labels.next();
                 continue;
-            },
+            }
             Some(b) => b,
         };
 
@@ -108,11 +108,11 @@ fn inline_single_target_blocks(
                 // put cur's block back into working_blocks, as we will revisit it on next iter.
                 working_blocks.insert(cur, block);
                 // Note that target_block is droppped.
-            },
+            }
             _ => {
                 next = labels.next();
                 finished_blocks.insert(cur, block);
-            },
+            }
         }
     }
 
@@ -156,10 +156,10 @@ fn remap_to_last_target(
                     Some(next_next_label) => {
                         prev_label = next_label;
                         next_label = next_next_label;
-                    },
+                    }
                     None => {
                         break;
-                    },
+                    }
                 };
             }
             if next_label != label {

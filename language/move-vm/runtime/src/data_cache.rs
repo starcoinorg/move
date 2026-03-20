@@ -3,20 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    dispatch_loader,
     loader::{Loader, ModuleStorageAdapter},
-    logging::expect_no_verification_errors,
+    AsUnsyncModuleStorage, RuntimeEnvironmentRef,
 };
 use bytes::Bytes;
 use move_binary_format::{
-    deserializer::DeserializerConfig,
-    errors::*,
-    file_format::{CompiledModule, CompiledScript},
+    deserializer::DeserializerConfig, errors::*, file_format::CompiledScript,
 };
 use move_core_types::{
     account_address::AccountAddress,
     effects::{AccountChanges, ChangeSet, Changes, Op},
     gas_algebra::NumBytes,
-    identifier::Identifier,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     metadata::Metadata,
     resolver::MoveResolver,
@@ -24,15 +23,17 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::{
+    code::ModuleBytesStorage,
     loaded_data::runtime_types::Type,
     value_serde::deserialize_and_allow_delayed_values,
     values::{GlobalValue, Value},
 };
-use sha3::{Digest, Sha3_256};
 use std::{
     collections::btree_map::{self, BTreeMap},
     sync::Arc,
 };
+
+use crate::storage::{ty_layout_converter::LayoutConverter, ty_tag_converter::TypeTagConverter};
 
 pub struct AccountDataCache {
     // The bool flag in the `data_map` indicates whether the resource contains
@@ -87,7 +88,6 @@ pub(crate) struct TransactionDataCache<'r> {
 
     // Caches to help avoid duplicate deserialization calls.
     compiled_scripts: BTreeMap<[u8; 32], Arc<CompiledScript>>,
-    compiled_modules: BTreeMap<ModuleId, (Arc<CompiledModule>, usize, [u8; 32])>,
 }
 
 impl<'r> TransactionDataCache<'r> {
@@ -102,7 +102,6 @@ impl<'r> TransactionDataCache<'r> {
             account_map: BTreeMap::new(),
             deserializer_config,
             compiled_scripts: BTreeMap::new(),
-            compiled_modules: BTreeMap::new(),
         }
     }
 
@@ -144,9 +143,11 @@ impl<'r> TransactionDataCache<'r> {
             }
 
             let mut resources = BTreeMap::new();
+            let runtime_environment = loader.runtime_environment();
+            let ty_tag_converter = TypeTagConverter::new(&runtime_environment);
             for (ty, (layout, gv, has_aggregator_lifting)) in account_data_cache.data_map {
                 if let Some(op) = gv.into_effect_with_layout(layout) {
-                    let struct_tag = match loader.type_to_type_tag(&ty)? {
+                    let struct_tag = match ty_tag_converter.ty_to_ty_tag(&ty)? {
                         TypeTag::Struct(struct_tag) => *struct_tag,
                         _ => return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)),
                     };
@@ -204,24 +205,42 @@ impl<'r> TransactionDataCache<'r> {
         ty: &Type,
         module_store: &ModuleStorageAdapter,
     ) -> PartialVMResult<(&mut GlobalValue, Option<NumBytes>)> {
-        let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
-            (addr, AccountDataCache::new())
-        });
-
+        let needs_load = self
+            .account_map
+            .get(&addr)
+            .map(|account_cache| !account_cache.data_map.contains_key(ty))
+            .unwrap_or(true);
         let mut load_res = None;
-        if !account_cache.data_map.contains_key(ty) {
-            let ty_tag = match loader.type_to_type_tag(ty)? {
+        let load_info = if needs_load {
+            let runtime_environment = loader.runtime_environment();
+            let ty_tag = match TypeTagConverter::new(&runtime_environment).ty_to_ty_tag(ty)? {
                 TypeTag::Struct(s_tag) => s_tag,
                 _ =>
                 // non-struct top-level value; can't happen
                 {
                     return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
-                },
+                }
             };
-            // TODO(Gas): Shall we charge for this?
+            let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, &*self);
+            let v2_module_storage = base_storage.as_unsync_module_storage();
+            let traversal_storage = crate::module_traversal::TraversalStorage::new();
+            let mut traversal_context =
+                crate::module_traversal::TraversalContext::new(&traversal_storage);
+            let mut gas_meter = move_vm_types::gas::UnmeteredGasMeter;
             let (ty_layout, has_aggregator_lifting) =
-                loader.type_to_type_layout_with_identifier_mappings(ty, module_store)?;
+                dispatch_loader!(&v2_module_storage, v2_loader, {
+                    LayoutConverter::new(&v2_loader).type_to_type_layout_with_identifier_mappings(
+                        &mut gas_meter,
+                        &mut traversal_context,
+                        ty,
+                    )
+                })?;
+            Some((ty_tag, ty_layout, has_aggregator_lifting))
+        } else {
+            None
+        };
 
+        if let Some((ty_tag, ty_layout, has_aggregator_lifting)) = load_info {
             let module = module_store.module_at(&ty_tag.module_id());
             let metadata: &[Metadata] = match &module {
                 Some(module) => &module.module().metadata,
@@ -254,19 +273,25 @@ impl<'r> TransactionDataCache<'r> {
                                 StatusCode::FAILED_TO_DESERIALIZE_RESOURCE,
                             )
                             .with_message(msg));
-                        },
+                        }
                     };
 
                     GlobalValue::cached(val)?
-                },
+                }
                 None => GlobalValue::none(),
             };
 
+            let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
+                (addr, AccountDataCache::new())
+            });
             account_cache
                 .data_map
                 .insert(ty.clone(), (ty_layout, gv, has_aggregator_lifting));
         }
 
+        let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
+            (addr, AccountDataCache::new())
+        });
         Ok((
             account_cache
                 .data_map
@@ -300,53 +325,10 @@ impl<'r> TransactionDataCache<'r> {
                         return Err(PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
                             .with_message(msg)
                             .finish(Location::Script));
-                    },
+                    }
                 };
                 Ok(entry.insert(Arc::new(script)).clone())
-            },
-        }
-    }
-
-    pub(crate) fn load_compiled_module_to_cache(
-        &mut self,
-        id: ModuleId,
-        allow_loading_failure: bool,
-    ) -> VMResult<(Arc<CompiledModule>, usize, [u8; 32])> {
-        let cache = &mut self.compiled_modules;
-        match cache.entry(id) {
-            btree_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
-            btree_map::Entry::Vacant(entry) => {
-                // bytes fetching, allow loading to fail if the flag is set
-                let bytes = match load_module_impl(self.remote, &self.account_map, entry.key())
-                    .map_err(|err| err.finish(Location::Undefined))
-                {
-                    Ok(bytes) => bytes,
-                    Err(err) if allow_loading_failure => return Err(err),
-                    Err(err) => {
-                        return Err(expect_no_verification_errors(err));
-                    },
-                };
-
-                let mut sha3_256 = Sha3_256::new();
-                sha3_256.update(&bytes);
-                let hash_value: [u8; 32] = sha3_256.finalize().into();
-
-                // for bytes obtained from the data store, they should always deserialize and verify.
-                // It is an invariant violation if they don't.
-                let module =
-                    CompiledModule::deserialize_with_config(&bytes, &self.deserializer_config)
-                        .map_err(|err| {
-                            let msg = format!("Deserialization error: {:?}", err);
-                            PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
-                                .with_message(msg)
-                                .finish(Location::Module(entry.key().clone()))
-                        })
-                        .map_err(expect_no_verification_errors)?;
-
-                Ok(entry
-                    .insert((Arc::new(module), bytes.len(), hash_value))
-                    .clone())
-            },
+            }
         }
     }
 
@@ -379,5 +361,25 @@ impl<'r> TransactionDataCache<'r> {
             .get_module(module_id)
             .map_err(|e| e.finish(Location::Undefined))?
             .is_some())
+    }
+}
+
+impl ModuleBytesStorage for TransactionDataCache<'_> {
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        let module_id = ModuleId::new(*address, module_name.to_owned());
+        self.load_module(&module_id)
+            .map(Some)
+            .map_err(|err| err.finish(Location::Undefined))
+            .or_else(|err| {
+                if err.major_status() == StatusCode::LINKER_ERROR {
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            })
     }
 }

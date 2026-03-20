@@ -131,10 +131,10 @@ impl<'env, 'params> SymbolVisitor<'env, 'params> {
                             self.node_symbol_decl_visitor(true, &id, &var, UsageKind::LocalVar)
                         }
                         self.seen_uses.exit_scope();
-                    },
-                    Pre | MidMutate | BeforeThen | BeforeElse | PreSequenceValue => {},
+                    }
+                    Pre | MidMutate | BeforeThen | BeforeElse | PreSequenceValue => {}
                 };
-            },
+            }
             Lambda(_, pat, _) => {
                 match position {
                     Pre => self.seen_uses.enter_scope(),
@@ -143,10 +143,10 @@ impl<'env, 'params> SymbolVisitor<'env, 'params> {
                             self.node_symbol_decl_visitor(true, &id, &var, UsageKind::Lambda);
                         }
                         self.seen_uses.exit_scope();
-                    },
-                    BeforeBody | MidMutate | BeforeThen | BeforeElse | PreSequenceValue => {},
+                    }
+                    BeforeBody | MidMutate | BeforeThen | BeforeElse | PreSequenceValue => {}
                 };
-            },
+            }
             Quant(_, _, ranges, ..) => {
                 match position {
                     Pre => self.seen_uses.enter_scope(),
@@ -160,28 +160,28 @@ impl<'env, 'params> SymbolVisitor<'env, 'params> {
                             );
                         }
                         self.seen_uses.exit_scope();
-                    },
-                    BeforeBody | MidMutate | BeforeThen | BeforeElse | PreSequenceValue => {},
+                    }
+                    BeforeBody | MidMutate | BeforeThen | BeforeElse | PreSequenceValue => {}
                 };
-            },
+            }
             Assign(_, pat, _) => {
                 if let Post = position {
                     for (id, sym) in pat.vars().iter() {
                         self.node_symbol_use_visitor(true, id, sym);
                     }
                 }
-            },
+            }
             LocalVar(id, sym) => {
                 if let Post = position {
                     self.node_symbol_use_visitor(true, id, sym);
                 }
-            },
+            }
             Temporary(id, idx) => {
                 if let Post = position {
                     self.node_tmp_use_visitor(true, id, idx);
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
         true // always continue
     }

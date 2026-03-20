@@ -137,7 +137,7 @@ impl SplitCriticalEdgesTransformation {
         match bytecode {
             Bytecode::Branch(attr_id, l0, l1, t) => {
                 self.transform_branch(transformed, attr_id, l0, l1, t)
-            },
+            }
             // Edge of a `Jump` is never critical because the source node only has one out edge.
             _ => transformed.push(bytecode),
         }
@@ -162,16 +162,16 @@ impl SplitCriticalEdgesTransformation {
             (None, Some((l1_new, mut code))) => {
                 transformed.push(Bytecode::Branch(attr_id, l0, l1_new, t));
                 transformed.append(&mut code);
-            },
+            }
             (Some((l0_new, mut code)), None) => {
                 transformed.push(Bytecode::Branch(attr_id, l0_new, l1, t));
                 transformed.append(&mut code)
-            },
+            }
             (Some((l0_new, mut code0)), Some((l1_new, mut code1))) => {
                 transformed.push(Bytecode::Branch(attr_id, l0_new, l1_new, t));
                 transformed.append(&mut code0);
                 transformed.append(&mut code1);
-            },
+            }
         }
     }
 
@@ -211,14 +211,12 @@ impl SplitCriticalEdgesTransformation {
 
     /// Generates a fresh label
     fn gen_fresh_label(&mut self) -> Label {
-        let new_label = Label::new(
-            if self.labels.is_empty() {
-                0
-            } else {
-                let max_label = self.labels.iter().next_back().expect("label");
-                max_label.as_usize() + 1
-            },
-        );
+        let new_label = Label::new(if self.labels.is_empty() {
+            0
+        } else {
+            let max_label = self.labels.iter().next_back().expect("label");
+            max_label.as_usize() + 1
+        });
         self.labels.insert(new_label);
         new_label
     }
@@ -243,7 +241,7 @@ fn count_incoming_edges(code: &[Bytecode]) -> BTreeMap<Label, usize> {
             Bytecode::Branch(_, l0, l1, _) => {
                 increment_key_count(&mut srcs_count, *l0);
                 increment_key_count(&mut srcs_count, *l1);
-            },
+            }
             Bytecode::Label(_, label) => {
                 if code_offset != 0 {
                     let prev_instr = code.get(code_offset - 1).expect("instruction");
@@ -252,8 +250,8 @@ fn count_incoming_edges(code: &[Bytecode]) -> BTreeMap<Label, usize> {
                         increment_key_count(&mut srcs_count, *label)
                     }
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
     srcs_count

@@ -110,7 +110,7 @@ impl ModelBuilder {
                     }
                 }
                 (new_targets, new_deps)
-            },
+            }
             None => (
                 all_targets,
                 all_deps.into_iter().map(|(p, _)| p).collect_vec(),
@@ -147,7 +147,7 @@ impl ModelBuilder {
                 options.skip_attribute_checks = skip_attribute_checks;
                 let mut error_writer = StandardStream::stderr(ColorChoice::Auto);
                 move_compiler_v2::run_move_compiler_for_analysis(&mut error_writer, options)
-            },
+            }
         }
     }
 }

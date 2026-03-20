@@ -580,7 +580,7 @@ impl<'env> SimplifierRewriter<'env> {
                         sym.display(self.env().symbol_pool()),
                     );
                     None
-                },
+                }
             }
         } else {
             trace!(
@@ -679,20 +679,20 @@ impl<'env> ExpRewriterFunctions for SimplifierRewriter<'env> {
         match &borrow_effect {
             TransparentToBorrow => {
                 // no effect on `in_mut_borrow`. Depends on context.
-            },
+            }
             Borrowable => {
                 // no effect on `in_mut_borrow`, safe to rewrite ***if safe***,
                 // since such rewrites are only safe if not in a Mutable borrow.
-            },
+            }
             IsMutableBorrow => {
                 // Turn on `in_mut_borrow`
                 self.in_mut_borrow_stack.push(self.in_mut_borrow);
                 self.in_mut_borrow = true;
-            },
+            }
             NotBorrowable => {
                 self.in_mut_borrow_stack.push(self.in_mut_borrow);
                 self.in_mut_borrow = false;
-            },
+            }
         };
         let rexp = self.rewrite_exp_descent(exp);
         let new_id = rexp.as_ref().node_id().as_usize();
@@ -709,7 +709,7 @@ impl<'env> ExpRewriterFunctions for SimplifierRewriter<'env> {
             TransparentToBorrow | Borrowable => {
                 // It was already borrowable, don't need to check for unwrap.
                 rexp // No effect.
-            },
+            }
             IsMutableBorrow => {
                 // Exit this `in_mut_borrow` scope
                 self.in_mut_borrow = self
@@ -717,7 +717,7 @@ impl<'env> ExpRewriterFunctions for SimplifierRewriter<'env> {
                     .pop()
                     .expect("Imbalanced in_mut_borrow stack.");
                 rexp
-            },
+            }
             NotBorrowable => {
                 // Exit `in_mut_borrow=false` scope
                 self.in_mut_borrow = self
@@ -746,11 +746,11 @@ impl<'env> ExpRewriterFunctions for SimplifierRewriter<'env> {
                             | Call(id, Operation::Select(..), _) => {
                                 let cloned_id = self.env().clone_node(*id);
                                 Sequence(cloned_id, vec![rexp]).into_exp()
-                            },
+                            }
                             _ => {
                                 // Nothing to do.
                                 rexp
-                            },
+                            }
                         }
                     } else {
                         rexp
@@ -758,7 +758,7 @@ impl<'env> ExpRewriterFunctions for SimplifierRewriter<'env> {
                 } else {
                     rexp
                 }
-            },
+            }
         };
         let protected_rexp_id = protected_rexp.as_ref().node_id().as_usize();
         trace!(
@@ -1023,14 +1023,14 @@ impl<'env> ExpRewriterFunctions for SimplifierRewriter<'env> {
                     } else {
                         None
                     }
-                },
+                }
                 ExpData::Value(_, Value::Bool(false)) => {
                     if then.as_ref().is_ok_to_remove_from_code() {
                         Some((false, "then", else_.clone(), then.node_id()))
                     } else {
                         None
                     }
-                },
+                }
                 _ => None,
             } {
                 let loc = self.env().get_node_loc(eliminated_id);

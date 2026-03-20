@@ -110,7 +110,7 @@ fn check_privileged_operations_on_structs(env: &GlobalEnv, fun_env: &FunctionEnv
                                 );
                             }
                         }
-                    },
+                    }
                     Operation::Select(mid, sid, fid) if *mid != caller_module_id => {
                         let qualified_struct_id = mid.qualified(*sid);
                         let struct_env = env.get_struct(qualified_struct_id);
@@ -126,7 +126,7 @@ fn check_privileged_operations_on_structs(env: &GlobalEnv, fun_env: &FunctionEnv
                             ),
                             &struct_env.module_env,
                         );
-                    },
+                    }
                     Operation::Pack(mid, sid) => {
                         if *mid != caller_module_id {
                             let qualified_struct_id = mid.qualified(*sid);
@@ -140,8 +140,8 @@ fn check_privileged_operations_on_structs(env: &GlobalEnv, fun_env: &FunctionEnv
                                 &struct_env.module_env,
                             );
                         }
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 },
                 ExpData::Assign(_, pat, _)
                 | ExpData::Block(_, pat, _, _)
@@ -162,12 +162,12 @@ fn check_privileged_operations_on_structs(env: &GlobalEnv, fun_env: &FunctionEnv
                             }
                         }
                     });
-                },
+                }
                 // access in specs is not restricted
                 ExpData::SpecBlock(_, _) => {
                     return false;
-                },
-                _ => {},
+                }
+                _ => {}
             }
             true
         });
@@ -204,16 +204,16 @@ pub fn check_access_and_use(env: &mut GlobalEnv, before_inlining: bool) {
                 // During first pass, record private functions for later
                 if before_inlining {
                     match caller_func.visibility() {
-                        Visibility::Public => {},
+                        Visibility::Public => {}
                         Visibility::Friend => {
                             if !caller_module_has_friends {
                                 // Function is essentially private
                                 private_funcs.insert(caller_qfid);
                             }
-                        },
+                        }
                         Visibility::Private => {
                             private_funcs.insert(caller_qfid);
-                        },
+                        }
                     };
                 }
 
@@ -249,7 +249,7 @@ pub fn check_access_and_use(env: &mut GlobalEnv, before_inlining: bool) {
                                         &callee_func,
                                     );
                                     false
-                                },
+                                }
                                 Visibility::Friend => {
                                     if callee_func.module_env.has_friend(&caller_module_id) {
                                         true
@@ -257,11 +257,11 @@ pub fn check_access_and_use(env: &mut GlobalEnv, before_inlining: bool) {
                                         not_a_friend_error(env, sites, &caller_func, &callee_func);
                                         false
                                     }
-                                },
+                                }
                                 Visibility::Private => {
                                     private_to_module_error(env, sites, &caller_func, &callee_func);
                                     false
-                                },
+                                }
                             }
                         };
                         // Only record and warn about unused functions before inlining:

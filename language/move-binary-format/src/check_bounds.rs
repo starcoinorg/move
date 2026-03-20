@@ -396,7 +396,7 @@ impl<'a> BoundsChecker<'a> {
                             type_param_count,
                         )?;
                     }
-                },
+                }
                 Call(idx) => self.check_code_unit_bounds_impl(
                     self.view.function_handles(),
                     *idx,
@@ -417,7 +417,7 @@ impl<'a> BoundsChecker<'a> {
                             type_param_count,
                         )?;
                     }
-                },
+                }
                 Pack(idx) | Unpack(idx) | Exists(idx) | ImmBorrowGlobal(idx)
                 | MutBorrowGlobal(idx) | MoveFrom(idx) | MoveTo(idx) => self
                     .check_code_unit_bounds_impl_opt(
@@ -448,7 +448,7 @@ impl<'a> BoundsChecker<'a> {
                             type_param_count,
                         )?;
                     }
-                },
+                }
                 // Instructions that refer to this code block.
                 BrTrue(offset) | BrFalse(offset) | Branch(offset) => {
                     let offset = *offset as usize;
@@ -461,7 +461,7 @@ impl<'a> BoundsChecker<'a> {
                             bytecode_offset as CodeOffset,
                         ));
                     }
-                },
+                }
                 // Instructions that refer to the locals.
                 CopyLoc(idx) | MoveLoc(idx) | StLoc(idx) | MutBorrowLoc(idx)
                 | ImmBorrowLoc(idx) => {
@@ -475,7 +475,7 @@ impl<'a> BoundsChecker<'a> {
                             bytecode_offset as CodeOffset,
                         ));
                     }
-                },
+                }
 
                 // Instructions that refer to a signature
                 VecPack(idx, _)
@@ -492,7 +492,7 @@ impl<'a> BoundsChecker<'a> {
                         bytecode_offset,
                     )?;
                     self.check_type_parameters_in_signature(*idx, type_param_count)?;
-                },
+                }
 
                 // List out the other options explicitly so there's a compile error if a new
                 // bytecode gets added.
@@ -526,7 +526,7 @@ impl<'a> BoundsChecker<'a> {
                             )));
                         }
                     }
-                },
+                }
                 StructInstantiation(idx, type_params) => {
                     check_bounds_impl(self.view.struct_handles(), *idx)?;
                     if let Some(sh) = self.view.struct_handles().get(idx.into_index()) {
@@ -541,7 +541,7 @@ impl<'a> BoundsChecker<'a> {
                             )));
                         }
                     }
-                },
+                }
             }
         }
         Ok(())
@@ -591,7 +591,7 @@ impl<'a> BoundsChecker<'a> {
                 }
 
                 *entry.insert(max_idx)
-            },
+            }
             btree_map::Entry::Occupied(entry) => *entry.get(),
         };
 
@@ -607,7 +607,7 @@ impl<'a> BoundsChecker<'a> {
                 } else {
                     Ok(())
                 }
-            },
+            }
             None => Ok(()),
         }
     }
@@ -674,7 +674,7 @@ impl<'a> BoundsChecker<'a> {
             BoundsCheckingContext::Module => {
                 let msg = format!("Indexing into bytecode {} during bounds checking but 'current_function' was not set", cur_bytecode_offset);
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(msg)
-            },
+            }
             BoundsCheckingContext::ModuleFunction(current_function_index) => {
                 offset_out_of_bounds_error(
                     status,
@@ -684,13 +684,13 @@ impl<'a> BoundsChecker<'a> {
                     current_function_index,
                     cur_bytecode_offset,
                 )
-            },
+            }
             BoundsCheckingContext::Script => {
                 let msg = format!(
         "Index {} out of bounds for {} at bytecode offset {} in script while indexing {}",
         target_offset, target_pool_len, cur_bytecode_offset, kind);
                 PartialVMError::new(status).with_message(msg)
-            },
+            }
         }
     }
 }

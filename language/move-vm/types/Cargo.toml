@@ -10,10 +10,17 @@ publish = false
 edition = "2021"
 
 [dependencies]
+ambassador = { workspace = true }
+bytes = { workspace = true }
+crossbeam = { workspace = true }
+dashmap = { workspace = true }
 derivative = { workspace = true }
+hashbrown = { workspace = true }
 itertools = { workspace = true }
+parking_lot = { workspace = true }
 proptest = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"] }
+sha3 = { workspace = true }
 smallbitvec = { workspace = true }
 smallvec = { workspace = true }
 triomphe = { workspace = true }
@@ -26,9 +33,11 @@ move-core-types = { path = "../../move-core/types" }
 [dev-dependencies]
 claims = { workspace = true }
 move-binary-format = { path = "../../move-binary-format", features = ["fuzzing"] }
+once_cell = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 
 [features]
 default = []
+testing = []
 fuzzing = ["proptest", "move-binary-format/fuzzing"]

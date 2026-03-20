@@ -38,7 +38,7 @@ fn run(
 
     let code = format!(
         r#"
-        module 0x{}::M {{
+        module {}::M {{
             struct Foo has copy, drop {{ x: u64 }}
             struct Bar<T> has copy, drop {{ x: T }}
 
@@ -83,7 +83,8 @@ fn run(
 }
 
 fn expect_err(params: &[&str], args: Vec<MoveValue>, expected_status: StatusCode) {
-    assert!(run(&[], params, vec![], args).unwrap_err().major_status() == expected_status);
+    let err = run(&[], params, vec![], args).unwrap_err();
+    assert_eq!(err.major_status(), expected_status, "{:?}", err);
 }
 
 fn expect_err_generic(
@@ -93,12 +94,8 @@ fn expect_err_generic(
     args: Vec<MoveValue>,
     expected_status: StatusCode,
 ) {
-    assert!(
-        run(ty_params, params, ty_args, args)
-            .unwrap_err()
-            .major_status()
-            == expected_status
-    );
+    let err = run(ty_params, params, ty_args, args).unwrap_err();
+    assert_eq!(err.major_status(), expected_status, "{:?}", err);
 }
 
 fn expect_ok(params: &[&str], args: Vec<MoveValue>) {
@@ -163,9 +160,10 @@ fn expected_u64_got_u64() {
 #[test]
 #[allow(non_snake_case)]
 fn expected_Foo_got_Foo() {
-    expect_ok(&["Foo"], vec![MoveValue::Struct(MoveStruct::new(vec![
-        MoveValue::U64(0),
-    ]))])
+    expect_ok(
+        &["Foo"],
+        vec![MoveValue::Struct(MoveStruct::new(vec![MoveValue::U64(0)]))],
+    )
 }
 
 #[test]
@@ -175,10 +173,10 @@ fn expected_signer_ref_got_signer() {
 
 #[test]
 fn expected_u64_signer_ref_got_u64_signer() {
-    expect_ok(&["u64", "&signer"], vec![
-        MoveValue::U64(0),
-        MoveValue::Signer(TEST_ADDR),
-    ])
+    expect_ok(
+        &["u64", "&signer"],
+        vec![MoveValue::U64(0), MoveValue::Signer(TEST_ADDR)],
+    )
 }
 
 #[test]
@@ -237,17 +235,25 @@ fn expected_A_B__A_u32_vector_B_got_u16_u256__u16_u32_vector_u256() {
 #[test]
 #[allow(non_snake_case)]
 fn expected_T__Bar_T_got_bool__Bar_bool() {
-    expect_ok_generic(&["T"], &["Bar<T>"], vec![TypeTag::Bool], vec![
-        MoveValue::Struct(MoveStruct::new(vec![MoveValue::Bool(false)])),
-    ])
+    expect_ok_generic(
+        &["T"],
+        &["Bar<T>"],
+        vec![TypeTag::Bool],
+        vec![MoveValue::Struct(MoveStruct::new(vec![MoveValue::Bool(
+            false,
+        )]))],
+    )
 }
 
 #[test]
 #[allow(non_snake_case)]
 fn expected_T__T_got_bool__bool() {
-    expect_ok_generic(&["T"], &["T"], vec![TypeTag::Bool], vec![MoveValue::Bool(
-        false,
-    )])
+    expect_ok_generic(
+        &["T"],
+        &["T"],
+        vec![TypeTag::Bool],
+        vec![MoveValue::Bool(false)],
+    )
 }
 
 #[test]

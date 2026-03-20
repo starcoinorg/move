@@ -337,7 +337,7 @@ impl Generator {
                 match arg {
                     MoveValue::Address(addr) => {
                         emitln!(ctx.writer, "0x{}", addr.short_str_lossless());
-                    },
+                    }
                     _ => unreachable!(
                         "only address literals are allowed as test arguments currently"
                     ),

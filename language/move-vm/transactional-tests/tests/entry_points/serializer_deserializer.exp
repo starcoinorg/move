@@ -1,7 +1,7 @@
 processed 4 tasks
 
 task 2 'view'. lines 42-42:
-drop key 0x42::t::Ints {
+drop key 0x00000000000000000000000000000042::t::Ints {
     f8: 128u8
     f16: 32768u16
     f32: 2147483648u32

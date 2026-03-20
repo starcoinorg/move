@@ -232,17 +232,17 @@ impl<'a> BlockCFG<'a> {
         match cmd_ {
             Command_::Jump { target, .. } if *target == from_label => {
                 *target = to_label;
-            },
+            }
             Command_::JumpIf { if_true, .. } if *if_true == from_label => {
                 *if_true = to_label;
-            },
+            }
             Command_::JumpIf { if_false, .. } if *if_false == from_label => {
                 *if_false = to_label;
-            },
+            }
             _ => {
                 panic!("ICE: remap_jump_target called on command {:?} which is not a branch to from_label {:?}",
                        cmd_, from_label);
-            },
+            }
         }
     }
 
@@ -257,10 +257,13 @@ impl<'a> BlockCFG<'a> {
         };
 
         let mut new_block = BasicBlock::new();
-        new_block.push_back(sp(loc, Command_::Jump {
-            target: succ,
-            from_user: false,
-        }));
+        new_block.push_back(sp(
+            loc,
+            Command_::Jump {
+                target: succ,
+                from_user: false,
+            },
+        ));
         self.blocks.insert(new_label, new_block);
     }
 }
@@ -380,9 +383,12 @@ fn is_implicit_control_flow(block: &BasicBlock) -> bool {
     block.len() == 1
         && match &block.front().unwrap().value {
             C::Jump { from_user, .. } => !*from_user,
-            C::Return { exp: e, from_user } if !*from_user => matches!(&e.exp.value, E::Unit {
-                case: UnitCase::Implicit
-            }),
+            C::Return { exp: e, from_user } if !*from_user => matches!(
+                &e.exp.value,
+                E::Unit {
+                    case: UnitCase::Implicit
+                }
+            ),
             _ => false,
         }
 }
@@ -410,7 +416,7 @@ fn determine_infinite_loop_starts(
         match loop_stack.last() {
             Some((_, cur_loop_end)) if cur_loop_end.equals(*lbl) => {
                 loop_stack.pop();
-            },
+            }
             _ => (),
         }
 
@@ -420,7 +426,7 @@ fn determine_infinite_loop_starts(
             BlockInfo::LoopHead(LoopInfo { loop_end, .. }) => {
                 infinite_loop_starts.insert(*lbl);
                 loop_stack.push((*lbl, *loop_end))
-            },
+            }
         }
 
         current_loop_info.push(loop_stack.last().cloned());
@@ -462,15 +468,15 @@ fn maybe_unmark_infinite_loop_starts(
     match &block.back().unwrap().value {
         C::Jump { target, .. } if cur_loop_end.equals(*target) => {
             infinite_loop_starts.remove(&cur_loop_start);
-        },
+        }
         C::JumpIf {
             if_true, if_false, ..
         } if cur_loop_end.equals(*if_true) || cur_loop_end.equals(*if_false) => {
             infinite_loop_starts.remove(&cur_loop_start);
-        },
+        }
         C::Return { .. } | C::Abort(_) => {
             infinite_loop_starts.remove(&cur_loop_start);
-        },
+        }
 
         C::Jump { .. }
         | C::JumpIf { .. }

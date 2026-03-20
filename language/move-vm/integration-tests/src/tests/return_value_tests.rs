@@ -27,7 +27,7 @@ fn run(
 
     let code = format!(
         r#"
-        module 0x{}::M {{
+        module {}::M {{
             {}
 
             fun foo{} {{
@@ -107,10 +107,14 @@ fn return_u64() {
 
 #[test]
 fn return_u64_bool() {
-    expect_success(&[], "(): (u64, bool)", "(42, true)", vec![], vec![], &[
-        MoveTypeLayout::U64,
-        MoveTypeLayout::Bool,
-    ])
+    expect_success(
+        &[],
+        "(): (u64, bool)",
+        "(42, true)",
+        vec![],
+        vec![],
+        &[MoveTypeLayout::U64, MoveTypeLayout::Bool],
+    )
 }
 
 #[test]

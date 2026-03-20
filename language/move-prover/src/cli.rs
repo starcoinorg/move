@@ -12,6 +12,7 @@ use codespan_reporting::diagnostic::Severity;
 use log::LevelFilter;
 use move_abigen::AbigenOptions;
 use move_command_line_common::env::{bool_to_str, get_move_compiler_v2_from_env};
+use move_compiler::shared::known_attributes::KnownAttribute;
 use move_compiler::{command_line::SKIP_ATTRIBUTE_CHECKS, shared::NumericalAddress};
 use move_docgen::DocgenOptions;
 use move_errmapgen::ErrmapOptions;
@@ -27,12 +28,11 @@ use serde::{Deserialize, Serialize};
 use simplelog::{
     CombinedLogger, Config, ConfigBuilder, LevelPadding, SimpleLogger, TermLogger, TerminalMode,
 };
+use std::collections::BTreeSet;
 use std::{
     collections::BTreeMap,
     sync::atomic::{AtomicBool, Ordering},
 };
-use std::collections::BTreeSet;
-use move_compiler::shared::known_attributes::KnownAttribute;
 
 /// Atomic used to prevent re-initialization of logging.
 static LOGGER_CONFIGURED: AtomicBool = AtomicBool::new(false);
@@ -128,7 +128,7 @@ impl Default for Options {
                 CompilerVersion::V2_0 => true,
             },
             language_version: None,
-            known_attributes: KnownAttribute::get_all_attribute_names().clone()
+            known_attributes: KnownAttribute::get_all_attribute_names().clone(),
         }
     }
 }

@@ -534,7 +534,7 @@ pub(crate) mod versioned_data {
                 Err(_) => {
                     return Err(PartialVMError::new(StatusCode::MALFORMED)
                         .with_message("Bad binary header".to_string()));
-                },
+                }
             };
             if version == 0 || version > u32::min(max_version, VERSION_MAX) {
                 return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION)
@@ -650,7 +650,7 @@ pub(crate) mod versioned_data {
                         max_identifier_size: self.max_identifier_size,
                         binary: buffer,
                     })
-                },
+                }
             }
         }
 

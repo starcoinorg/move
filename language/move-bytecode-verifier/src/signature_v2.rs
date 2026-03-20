@@ -143,10 +143,10 @@ fn check_ty<const N: usize>(
         TypeParameter(param_idx) => param_constraints.insert(*param_idx, required_abilities),
         U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address => {
             assert_abilities(AbilitySet::PRIMITIVES, required_abilities)?;
-        },
+        }
         Signer => {
             assert_abilities(AbilitySet::SIGNER, required_abilities)?;
-        },
+        }
         Reference(ty) | MutableReference(ty) => {
             if allow_ref {
                 assert_abilities(AbilitySet::REFERENCES, required_abilities)?;
@@ -161,7 +161,7 @@ fn check_ty<const N: usize>(
                 return Err(PartialVMError::new(StatusCode::INVALID_SIGNATURE_TOKEN)
                     .with_message("reference not allowed".to_string()));
             }
-        },
+        }
         Vector(ty) => {
             assert_abilities(AbilitySet::VECTOR, required_abilities)?;
             check_ty(
@@ -171,11 +171,11 @@ fn check_ty<const N: usize>(
                 required_abilities.requires(),
                 param_constraints,
             )?;
-        },
+        }
         Struct(sh_idx) => {
             let handle = &struct_handles[sh_idx.0 as usize];
             assert_abilities(handle.abilities, required_abilities)?;
-        },
+        }
         StructInstantiation(sh_idx, ty_args) => {
             let handle = &struct_handles[sh_idx.0 as usize];
 
@@ -207,7 +207,7 @@ fn check_ty<const N: usize>(
                     param_constraints,
                 )?;
             }
-        },
+        }
     }
 
     Ok(())
@@ -268,7 +268,7 @@ fn check_phantom_params(
                     ty,
                 )?;
             }
-        },
+        }
         TypeParameter(idx) => {
             if context[*idx as usize].is_phantom && !is_phantom_pos {
                 return Err(
@@ -279,10 +279,10 @@ fn check_phantom_params(
                         ),
                 );
             }
-        },
+        }
 
         Struct(_) | Reference(_) | MutableReference(_) | Bool | U8 | U16 | U32 | U64 | U128
-        | U256 | Address | Signer => {},
+        | U256 | Address | Signer => {}
     }
 
     Ok(())
@@ -375,7 +375,7 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
                 let r = self.constraints.alloc(param_constraints);
 
                 *entry.insert(r)
-            },
+            }
         };
 
         Ok(r)
@@ -406,7 +406,7 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
                 }
 
                 *entry.insert(self.constraints.alloc(constraints))
-            },
+            }
         };
 
         Ok(r)
@@ -489,7 +489,7 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
                 }
 
                 *entry.insert(self.constraints.alloc(constraints))
-            },
+            }
         };
 
         Ok(r)
@@ -581,7 +581,7 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
                 }
 
                 *entry.insert(self.constraints.alloc(constraints))
-            },
+            }
         };
 
         Ok(r)
@@ -653,7 +653,7 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
                 }
 
                 *entry.insert(self.constraints.alloc(constraints))
-            },
+            }
         };
         Ok(r)
     }
@@ -730,7 +730,7 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
                         map_err(constraints.check_in_context(&ability_context))?;
                         entry.insert(());
                     }
-                },
+                }
                 PackGeneric(idx) | UnpackGeneric(idx) => {
                     if let btree_map::Entry::Vacant(entry) = checked_struct_def_insts.entry(*idx) {
                         let constraints =
@@ -738,7 +738,7 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
                         map_err(constraints.check_in_context(&ability_context))?;
                         entry.insert(());
                     }
-                },
+                }
                 ExistsGeneric(idx)
                 | MoveFromGeneric(idx)
                 | MoveToGeneric(idx)
@@ -754,14 +754,14 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
                         map_err(constraints.check_in_context(&ability_context))?;
                         entry.insert(());
                     }
-                },
+                }
                 ImmBorrowFieldGeneric(idx) | MutBorrowFieldGeneric(idx) => {
                     if let btree_map::Entry::Vacant(entry) = checked_field_insts.entry(*idx) {
                         let constraints = self.verify_field_instantiation_contextless(*idx)?;
                         map_err(constraints.check_in_context(&ability_context))?;
                         entry.insert(());
                     }
-                },
+                }
                 VecPack(idx, _)
                 | VecLen(idx)
                 | VecImmBorrow(idx)
@@ -792,7 +792,7 @@ impl<'a, const N: usize> SignatureChecker<'a, N> {
 
                         entry.insert(());
                     }
-                },
+                }
 
                 // List out the other options explicitly so there's a compile error if a new
                 // bytecode gets added.

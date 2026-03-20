@@ -39,10 +39,10 @@ pub fn run_spec_checker(env: &GlobalEnv) {
                     check_spec(env, s);
                     true
                 })
-            },
+            }
             (RewriteTarget::SpecFun(_), RewriteState::Def(exp)) => check_exp(env, &exp),
             (RewriteTarget::SpecBlock(_), RewriteState::Spec(spec)) => check_spec(env, &spec),
-            _ => {},
+            _ => {}
         }
     }
 }

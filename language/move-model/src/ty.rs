@@ -299,7 +299,7 @@ impl ConstraintOrigin {
         match self {
             Unspecified => {
                 // Do nothing
-            },
+            }
             Local(name) => hints.push(format!(
                 "required by declaration of local `{}`",
                 name.display(context.env.symbol_pool())
@@ -340,17 +340,17 @@ impl ConstraintOrigin {
                         ));
                     }
                 }
-            },
+            }
             TupleElement(parent, idx) => {
                 hints.push(format!("required by {} tuple element", ith_str(*idx)));
                 parent.describe(context, hints, labels)
-            },
+            }
             VectorTypeParameter(parent) => {
                 hints.push("required by instantiating vector type parameter".to_string());
                 if let Some(parent) = parent {
                     parent.describe(context, hints, labels)
                 }
-            },
+            }
         }
     }
 }
@@ -362,7 +362,7 @@ impl Constraint {
         match self {
             Constraint::SomeNumber(options) if options.contains(&PrimitiveType::U64) => {
                 Some(Type::new_prim(PrimitiveType::U64))
-            },
+            }
             Constraint::SomeReference(ty) => Some(Type::Reference(
                 ReferenceKind::Immutable,
                 Box::new(ty.clone()),
@@ -446,11 +446,11 @@ impl Constraint {
                     *opts1 = joined;
                     Ok(true)
                 }
-            },
+            }
             (Constraint::SomeReference(ty1), Constraint::SomeReference(ty2)) => {
                 *ty1 = subs.unify(context, Variance::NoVariance, WideningOrder::Join, ty1, ty2)?;
                 Ok(true)
-            },
+            }
             (Constraint::SomeStruct(fields1), Constraint::SomeStruct(fields2)) => {
                 // Join the fields together, unifying their types if there are overlaps.
                 for (name, ty) in fields2 {
@@ -465,7 +465,7 @@ impl Constraint {
                     }
                 }
                 Ok(true)
-            },
+            }
             (
                 Constraint::SomeReceiverFunction(name1, generics1, _, args1, result1),
                 Constraint::SomeReceiverFunction(name2, generics2, _, args2, result2),
@@ -505,14 +505,14 @@ impl Constraint {
                         other.clone(),
                     ))
                 }
-            },
+            }
             (Constraint::NoReference, Constraint::NoReference) => Ok(true),
             (Constraint::NoTuple, Constraint::NoTuple) => Ok(true),
             (Constraint::NoPhantom, Constraint::NoPhantom) => Ok(true),
             (Constraint::HasAbilities(a1), Constraint::HasAbilities(a2)) => {
                 *a1 = a1.union(*a2);
                 Ok(true)
-            },
+            }
             // After the above checks, if one of the constraints is
             // accumulating, indicate its compatible but cannot be joined.
             (c1, c2) if c1.accumulating() || c2.accumulating() => Ok(false),
@@ -606,10 +606,10 @@ impl Constraint {
                         .map(|p| Type::new_prim(*p).display(display_context).to_string())
                         .join("|")
                 }
-            },
+            }
             Constraint::SomeReference(ty) => {
                 format!("&{}", ty.display(display_context))
-            },
+            }
             Constraint::SomeStruct(field_map) => {
                 format!(
                     "struct{{{}}}",
@@ -618,7 +618,7 @@ impl Constraint {
                         .map(|s| s.display(pool).to_string())
                         .join(",")
                 )
-            },
+            }
             Constraint::SomeReceiverFunction(name, inst, _, args, result) => {
                 format!(
                     "fun self.{}{}({}):{}",
@@ -631,13 +631,13 @@ impl Constraint {
                     fmt_types(display_context, args.iter()),
                     result.display(display_context)
                 )
-            },
+            }
             Constraint::NoReference => "no-ref".to_string(),
             Constraint::NoTuple => "no-tuple".to_string(),
             Constraint::NoPhantom => "no-phantom".to_string(),
             Constraint::HasAbilities(required_abilities) => {
                 format!("{}", required_abilities)
-            },
+            }
             Constraint::WithDefault(_ty) => "".to_owned(),
         }
     }
@@ -789,7 +789,7 @@ impl Type {
             TypeParameter(_) => true,
             Tuple(ts) | Struct(_, _, ts) | ResourceDomain(_, _, Some(ts)) => {
                 ts.iter().any(|t| t.depends_from_type_parameter())
-            },
+            }
             Vector(t) | Reference(_, t) | TypeDomain(t) => t.depends_from_type_parameter(),
             Fun(t, r) => t.depends_from_type_parameter() || r.depends_from_type_parameter(),
             _ => false,
@@ -1062,7 +1062,7 @@ impl Type {
                 } else {
                     self.clone()
                 }
-            },
+            }
             Type::Var(i) => {
                 if let Some(s) = subs {
                     if let Some(t) = s.subs.get(i) {
@@ -1085,10 +1085,10 @@ impl Type {
                 } else {
                     self.clone()
                 }
-            },
+            }
             Type::Reference(kind, bt) => {
                 Type::Reference(*kind, Box::new(bt.replace(params, subs, use_constr)))
-            },
+            }
             Type::Struct(mid, sid, args) => Type::Struct(*mid, *sid, replace_vec(args)),
             Type::Fun(arg, result) => Type::Fun(
                 Box::new(arg.replace(params, subs, use_constr)),
@@ -1098,10 +1098,10 @@ impl Type {
             Type::Vector(et) => Type::Vector(Box::new(et.replace(params, subs, use_constr))),
             Type::TypeDomain(et) => {
                 Type::TypeDomain(Box::new(et.replace(params, subs, use_constr)))
-            },
+            }
             Type::ResourceDomain(mid, sid, args_opt) => {
                 Type::ResourceDomain(*mid, *sid, args_opt.as_ref().map(|args| replace_vec(args)))
-            },
+            }
             Type::Primitive(..) | Type::Error => self.clone(),
         }
     }
@@ -1156,15 +1156,15 @@ impl Type {
             Fun(a, r) => {
                 a.module_usage(usage);
                 r.module_usage(usage);
-            },
+            }
             Struct(mid, _, ts) => {
                 usage.insert(*mid);
                 ts.iter().for_each(|t| t.module_usage(usage));
-            },
+            }
             Vector(et) => et.module_usage(usage),
             Reference(_, bt) => bt.module_usage(usage),
             TypeDomain(bt) => bt.module_usage(usage),
-            _ => {},
+            _ => {}
         }
     }
 
@@ -1236,7 +1236,7 @@ impl Type {
                     .map(|arg| Self::from_type_tag(arg, env))
                     .collect();
                 Struct(qid.module_id, qid.id, type_args)
-            },
+            }
             TypeTag::Vector(type_param) => Vector(Box::new(Self::from_type_tag(type_param, env))),
         }
     }
@@ -1253,17 +1253,17 @@ impl Type {
         match self {
             Var(id) => {
                 vars.insert(*id);
-            },
+            }
             Tuple(ts) => ts.iter().for_each(|t| t.internal_get_vars(vars)),
             Fun(a, r) => {
                 a.internal_get_vars(vars);
                 r.internal_get_vars(vars);
-            },
+            }
             Struct(_, _, ts) => ts.iter().for_each(|t| t.internal_get_vars(vars)),
             Vector(et) => et.internal_get_vars(vars),
             Reference(_, bt) => bt.internal_get_vars(vars),
             TypeDomain(bt) => bt.internal_get_vars(vars),
-            Error | Primitive(..) | TypeParameter(..) | ResourceDomain(..) => {},
+            Error | Primitive(..) | TypeParameter(..) | ResourceDomain(..) => {}
         }
     }
 
@@ -1281,9 +1281,9 @@ impl Type {
             Type::Fun(a, ty) => {
                 a.visit(visitor);
                 ty.visit(visitor);
-            },
+            }
             Type::TypeDomain(bt) => bt.visit(visitor),
-            _ => {},
+            _ => {}
         }
         visitor(self)
     }
@@ -1528,7 +1528,7 @@ impl Substitution {
             match self.constraint_contexts.entry(var) {
                 Entry::Vacant(e) => {
                     e.insert(ctx);
-                },
+                }
                 Entry::Occupied(e) => {
                     let curr = e.into_mut();
                     curr.inferred |= ctx.inferred;
@@ -1537,7 +1537,7 @@ impl Substitution {
                         // more precise error messages.
                         curr.origin = ctx.origin;
                     }
-                },
+                }
             }
         }
         Ok(())
@@ -1597,13 +1597,13 @@ impl Substitution {
                 ) {
                     Ok(_) => {
                         // Constraint discharged
-                    },
+                    }
                     Err(e) => {
                         // Put the constraint back, we may need it for error messages
                         constrs.push((loc, o, c));
                         self.constraints.insert(var, constrs);
                         return Err(e);
-                    },
+                    }
                 }
             }
         }
@@ -1667,7 +1667,7 @@ impl Substitution {
                     if options.contains(prim) =>
                 {
                     Ok(())
-                },
+                }
                 (Constraint::SomeReference(inner_type), Type::Reference(_, target_type)) => self
                     .unify(context, variance, order, target_type, inner_type)
                     .map(|_| ())
@@ -1693,7 +1693,7 @@ impl Substitution {
                         }
                     }
                     Ok(())
-                },
+                }
                 (
                     Constraint::SomeReceiverFunction(name, ty_args_opt, args_loc, args, result),
                     ty,
@@ -1711,28 +1711,28 @@ impl Substitution {
                     } else {
                         constraint_unsatisfied_error()
                     }
-                },
+                }
                 (Constraint::HasAbilities(required_abilities), ty) => {
                     self.eval_ability_constraint(context, loc, *required_abilities, ty, ctx_opt)
-                },
+                }
                 (Constraint::NoReference, ty) => {
                     if ty.is_reference() {
                         constraint_unsatisfied_error()
                     } else {
                         Ok(())
                     }
-                },
+                }
                 (Constraint::NoTuple, ty) => {
                     if ty.is_tuple() {
                         constraint_unsatisfied_error()
                     } else {
                         Ok(())
                     }
-                },
+                }
                 (Constraint::NoPhantom, ty) => match ty {
                     Type::TypeParameter(idx) if context.type_param(*idx).1.is_phantom => {
                         constraint_unsatisfied_error()
-                    },
+                    }
                     _ => Ok(()),
                 },
                 (Constraint::WithDefault(_), _) => Ok(()),
@@ -1778,7 +1778,7 @@ impl Substitution {
                     )?;
                 }
                 Ok(())
-            },
+            }
             Vector(t) => {
                 check(AbilitySet::VECTOR)?;
                 self.eval_ability_constraint(
@@ -1788,7 +1788,7 @@ impl Substitution {
                     t,
                     ctx_opt.map(|ctx| ctx.derive_vector_type_param()),
                 )
-            },
+            }
             Struct(m, s, ts) => {
                 let (name, type_params, struct_abilities) =
                     context.struct_signature(m.qualified(*s));
@@ -1832,11 +1832,11 @@ impl Substitution {
                     }
                 }
                 Ok(())
-            },
+            }
             TypeParameter(idx) => {
                 let tparam = context.type_param(*idx);
                 check(tparam.1.abilities)
-            },
+            }
             Fun(_, _) => check(AbilitySet::FUNCTIONS),
             Reference(_, _) => check(AbilitySet::REFERENCES),
             TypeDomain(_) | ResourceDomain(_, _, _) => check(AbilitySet::EMPTY),
@@ -1852,7 +1852,7 @@ impl Substitution {
                     Constraint::HasAbilities(required_abilities),
                     ctx_opt,
                 )
-            },
+            }
         }
     }
 
@@ -1950,7 +1950,7 @@ impl Substitution {
                 } else {
                     self.get_substitution(*next_var, false)
                 }
-            },
+            }
             Some(subst_ty) => Some(subst_ty.clone()),
         }
     }
@@ -2035,12 +2035,12 @@ impl Substitution {
                 if variance.is_spec_variance() && t1.is_number() && t2.is_number() {
                     return Ok(Type::Primitive(PrimitiveType::Num));
                 }
-            },
+            }
             (Type::TypeParameter(idx1), Type::TypeParameter(idx2)) => {
                 if idx1 == idx2 {
                     return Ok(t1.clone());
                 }
-            },
+            }
             (Type::Reference(k1, ty1), Type::Reference(k2, ty2)) => {
                 let ty = self
                     .unify(context, sub_variance, order, ty1, ty2)
@@ -2059,7 +2059,7 @@ impl Substitution {
                                 (k2, k1)
                             };
                             return Err(TypeUnificationError::MutabilityMismatch(*kl, *kr));
-                        },
+                        }
                     }
                 } else if *k1 != *k2 {
                     return Err(TypeUnificationError::MutabilityMismatch(*k1, *k2));
@@ -2067,7 +2067,7 @@ impl Substitution {
                     k1
                 };
                 return Ok(Type::Reference(*k, Box::new(ty)));
-            },
+            }
             (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                 return Ok(Type::Tuple(
                     self.unify_vec(
@@ -2079,7 +2079,7 @@ impl Substitution {
                     )
                     .map_err(TypeUnificationError::lift(order, t1, t2))?,
                 ));
-            },
+            }
             (Type::Fun(a1, r1), Type::Fun(a2, r2)) => {
                 // Same as for tuples, we pass on `variance` not `sub_variance`, allowing
                 // conversion for arguments. We also have contra-variance of arguments:
@@ -2097,7 +2097,7 @@ impl Substitution {
                             .map_err(TypeUnificationError::lift(order, t1, t2))?,
                     ),
                 ));
-            },
+            }
             (Type::Struct(m1, s1, ts1), Type::Struct(m2, s2, ts2)) => {
                 if m1 == m2 && s1 == s2 {
                     // For structs, also pass on `variance`, not `sub_variance`, to inherit
@@ -2109,13 +2109,13 @@ impl Substitution {
                             .map_err(TypeUnificationError::lift(order, t1, t2))?,
                     ));
                 }
-            },
+            }
             (Type::Vector(e1), Type::Vector(e2)) => {
                 return Ok(Type::Vector(Box::new(
                     self.unify(context, sub_variance, order, e1, e2)
                         .map_err(TypeUnificationError::lift(order, t1, t2))?,
                 )));
-            },
+            }
             (Type::TypeDomain(e1), Type::TypeDomain(e2)) => {
                 return Ok(Type::TypeDomain(Box::new(self.unify(
                     context,
@@ -2124,8 +2124,8 @@ impl Substitution {
                     e1,
                     e2,
                 )?)));
-            },
-            _ => {},
+            }
+            _ => {}
         }
         match order {
             WideningOrder::LeftToRight | WideningOrder::Join => Err(
@@ -2417,14 +2417,14 @@ impl TypeUnificationAdapter {
                                     // If the original types do not contain free type
                                     // variables, this should not happen.
                                     panic!("unexpected type variable");
-                                },
+                                }
                                 Some((_, subs_param_idx)) => {
                                     // There can be either lhs or rhs type parameters left, but
                                     // not both sides, so it is unambiguous to just return it here.
                                     Type::TypeParameter(*subs_param_idx)
-                                },
+                                }
                             }
-                        },
+                        }
                         Some(subst_ty) => subst_ty.clone(),
                     };
                     let inst = if *is_lhs {
@@ -2436,7 +2436,7 @@ impl TypeUnificationAdapter {
                 }
 
                 Some((inst_lhs, inst_rhs))
-            },
+            }
             Err(_) => None,
         }
     }
@@ -2532,7 +2532,7 @@ impl ErrorMessageContext {
                     "cannot return {} from a function {}",
                     actual_str, result_str
                 )
-            },
+            }
             SchemaInclusion(name) => {
                 format!(
                     "variable `{}` bound by schema \
@@ -2541,7 +2541,7 @@ impl ErrorMessageContext {
                     expected,
                     actual
                 )
-            },
+            }
             General => {
                 if expected == "()" {
                     format!("expected expression with no value but found `{}`", actual)
@@ -2551,7 +2551,7 @@ impl ErrorMessageContext {
                         expected, actual
                     )
                 }
-            },
+            }
         }
     }
 
@@ -2590,7 +2590,7 @@ impl ErrorMessageContext {
                         actual - 1
                     )
                 }
-            },
+            }
             OperatorArgument => format!(
                 "the operator takes {} {} but {} were provided",
                 expected,
@@ -2604,7 +2604,7 @@ impl ErrorMessageContext {
                     pluralize("argument", expected),
                     actual
                 )
-            },
+            }
             Return => format!(
                 "the function returns {} {} but {} were provided",
                 expected,
@@ -2613,7 +2613,7 @@ impl ErrorMessageContext {
             ),
             SchemaInclusion(_) | General | TypeAnnotation => {
                 format!("expected {} items but found {}", expected, actual)
-            },
+            }
         }
     }
 
@@ -2638,7 +2638,7 @@ impl ErrorMessageContext {
             ),
             SchemaInclusion(_) | TypeAnnotation | General | TypeArgument => {
                 format!("expected {} but {} was provided", expected, actual)
-            },
+            }
         }
     }
 
@@ -2655,11 +2655,11 @@ impl ErrorMessageContext {
                     "the operator takes a reference but `{}` was provided",
                     actual
                 )
-            },
+            }
             SchemaInclusion(_) | Binding | Assignment | Return | TypeAnnotation | General
             | TypeArgument => {
                 format!("a reference is expected but `{}` was provided", actual)
-            },
+            }
         }
     }
 }
@@ -2715,10 +2715,10 @@ impl TypeUnificationError {
                 // regular type errors and are better reported at the expression leading
                 // to the error instead of the location where the constraint stems from
                 None
-            },
+            }
             TypeUnificationError::RedirectedError(loc, e) => {
                 Some(e.specific_loc().unwrap_or_else(|| loc.clone()))
-            },
+            }
             TypeUnificationError::ConstraintsIncompatible(loc, ..)
             | TypeUnificationError::ConstraintUnsatisfied(loc, ..)
             | TypeUnificationError::MissingAbilities(loc, ..) => Some(loc.clone()),
@@ -2764,7 +2764,7 @@ impl TypeUnificationError {
                     vec![],
                     vec![],
                 )
-            },
+            }
             TypeUnificationError::MutabilityMismatch(actual, expected) => (
                 error_context.mutability_mismatch(*actual, *expected),
                 vec![],
@@ -2790,7 +2790,7 @@ impl TypeUnificationError {
                     hints,
                     labels,
                 )
-            },
+            }
             TypeUnificationError::ConstraintUnsatisfied(_, ty, order, constr, ctx_opt) => {
                 let item_name = || match ctx_opt {
                     Some(ConstraintContext {
@@ -2822,7 +2822,7 @@ impl TypeUnificationError {
                         let (expected, actual) = match order {
                             WideningOrder::Join | WideningOrder::LeftToRight => {
                                 (options_str, type_str)
-                            },
+                            }
                             WideningOrder::RightToLeft => (type_str, options_str),
                         };
                         // Providing instantiation context for number constraints is
@@ -2833,10 +2833,10 @@ impl TypeUnificationError {
                         hints = vec![];
                         labels = vec![];
                         error_context.type_mismatch_str(display_context, actual, expected)
-                    },
+                    }
                     Constraint::SomeReference(ty) => {
                         error_context.expected_reference(display_context, ty)
-                    },
+                    }
                     Constraint::SomeStruct(field_map) => Self::message_for_struct(
                         unification_context,
                         display_context,
@@ -2849,37 +2849,37 @@ impl TypeUnificationError {
                             name.display(display_context.env.symbol_pool()),
                             ty.display(display_context)
                         )
-                    },
+                    }
                     Constraint::NoTuple => {
                         format!(
                             "tuple type `{}` is not allowed {}",
                             ty.display(display_context),
                             item_name()
                         )
-                    },
+                    }
                     Constraint::NoReference => {
                         format!(
                             "reference type `{}` is not allowed {}",
                             ty.display(display_context),
                             item_name()
                         )
-                    },
+                    }
                     Constraint::NoPhantom => {
                         format!(
                             "phantom type `{}` can only be used as an argument for another phantom type parameter",
                             ty.display(display_context)
                         )
-                    },
+                    }
                     Constraint::HasAbilities(_) | Constraint::WithDefault(_) => {
                         unreachable!("unexpected constraint in error message")
-                    },
+                    }
                 };
                 if !note.is_empty() {
                     (format!("{} ({})", main_msg, note), hints, labels)
                 } else {
                     (main_msg, hints, labels)
                 }
-            },
+            }
             TypeUnificationError::ConstraintsIncompatible(_, c1, c2) => {
                 use Constraint::*;
                 // Abstract details of gross incompatibilities
@@ -2904,10 +2904,10 @@ impl TypeUnificationError {
                         vec![],
                     ),
                 }
-            },
+            }
             TypeUnificationError::RedirectedError(_, err) => {
                 err.message_with_hints_and_labels(unification_context, error_context)
-            },
+            }
         }
     }
 
@@ -3231,7 +3231,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 f.write_str("(")?;
                 comma_list(f, ts)?;
                 f.write_str(")")
-            },
+            }
             Vector(t) => write!(f, "vector<{}>", t.display(self.context)),
             TypeDomain(t) => write!(f, "domain<{}>", t.display(self.context)),
             ResourceDomain(mid, sid, inst_opt) => {
@@ -3242,7 +3242,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                     f.write_str(">")?;
                 }
                 f.write_str(">")
-            },
+            }
             Fun(a, t) => {
                 f.write_str("|")?;
                 write!(f, "{}", a.display(self.context))?;
@@ -3252,7 +3252,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 } else {
                     Ok(())
                 }
-            },
+            }
             Struct(mid, sid, ts) => {
                 write!(f, "{}", self.struct_str(*mid, *sid))?;
                 if !ts.is_empty() {
@@ -3261,7 +3261,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                     f.write_str(">")?;
                 }
                 Ok(())
-            },
+            }
             Reference(kind, t) => {
                 f.write_str("&")?;
                 let modifier = match kind {
@@ -3270,7 +3270,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 };
                 f.write_str(modifier)?;
                 write!(f, "{}", t.display(self.context))
-            },
+            }
             TypeParameter(idx) => {
                 if let Some(names) = &self.context.type_param_names {
                     let idx = *idx as usize;
@@ -3282,7 +3282,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 } else {
                     write!(f, "#{}", idx)
                 }
-            },
+            }
             Var(idx) => {
                 if let Some(ty) = self.context.subs_opt.and_then(|s| s.subs.get(idx)) {
                     write!(f, "{}", ty.display(self.context))
@@ -3302,7 +3302,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 } else {
                     f.write_str(&self.type_var_str(*idx))
                 }
-            },
+            }
             Error => f.write_str("*error*"),
         }
     }
@@ -3398,7 +3398,7 @@ pub trait AbilityInference: AbilityContext {
             Type::TypeParameter(i) => {
                 let param = self.type_param(*i);
                 (param.1.is_phantom, param.1.abilities)
-            },
+            }
             Type::Var(_) => (false, AbilitySet::EMPTY),
             Type::Reference(_, _) => (false, AbilitySet::REFERENCES),
             Type::Tuple(et) => (
@@ -3410,7 +3410,7 @@ pub trait AbilityInference: AbilityContext {
             ),
             Type::Fun(_, _) | Type::TypeDomain(_) | Type::ResourceDomain(_, _, _) | Type::Error => {
                 (false, AbilitySet::EMPTY)
-            },
+            }
         }
     }
 

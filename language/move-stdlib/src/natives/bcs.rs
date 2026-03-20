@@ -5,6 +5,9 @@
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
+    account_address::AccountAddress, vm_status::sub_status::NFE_BCS_TO_ADDRESS_FAILURE,
+};
+use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
     vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
 };
@@ -17,10 +20,6 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};
-use move_core_types::{
-    account_address::AccountAddress,
-    vm_status::sub_status::NFE_BCS_TO_ADDRESS_FAILURE
-};
 
 /***************************************************************************************************
  * native fun to_bytes
@@ -63,7 +62,7 @@ fn native_to_bytes(
         Err(_) => {
             cost += gas_params.failure;
             return Ok(NativeResult::err(cost, NFE_BCS_SERIALIZATION_FAILURE));
-        },
+        }
     };
     // serialize value
     let val = ref_to_val.read_ref()?;
@@ -72,7 +71,7 @@ fn native_to_bytes(
         None => {
             cost += gas_params.failure;
             return Ok(NativeResult::err(cost, NFE_BCS_SERIALIZATION_FAILURE));
-        },
+        }
     };
     cost += gas_params.per_byte_serialized
         * std::cmp::max(
@@ -80,9 +79,10 @@ fn native_to_bytes(
             gas_params.legacy_min_output_size,
         );
 
-    Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(
-        serialized_value
-    )]))
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::vector_u8(serialized_value)],
+    ))
 }
 
 pub fn make_native_to_bytes(gas_params: ToBytesGasParameters) -> NativeFunction {
@@ -92,7 +92,6 @@ pub fn make_native_to_bytes(gas_params: ToBytesGasParameters) -> NativeFunction 
         },
     )
 }
-
 
 /***************************************************************************************************
  * native fun native_to_address

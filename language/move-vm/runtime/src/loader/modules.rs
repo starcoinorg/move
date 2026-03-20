@@ -34,6 +34,7 @@ use parking_lot::RwLock;
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
+    ops::Deref,
     sync::Arc,
 };
 
@@ -95,34 +96,9 @@ impl ModuleStorageAdapter {
         self.modules.fetch_module(id)
     }
 
-    pub(crate) fn module_at_by_ref(
-        &self,
-        addr: &AccountAddress,
-        name: &IdentStr,
-    ) -> Option<Arc<Module>> {
-        self.modules.fetch_module_by_ref(addr, name)
-    }
-
-    pub(crate) fn insert(
-        &self,
-        natives: &NativeFunctions,
-        id: ModuleId,
-        module_size: usize,
-        module: Arc<CompiledModule>,
-        name_cache: &StructNameCache,
-    ) -> VMResult<Arc<Module>> {
-        if let Some(cached) = self.module_at(&id) {
-            return Ok(cached);
-        }
-
-        match Module::new(natives, module_size, module, self, name_cache) {
-            Ok(module) => Ok(self.modules.store_module(&id, module)),
-            Err((err, _)) => Err(err.finish(Location::Undefined)),
-        }
-    }
-
-    pub(crate) fn has_module(&self, module_id: &ModuleId) -> bool {
-        self.modules.fetch_module(module_id).is_some()
+    pub(crate) fn store_verified_module(&self, module: Arc<Module>) -> Arc<Module> {
+        self.modules
+            .store_module(module.self_id(), module.as_ref().clone())
     }
 
     // Given a ModuleId::struct_name, retrieve the `StructType` and the index associated.
@@ -166,25 +142,6 @@ impl ModuleStorageAdapter {
             ),
         }
     }
-
-    pub(crate) fn function_at(&self, handle: &FunctionHandle) -> PartialVMResult<Arc<Function>> {
-        match handle {
-            FunctionHandle::Local(func) => Ok(func.clone()),
-            FunctionHandle::Remote { module, name } => {
-                self.modules
-                    .fetch_module(module)
-                    .and_then(|module| {
-                        let idx = module.function_map.get(name)?;
-                        module.function_defs.get(*idx).cloned()
-                    })
-                    .ok_or_else(|| {
-                        PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE).with_message(
-                            format!("Failed to resolve function: {:?}::{:?}", module, name),
-                        )
-                    })
-            },
-        }
-    }
 }
 
 // A Module is very similar to a binary Module but data is "transformed" to a representation
@@ -195,9 +152,6 @@ impl ModuleStorageAdapter {
 pub struct Module {
     #[allow(dead_code)]
     id: ModuleId,
-
-    // size in bytes
-    pub(crate) size: usize,
 
     // primitive pools
     pub(crate) module: Arc<CompiledModule>,
@@ -271,11 +225,9 @@ pub(crate) struct FieldInstantiation {
 impl Module {
     pub(crate) fn new(
         natives: &NativeFunctions,
-        size: usize,
         module: Arc<CompiledModule>,
-        cache: &ModuleStorageAdapter,
         name_cache: &StructNameCache,
-    ) -> Result<Self, (PartialVMError, Arc<CompiledModule>)> {
+    ) -> PartialVMResult<Self> {
         let id = module.self_id();
 
         let mut structs = vec![];
@@ -293,22 +245,15 @@ impl Module {
         let mut create = || {
             let mut struct_idxs = vec![];
             let mut struct_names = vec![];
-            // validate the correctness of struct handle references.
             for struct_handle in module.struct_handles() {
                 let struct_name = module.identifier_at(struct_handle.name);
                 let module_handle = module.module_handle_at(struct_handle.module);
                 let module_id = module.module_id_for_handle(module_handle);
-
-                if module_handle != module.self_handle() {
-                    cache
-                        .get_struct_type_by_identifier(struct_name, &module_id)?
-                        .check_compatibility(struct_handle)?;
-                }
                 let name = StructIdentifier {
                     module: module_id,
                     name: struct_name.to_owned(),
                 };
-                struct_idxs.push(name_cache.insert_or_get(name.clone()));
+                struct_idxs.push(name_cache.struct_name_to_idx(&name)?);
                 struct_names.push(name)
             }
 
@@ -383,7 +328,7 @@ impl Module {
                                                 expects one and only one signature token"
                                                     .to_owned(),
                                             ));
-                                        },
+                                        }
                                         Some(sig_token) => sig_token,
                                     };
                                     single_signature_token_map.insert(
@@ -395,8 +340,8 @@ impl Module {
                                         )?,
                                     );
                                 }
-                            },
-                            _ => {},
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -457,24 +402,21 @@ impl Module {
             Ok(())
         };
 
-        match create() {
-            Ok(_) => Ok(Self {
-                id,
-                size,
-                module,
-                structs,
-                struct_instantiations,
-                function_refs,
-                function_defs,
-                function_instantiations,
-                field_handles,
-                field_instantiations,
-                function_map,
-                struct_map,
-                single_signature_token_map,
-            }),
-            Err(err) => Err((err, module)),
-        }
+        create()?;
+        Ok(Self {
+            id,
+            module,
+            structs,
+            struct_instantiations,
+            function_refs,
+            function_defs,
+            function_instantiations,
+            field_handles,
+            field_instantiations,
+            function_map,
+            struct_map,
+            single_signature_token_map,
+        })
     }
 
     fn make_struct_type(
@@ -533,6 +475,10 @@ impl Module {
         &self.struct_instantiations[idx as usize]
     }
 
+    pub(crate) fn self_id(&self) -> &ModuleId {
+        &self.id
+    }
+
     pub(crate) fn function_at(&self, idx: u16) -> &FunctionHandle {
         &self.function_refs[idx as usize]
     }
@@ -567,5 +513,52 @@ impl Module {
 
     pub(crate) fn single_type_at(&self, idx: SignatureIndex) -> &Type {
         self.single_signature_token_map.get(&idx).unwrap()
+    }
+
+    pub fn get_function(&self, function_name: &IdentStr) -> VMResult<Arc<Function>> {
+        Ok(self
+            .function_map
+            .get(function_name)
+            .and_then(|idx| self.function_defs.get(*idx))
+            .ok_or_else(|| {
+                let module_id = self.self_id();
+                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
+                    .with_message(format!(
+                        "Function {}::{}::{} does not exist",
+                        module_id.address(),
+                        module_id.name(),
+                        function_name
+                    ))
+                    .finish(Location::Undefined)
+            })?
+            .clone())
+    }
+
+    pub(crate) fn get_struct(&self, struct_name: &IdentStr) -> VMResult<Arc<StructType>> {
+        Ok(self
+            .struct_map
+            .get(struct_name)
+            .and_then(|idx| self.structs.get(*idx))
+            .ok_or_else(|| {
+                let module_id = self.self_id();
+                PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
+                    .with_message(format!(
+                        "Struct {}::{}::{} does not exist",
+                        module_id.address(),
+                        module_id.name(),
+                        struct_name
+                    ))
+                    .finish(Location::Undefined)
+            })?
+            .definition_struct_type
+            .clone())
+    }
+}
+
+impl Deref for Module {
+    type Target = Arc<CompiledModule>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.module
     }
 }

@@ -286,12 +286,12 @@ impl ModuleGenerator {
                 Num | Range | EventStore => {
                     ctx.internal_error(loc, format!("unexpected specification type {:#?}", ty));
                     FF::SignatureToken::Bool
-                },
+                }
             },
             Tuple(_) => {
                 ctx.internal_error(loc, format!("unexpected tuple type {:#?}", ty));
                 FF::SignatureToken::Bool
-            },
+            }
             Vector(ty) => FF::SignatureToken::Vector(Box::new(self.signature_token(ctx, loc, ty))),
             Struct(mid, sid, inst) => {
                 let handle = self.struct_index(ctx, loc, &ctx.env.get_struct(mid.qualified(*sid)));
@@ -305,7 +305,7 @@ impl ModuleGenerator {
                             .collect(),
                     )
                 }
-            },
+            }
             TypeParameter(p) => FF::SignatureToken::TypeParameter(*p),
             Reference(kind, target_ty) => {
                 let target_ty = Box::new(self.signature_token(ctx, loc, target_ty));
@@ -313,7 +313,7 @@ impl ModuleGenerator {
                     ReferenceKind::Immutable => FF::SignatureToken::Reference(target_ty),
                     ReferenceKind::Mutable => FF::SignatureToken::MutableReference(target_ty),
                 }
-            },
+            }
             Fun(_, _) | TypeDomain(_) | ResourceDomain(_, _, _) | Error | Var(_) => {
                 ctx.internal_error(
                     loc,
@@ -323,7 +323,7 @@ impl ModuleGenerator {
                     ),
                 );
                 FF::SignatureToken::Bool
-            },
+            }
         }
     }
 
@@ -521,7 +521,7 @@ impl ModuleGenerator {
                     &access_specifier.resource.0,
                     &ctx.env.get_module(*module_id),
                 ))
-            },
+            }
             ResourceSpecifier::Resource(struct_id) => {
                 let struct_env = ctx.env.get_struct(struct_id.to_qualified_id());
                 if struct_id.inst.is_empty() {
@@ -536,7 +536,7 @@ impl ModuleGenerator {
                         self.signature(ctx, &access_specifier.loc, struct_id.inst.to_vec()),
                     )
                 }
-            },
+            }
         };
         let address =
             match &access_specifier.address.1 {
@@ -551,7 +551,7 @@ impl ModuleGenerator {
                         .position(|Parameter(n, _ty, _)| n == name)
                         .expect("parameter defined") as u8;
                     FF::AddressSpecifier::Parameter(param_index, None)
-                },
+                }
                 AddressSpecifier::Call(fun, name) => {
                     let param_index = fun_env
                         .get_parameters()
@@ -565,7 +565,7 @@ impl ModuleGenerator {
                         fun.inst.clone(),
                     );
                     FF::AddressSpecifier::Parameter(param_index, Some(fun_index))
-                },
+                }
             };
         FF::AccessSpecifier {
             kind: access_specifier.kind,

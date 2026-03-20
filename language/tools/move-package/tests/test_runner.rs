@@ -80,7 +80,7 @@ fn run_test_impl(
                     "Cannot have compile and model flags set for same package"
                 )
                 .into())
-            },
+            }
             (true, _) => match BuildPlan::create(resolved_package)
                 .and_then(|bp| bp.compile_no_exit(&compiler_config.clone(), &mut Vec::new()))
             {
@@ -90,15 +90,18 @@ fn run_test_impl(
                     pkg.compiled_package_info.build_flags.install_dir =
                         Some(PathBuf::from("ELIDED_FOR_TEST"));
                     format!("{:#?}\n", pkg.compiled_package_info)
-                },
+                }
                 Err(error) => format!("{:#}\n", error),
             },
-            (_, true) => match ModelBuilder::create(resolved_package, ModelConfig {
-                all_files_as_targets: false,
-                target_filter: None,
-                compiler_version,
-                language_version: LanguageVersion::default(),
-            })
+            (_, true) => match ModelBuilder::create(
+                resolved_package,
+                ModelConfig {
+                    all_files_as_targets: false,
+                    target_filter: None,
+                    compiler_version,
+                    language_version: LanguageVersion::default(),
+                },
+            )
             .build_model()
             {
                 Ok(_) => "Built model".to_string(),
@@ -111,7 +114,7 @@ fn run_test_impl(
                 }
                 resolved_package.build_options.install_dir = Some(PathBuf::from("ELIDED_FOR_TEST"));
                 format!("{:#?}\n", resolved_package)
-            },
+            }
         },
         Err(error) => format!("{:#}\n", error),
     };

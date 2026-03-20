@@ -43,20 +43,24 @@ impl Compatibility {
         Self::default()
     }
 
-    pub fn no_check() -> Self {
+    pub fn custom(
+        check_struct_and_pub_function_linking: bool,
+        check_struct_layout: bool,
+        check_friend_linking: bool,
+    ) -> Self {
         Self {
-            check_struct_and_pub_function_linking: false,
-            check_struct_layout: false,
-            check_friend_linking: false,
-        }
-    }
-
-    pub fn new(check_struct_layout: bool, check_friend_linking: bool) -> Self {
-        Self {
-            check_struct_and_pub_function_linking: true,
+            check_struct_and_pub_function_linking,
             check_struct_layout,
             check_friend_linking,
         }
+    }
+
+    pub fn no_check() -> Self {
+        Self::custom(false, false, false)
+    }
+
+    pub fn new(check_struct_layout: bool, check_friend_linking: bool) -> Self {
+        Self::custom(true, check_struct_layout, check_friend_linking)
     }
 
     pub fn need_check_compat(&self) -> bool {

@@ -182,13 +182,13 @@ impl<'a> TransferFunctions for CopyDropAnalysis<'a> {
                 } else {
                     state.moved.insert(*src);
                 }
-            },
+            }
             Assign(_, _, src, AssignKind::Move) => {
                 state.moved.insert(*src);
-            },
+            }
             Call(_, _, Operation::BorrowLoc, _, _) => {
                 // Operation does not consume operands.
-            },
+            }
             Call(_, _, op, srcs, ..) => {
                 // If this is an equality we need to check drop for the operands, even though we do not need
                 // to emit a drop.
@@ -207,9 +207,9 @@ impl<'a> TransferFunctions for CopyDropAnalysis<'a> {
                         state.moved.insert(*src);
                     }
                 }
-            },
+            }
             Ret(_, srcs) => state.moved.extend(srcs.iter().cloned()),
-            _ => {},
+            _ => {}
         }
 
         // Clear information about re-assigned locals
@@ -284,15 +284,15 @@ impl<'a> Transformer<'a> {
                     } else {
                         self.builder.emit(Assign(id, dst, src, AssignKind::Move))
                     }
-                },
+                }
                 AssignKind::Copy | AssignKind::Store => {
                     self.check_explicit_copy(id, src);
                     self.builder.emit(Assign(id, dst, src, AssignKind::Copy))
-                },
+                }
                 AssignKind::Move => {
                     self.check_explicit_move(code_offset, id, src);
                     self.builder.emit(Assign(id, dst, src, AssignKind::Move))
-                },
+                }
             },
             Call(id, dests, op, srcs, ai) => {
                 use Operation::*;
@@ -300,10 +300,10 @@ impl<'a> Transformer<'a> {
                     Function(..) => {
                         let new_srcs = self.copy_args_if_needed(code_offset, id, srcs);
                         self.check_and_emit_bytecode(code_offset, Call(id, dests, op, new_srcs, ai))
-                    },
+                    }
                     _ => self.check_and_emit_bytecode(code_offset, bc.clone()),
                 }
-            },
+            }
             _ => self.check_and_emit_bytecode(code_offset, bc.clone()),
         }
         // Insert/check any drops needed after this program point
@@ -328,7 +328,7 @@ impl<'a> Transformer<'a> {
                             ty.get_target_type().expect("reference type"),
                             || ("reference content copied here".to_string(), vec![]),
                         );
-                    },
+                    }
                     WriteRef => {
                         let ty = self.builder.get_local_type(srcs[0]);
                         self.check_drop_for_type(
@@ -337,11 +337,11 @@ impl<'a> Transformer<'a> {
                             ty.get_target_type().expect("reference type"),
                             || ("reference content dropped here".to_string(), vec![]),
                         );
-                    },
+                    }
                     _ => (),
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
         self.builder.emit(bc)
     }

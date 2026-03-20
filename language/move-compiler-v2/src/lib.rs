@@ -472,7 +472,7 @@ pub fn run_bytecode_verifier(units: &[AnnotatedCompiledUnit], env: &mut GlobalEn
                     report_bytecode_verification_error(env, loc, source_map, &e);
                     errors = true
                 }
-            },
+            }
             AnnotatedCompiledUnit::Script(AnnotatedCompiledScript {
                 loc,
                 named_script:
@@ -485,7 +485,7 @@ pub fn run_bytecode_verifier(units: &[AnnotatedCompiledUnit], env: &mut GlobalEn
                     report_bytecode_verification_error(env, loc, source_map, &e);
                     errors = true
                 }
-            },
+            }
         }
     }
     !errors
@@ -537,7 +537,7 @@ fn report_bytecode_verification_error(
                         debug_info
                     ),
                 )
-            },
+            }
             _ => env.diag(
                 Severity::Bug,
                 loc,
@@ -594,7 +594,7 @@ pub fn annotate_units(units: Vec<CompiledUnit>) -> Vec<AnnotatedCompiledUnit> {
                     named_module,
                     function_infos: UniqueMap::new(),
                 })
-            },
+            }
             CompiledUnit::Script(named_script) => {
                 AnnotatedCompiledUnit::Script(AnnotatedCompiledScript {
                     loc: named_script.source_map.definition_location,
@@ -603,7 +603,7 @@ pub fn annotate_units(units: Vec<CompiledUnit>) -> Vec<AnnotatedCompiledUnit> {
                         spec_info: Default::default(),
                     },
                 })
-            },
+            }
         })
         .collect()
 }

@@ -1,0 +1,42 @@
+//# publish --lazy-loading
+module 0x42.A {
+  public a() {
+  label b0:
+    return;
+  }
+}
+
+//# publish --lazy-loading
+module 0x42.B {
+  import 0x42.A;
+
+  public b() {
+  label b0:
+    A.a();
+    return;
+  }
+}
+
+//# publish --lazy-loading
+module 0x42.C {
+  import 0x42.B;
+
+  public c() {
+  label b0:
+    B.b();
+    return;
+  }
+}
+
+//# publish --lazy-loading
+module 0x42.A {
+  import 0x42.C;
+
+  public a() {
+  label b0:
+    C.c();
+    return;
+  }
+}
+
+//# run --lazy-loading 0x42::A::a

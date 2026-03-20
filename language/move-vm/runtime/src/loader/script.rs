@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    intern_type, BinaryCache, Function, FunctionHandle, FunctionInstantiation,
-    ModuleStorageAdapter, Scope, ScriptHash, StructNameCache,
+    intern_type, BinaryCache, Function, FunctionHandle, FunctionInstantiation, Scope, ScriptHash,
+    StructNameCache,
 };
 use move_binary_format::{
     access::ScriptAccess,
@@ -16,14 +16,14 @@ use move_vm_types::loaded_data::{
     runtime_access_specifier::AccessSpecifier,
     runtime_types::{StructIdentifier, Type},
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
 // A Script is very similar to a `CompiledScript` but data is "transformed" to a representation
 // more appropriate to execution.
 // When code executes, indices in instructions are resolved against runtime structures
 // (rather than "compiled") to make available data needed for execution.
 #[derive(Clone, Debug)]
-pub(crate) struct Script {
+pub struct Script {
     // primitive pools
     pub(crate) script: Arc<CompiledScript>,
 
@@ -43,7 +43,6 @@ impl Script {
     pub(crate) fn new(
         script: Arc<CompiledScript>,
         script_hash: &ScriptHash,
-        cache: &ModuleStorageAdapter,
         name_cache: &StructNameCache,
     ) -> VMResult<Self> {
         let mut struct_names = vec![];
@@ -51,16 +50,14 @@ impl Script {
             let struct_name = script.identifier_at(struct_handle.name);
             let module_handle = script.module_handle_at(struct_handle.module);
             let module_id = script.module_id_for_handle(module_handle);
-            cache
-                .get_struct_type_by_identifier(struct_name, &module_id)
-                .map_err(|err| err.finish(Location::Script))?
-                .check_compatibility(struct_handle)
-                .map_err(|err| err.finish(Location::Script))?;
-
-            struct_names.push(name_cache.insert_or_get(StructIdentifier {
-                module: module_id,
-                name: struct_name.to_owned(),
-            }));
+            struct_names.push(
+                name_cache
+                    .struct_name_to_idx(&StructIdentifier {
+                        module: module_id,
+                        name: struct_name.to_owned(),
+                    })
+                    .map_err(|err| err.finish(Location::Script))?,
+            );
         }
 
         let mut function_refs = vec![];
@@ -163,7 +160,7 @@ impl Script {
                                         .to_owned(),
                                 )
                                 .finish(Location::Script));
-                            },
+                            }
                             Some(sig_token) => sig_token,
                         };
                         single_signature_token_map.insert(
@@ -172,8 +169,8 @@ impl Script {
                                 .map_err(|e| e.finish(Location::Script))?,
                         );
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
@@ -203,6 +200,14 @@ impl Script {
     }
 }
 
+impl Deref for Script {
+    type Target = Arc<CompiledScript>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.script
+    }
+}
+
 // A script cache is a map from the hash value of a script and the `Script` itself.
 // Script are added in the cache once verified and so getting a script out the cache
 // does not require further verification (except for parameters and type parameters)
@@ -215,20 +220,6 @@ impl ScriptCache {
     pub(crate) fn new() -> Self {
         Self {
             scripts: BinaryCache::new(),
-        }
-    }
-
-    pub(crate) fn get(&self, hash: &ScriptHash) -> Option<Arc<Function>> {
-        self.scripts.get(hash).map(|script| script.entry_point())
-    }
-
-    pub(crate) fn insert(&mut self, hash: ScriptHash, script: Script) -> Arc<Function> {
-        match self.get(&hash) {
-            Some(cached) => cached,
-            None => {
-                let script = self.scripts.insert(hash, script);
-                script.entry_point()
-            },
         }
     }
 }
