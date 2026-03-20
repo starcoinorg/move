@@ -11,7 +11,6 @@
 //! soon.
 
 pub mod data_cache;
-mod execution_context;
 mod interpreter;
 mod loader;
 pub mod logging;

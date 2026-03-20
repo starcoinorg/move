@@ -55,8 +55,8 @@
   - 发布、layout/type-tag、native `LoadModule`
   这些入口现在直接通过 `VMRuntime + loader-v2 storage` 运行，不再从外层依赖 `load_*_v2` 兼容包装。
 - 结构统一已继续推进到解释器内部：
-  - 新增 `ExecutionContext` 作为执行期唯一上下文，统一承载 `Loader`、`ModuleStorageAdapter` 与共享 `RuntimeEnvironment`。
-  - `Resolver`、native context、debug/tracing 现在都依赖 `ExecutionContext`，不再各自单独持有 `loader + module_store` 组合。
+  - `ExecutionContext` 过渡层已移除。
+  - `Interpreter` 直接接收 `Loader + ModuleStorageAdapter`，`Resolver` 直接持有这两者，`NativeContext` / `debug` / `tracing` 直接依赖 loader/runtime-environment 相关对象。
   - 当前保留的 `Loader`/`Resolver` 只承担运行时表示与字节码解析职责，不再构成第二套模块加载 runtime。
 - eager/lazy 两条语义都已经通过仓内主测试验证：
   - `cargo test -p move-vm-runtime -p move-vm-test-utils -p move-vm-integration-tests -p move-unit-test`

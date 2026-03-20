@@ -4,7 +4,6 @@
 
 use crate::{
     config::VMConfig, data_cache::TransactionDataCache, dispatch_loader,
-    execution_context::ExecutionContext,
     logging::expect_no_verification_errors_unless_bogus_storage,
     module_traversal::TraversalContext, native_functions::NativeFunctions, AsUnsyncModuleStorage,
     ModuleStorage as LoaderV2ModuleStorage, NativeModuleLoader, StructDefinitionLoader,
@@ -332,23 +331,25 @@ enum BinaryType {
 // interpreter. It's the only API known to the interpreter and it's tailored to the interpreter
 // needs.
 pub(crate) struct Resolver<'a> {
-    execution_context: &'a ExecutionContext<'a>,
+    loader: &'a Loader,
+    module_store: &'a ModuleStorageAdapter,
     binary: BinaryType,
 }
 
 struct LoadedStructDefinitionLoader<'a> {
-    execution_context: &'a ExecutionContext<'a>,
+    runtime_environment: &'a crate::RuntimeEnvironment,
+    module_store: &'a ModuleStorageAdapter,
 }
 
 impl WithRuntimeEnvironment for LoadedStructDefinitionLoader<'_> {
     fn runtime_environment(&self) -> &crate::RuntimeEnvironment {
-        self.execution_context.runtime_environment_ref()
+        self.runtime_environment
     }
 }
 
 impl StructDefinitionLoader for LoadedStructDefinitionLoader<'_> {
     fn is_lazy_loading_enabled(&self) -> bool {
-        self.execution_context.vm_config().enable_lazy_loading
+        self.runtime_environment.vm_config().enable_lazy_loading
     }
 
     fn load_struct_definition(
@@ -358,13 +359,11 @@ impl StructDefinitionLoader for LoadedStructDefinitionLoader<'_> {
         idx: &StructNameIndex,
     ) -> PartialVMResult<Arc<StructType>> {
         let struct_name = self
-            .execution_context
-            .runtime_environment_ref()
+            .runtime_environment
             .struct_name_index_map()
             .idx_to_struct_name_ref(*idx)?;
         let module = self
-            .execution_context
-            .module_store()
+            .module_store
             .module_at(&struct_name.module)
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
@@ -381,18 +380,28 @@ impl StructDefinitionLoader for LoadedStructDefinitionLoader<'_> {
 }
 
 impl<'a> Resolver<'a> {
-    fn for_module(execution_context: &'a ExecutionContext<'a>, module: Arc<Module>) -> Self {
+    fn for_module(
+        loader: &'a Loader,
+        module_store: &'a ModuleStorageAdapter,
+        module: Arc<Module>,
+    ) -> Self {
         let binary = BinaryType::Module(module);
         Self {
-            execution_context,
+            loader,
+            module_store,
             binary,
         }
     }
 
-    fn for_script(execution_context: &'a ExecutionContext<'a>, script: Arc<Script>) -> Self {
+    fn for_script(
+        loader: &'a Loader,
+        module_store: &'a ModuleStorageAdapter,
+        script: Arc<Script>,
+    ) -> Self {
         let binary = BinaryType::Script(script);
         Self {
-            execution_context,
+            loader,
+            module_store,
             binary,
         }
     }
@@ -419,10 +428,10 @@ impl<'a> Resolver<'a> {
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
     ) -> VMResult<()> {
-        self.execution_context.loader().ensure_module_loaded_v2(
+        self.loader.ensure_module_loaded_v2(
             module_id,
             data_store,
-            self.execution_context.module_store(),
+            self.module_store,
             gas_meter,
             traversal_context,
         )
@@ -449,8 +458,7 @@ impl<'a> Resolver<'a> {
                     gas_meter,
                     traversal_context,
                 )?;
-                self.execution_context
-                    .module_store()
+                self.module_store
                     .resolve_function_by_name(name.as_ident_str(), module)
                     .map_err(|err| err.finish(Location::Undefined))
             }
@@ -478,8 +486,7 @@ impl<'a> Resolver<'a> {
                     gas_meter,
                     traversal_context,
                 )?;
-                self.execution_context
-                    .module_store()
+                self.module_store
                     .resolve_function_by_name(name.as_ident_str(), module)
                     .map_err(|err| err.finish(Location::Undefined))
             }
@@ -495,8 +502,7 @@ impl<'a> Resolver<'a> {
         traversal_context: &mut TraversalContext,
     ) -> VMResult<Arc<Function>> {
         self.maybe_charge_and_load_module(module_id, data_store, gas_meter, traversal_context)?;
-        self.execution_context
-            .module_store()
+        self.module_store
             .resolve_function_by_name(func_name, module_id)
             .map_err(|err| err.finish(Location::Undefined))
     }
@@ -519,7 +525,7 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        let ty_builder = self.execution_context.ty_builder();
+        let ty_builder = self.loader.ty_builder();
         let mut instantiation = vec![];
         for ty in &func_inst.instantiation {
             let ty = ty_builder.create_ty_with_subst_with_legacy_check(ty, ty_args)?;
@@ -551,7 +557,7 @@ impl<'a> Resolver<'a> {
             BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
         };
 
-        self.execution_context
+        self.loader
             .ty_builder()
             .create_struct_ty(struct_ty.idx, AbilityInfo::struct_(struct_ty.abilities))
     }
@@ -566,7 +572,7 @@ impl<'a> Resolver<'a> {
             BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
         };
 
-        let ty_builder = self.execution_context.ty_builder();
+        let ty_builder = self.loader.ty_builder();
         if ty_builder.is_legacy() {
             let mut sum_nodes = 1u64;
             for ty in ty_args.iter().chain(struct_inst.instantiation.iter()) {
@@ -610,7 +616,7 @@ impl<'a> Resolver<'a> {
             BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
         };
 
-        let ty_builder = self.execution_context.ty_builder();
+        let ty_builder = self.loader.ty_builder();
         let instantiation_tys = field_instantiation
             .instantiation
             .iter()
@@ -643,7 +649,7 @@ impl<'a> Resolver<'a> {
         };
         let struct_ty = &struct_inst.definition_struct_type;
 
-        let ty_builder = self.execution_context.ty_builder();
+        let ty_builder = self.loader.ty_builder();
         let instantiation_tys = struct_inst
             .instantiation
             .iter()
@@ -672,7 +678,7 @@ impl<'a> Resolver<'a> {
         let ty = self.single_type_at(idx);
 
         if !ty_args.is_empty() {
-            self.execution_context
+            self.loader
                 .ty_builder()
                 .create_ty_with_subst_with_legacy_check(ty, ty_args)
         } else {
@@ -716,7 +722,7 @@ impl<'a> Resolver<'a> {
         match &self.binary {
             BinaryType::Module(module) => {
                 let struct_ty = &module.field_handles[idx.0 as usize].definition_struct_type;
-                self.execution_context
+                self.loader
                     .ty_builder()
                     .create_struct_ty(struct_ty.idx, AbilityInfo::struct_(struct_ty.abilities))
             }
@@ -735,7 +741,7 @@ impl<'a> Resolver<'a> {
                 let struct_ty = &field_inst.definition_struct_type;
                 let ty_params = &field_inst.instantiation;
 
-                self.execution_context
+                self.loader
                     .ty_builder()
                     .create_struct_instantiation_ty(struct_ty, ty_params, ty_args)
             }
@@ -745,16 +751,12 @@ impl<'a> Resolver<'a> {
 
     // get the loader
     pub(crate) fn loader(&self) -> &Loader {
-        self.execution_context.loader()
-    }
-
-    pub(crate) fn execution_context(&self) -> &ExecutionContext<'a> {
-        self.execution_context
+        self.loader
     }
 
     // get the module store
     pub(crate) fn module_store(&self) -> &ModuleStorageAdapter {
-        self.execution_context.module_store()
+        self.module_store
     }
 }
 

@@ -6,8 +6,7 @@ use crate::{
     access_control::AccessControlState,
     data_cache::TransactionDataCache,
     dispatch_loader,
-    execution_context::ExecutionContext,
-    loader::{Function, Resolver},
+    loader::{Function, Loader, ModuleStorageAdapter, Resolver},
     module_traversal::TraversalContext,
     native_extensions::NativeContextExtensions,
     native_functions::NativeContext,
@@ -73,15 +72,14 @@ pub(crate) struct Interpreter {
     active_modules: HashSet<ModuleId>,
 }
 
-struct TypeWithExecutionContext<'a, 'b> {
+struct TypeWithRuntimeEnvironment<'a, 'b> {
     ty: &'a Type,
-    execution_context: &'b ExecutionContext<'b>,
+    runtime_environment: &'b crate::RuntimeEnvironment,
 }
 
-impl<'a, 'b> TypeView for TypeWithExecutionContext<'a, 'b> {
+impl<'a, 'b> TypeView for TypeWithRuntimeEnvironment<'a, 'b> {
     fn to_type_tag(&self) -> TypeTag {
-        let runtime_environment = self.execution_context.runtime_environment();
-        TypeTagConverter::new(&runtime_environment)
+        TypeTagConverter::new(self.runtime_environment)
             .ty_to_ty_tag(self.ty)
             .unwrap()
     }
@@ -95,7 +93,8 @@ impl Interpreter {
         ty_args: Vec<Type>,
         args: Vec<Value>,
         data_store: &mut TransactionDataCache,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
         extensions: &mut NativeContextExtensions,
@@ -103,12 +102,13 @@ impl Interpreter {
         Interpreter {
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
-            paranoid_type_checks: execution_context.vm_config().paranoid_type_checks,
+            paranoid_type_checks: loader.vm_config().paranoid_type_checks,
             access_control: AccessControlState::default(),
             active_modules: HashSet::new(),
         }
         .execute_main(
-            execution_context,
+            loader,
+            module_store,
             data_store,
             gas_meter,
             traversal_context,
@@ -127,7 +127,8 @@ impl Interpreter {
     /// at the top of the stack (return). If the call stack is empty execution is completed.
     fn execute_main(
         mut self,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
@@ -139,11 +140,7 @@ impl Interpreter {
         let mut locals = Locals::new(function.local_count());
         for (i, value) in args.into_iter().enumerate() {
             locals
-                .store_loc(
-                    i,
-                    value,
-                    execution_context.vm_config().check_invariant_in_swap_loc,
-                )
+                .store_loc(i, value, loader.vm_config().check_invariant_in_swap_loc)
                 .map_err(|e| self.set_location(e))?;
         }
 
@@ -152,7 +149,7 @@ impl Interpreter {
         }
 
         let mut current_frame = self
-            .make_new_frame(gas_meter, execution_context, function, ty_args, locals)
+            .make_new_frame(gas_meter, loader, function, ty_args, locals)
             .map_err(|err| self.set_location(err))?;
 
         // Access control for the new frame.
@@ -160,11 +157,12 @@ impl Interpreter {
             .enter_function(&current_frame, current_frame.function.as_ref())
             .map_err(|e| self.set_location(e))?;
         loop {
-            let resolver = current_frame.resolver(execution_context);
+            let resolver = current_frame.resolver(loader, module_store);
             let exit_code = current_frame //self
                 .execute_code(
                     &resolver,
-                    execution_context,
+                    loader,
+                    module_store,
                     &mut self,
                     data_store,
                     gas_meter,
@@ -243,7 +241,7 @@ impl Interpreter {
                         self.call_native(
                             &mut current_frame,
                             &resolver,
-                            execution_context,
+                            module_store,
                             data_store,
                             gas_meter,
                             traversal_context,
@@ -256,7 +254,8 @@ impl Interpreter {
                     self.set_new_call_frame(
                         &mut current_frame,
                         gas_meter,
-                        execution_context,
+                        loader,
+                        module_store,
                         func,
                         vec![],
                     )?;
@@ -286,13 +285,14 @@ impl Interpreter {
                                 .with_message("Failed to get native function module id".to_string())
                         })
                         .map_err(|e| set_err_info!(current_frame, e))?;
+                    let runtime_environment = loader.runtime_environment();
                     gas_meter
                         .charge_call_generic(
                             module_id,
                             func.name(),
-                            ty_args.iter().map(|ty| TypeWithExecutionContext {
+                            ty_args.iter().map(|ty| TypeWithRuntimeEnvironment {
                                 ty,
-                                execution_context,
+                                runtime_environment: &runtime_environment,
                             }),
                             self.operand_stack
                                 .last_n(func.param_count())
@@ -305,7 +305,7 @@ impl Interpreter {
                         self.call_native(
                             &mut current_frame,
                             &resolver,
-                            execution_context,
+                            module_store,
                             data_store,
                             gas_meter,
                             traversal_context,
@@ -318,7 +318,8 @@ impl Interpreter {
                     self.set_new_call_frame(
                         &mut current_frame,
                         gas_meter,
-                        execution_context,
+                        loader,
+                        module_store,
                         func,
                         ty_args,
                     )?;
@@ -331,7 +332,8 @@ impl Interpreter {
         &mut self,
         current_frame: &mut Frame,
         gas_meter: &mut impl GasMeter,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        _module_store: &ModuleStorageAdapter,
         func: Arc<Function>,
         ty_args: Vec<Type>,
     ) -> VMResult<()> {
@@ -356,7 +358,7 @@ impl Interpreter {
         }
 
         let mut frame = self
-            .make_call_frame(gas_meter, execution_context, func, ty_args)
+            .make_call_frame(gas_meter, loader, func, ty_args)
             .map_err(|err| {
                 self.attach_state_if_invariant_violation(self.set_location(err), current_frame)
             })?;
@@ -383,7 +385,7 @@ impl Interpreter {
     fn make_call_frame(
         &mut self,
         gas_meter: &mut impl GasMeter,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
         func: Arc<Function>,
         ty_args: Vec<Type>,
     ) -> PartialVMResult<Frame> {
@@ -394,14 +396,14 @@ impl Interpreter {
             locals.store_loc(
                 param_count - i - 1,
                 self.operand_stack.pop()?,
-                execution_context.vm_config().check_invariant_in_swap_loc,
+                loader.vm_config().check_invariant_in_swap_loc,
             )?;
 
             if self.paranoid_type_checks {
                 let ty = self.operand_stack.pop_ty()?;
                 let expected_ty = &func.local_tys()[param_count - i - 1];
                 if !ty_args.is_empty() {
-                    let expected_ty = execution_context
+                    let expected_ty = loader
                         .ty_builder()
                         .create_ty_with_subst_with_legacy_check(expected_ty, &ty_args)?;
                     ty.paranoid_check_eq(&expected_ty)?;
@@ -411,7 +413,7 @@ impl Interpreter {
                 }
             }
         }
-        self.make_new_frame(gas_meter, execution_context, func, ty_args, locals)
+        self.make_new_frame(gas_meter, loader, func, ty_args, locals)
     }
 
     /// Create a new `Frame` given a `Function` and the function `Locals`.
@@ -420,7 +422,7 @@ impl Interpreter {
     fn make_new_frame(
         &self,
         gas_meter: &mut impl GasMeter,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
         function: Arc<Function>,
         ty_args: Vec<Type>,
         locals: Locals,
@@ -438,7 +440,7 @@ impl Interpreter {
                     .local_tys()
                     .iter()
                     .map(|ty| {
-                        execution_context
+                        loader
                             .ty_builder()
                             .create_ty_with_subst_with_legacy_check(ty, &ty_args)
                     })
@@ -462,7 +464,7 @@ impl Interpreter {
         &mut self,
         current_frame: &mut Frame,
         resolver: &Resolver,
-        execution_context: &ExecutionContext,
+        module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
@@ -474,7 +476,7 @@ impl Interpreter {
         self.call_native_impl(
             current_frame,
             resolver,
-            execution_context,
+            module_store,
             data_store,
             gas_meter,
             traversal_context,
@@ -504,7 +506,7 @@ impl Interpreter {
         &mut self,
         current_frame: &mut Frame,
         resolver: &Resolver,
-        execution_context: &ExecutionContext,
+        module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
@@ -512,7 +514,8 @@ impl Interpreter {
         function: Arc<Function>,
         ty_args: Vec<Type>,
     ) -> PartialVMResult<()> {
-        let ty_builder = execution_context.ty_builder();
+        let ty_builder = resolver.loader().ty_builder();
+        let runtime_environment = resolver.loader().runtime_environment();
 
         let mut args = VecDeque::new();
         let expected_args = function.param_count();
@@ -540,7 +543,7 @@ impl Interpreter {
             self,
             data_store,
             resolver,
-            execution_context,
+            module_store,
             extensions,
             gas_meter.balance_internal(),
             traversal_context,
@@ -548,9 +551,9 @@ impl Interpreter {
         let native_function = function.get_native()?;
 
         gas_meter.charge_native_function_before_execution(
-            ty_args.iter().map(|ty| TypeWithExecutionContext {
+            ty_args.iter().map(|ty| TypeWithRuntimeEnvironment {
                 ty,
-                execution_context,
+                runtime_environment: &runtime_environment,
             }),
             args.iter(),
         )?;
@@ -678,7 +681,8 @@ impl Interpreter {
                 self.set_new_call_frame(
                     current_frame,
                     gas_meter,
-                    execution_context,
+                    resolver.loader(),
+                    module_store,
                     target_func,
                     ty_args,
                 )
@@ -690,7 +694,7 @@ impl Interpreter {
                     .ensure_module_loaded_v2(
                         &module_name,
                         data_store,
-                        execution_context.module_store(),
+                        module_store,
                         gas_meter,
                         traversal_context,
                     )
@@ -777,25 +781,22 @@ impl Interpreter {
 
     /// Loads a resource from the data store and return the number of bytes read from the storage.
     fn load_resource<'c>(
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         data_store: &'c mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<&'c mut GlobalValue> {
-        match data_store.load_resource(
-            execution_context.loader(),
-            addr,
-            ty,
-            execution_context.module_store(),
-        ) {
+        let runtime_environment = loader.runtime_environment();
+        match data_store.load_resource(loader, addr, ty, module_store) {
             Ok((gv, load_res)) => {
                 if let Some(bytes_loaded) = load_res {
                     gas_meter.charge_load_resource(
                         addr,
-                        TypeWithExecutionContext {
+                        TypeWithRuntimeEnvironment {
                             ty,
-                            execution_context,
+                            runtime_environment: &runtime_environment,
                         },
                         gv.view(),
                         bytes_loaded,
@@ -812,25 +813,27 @@ impl Interpreter {
         &mut self,
         is_mut: bool,
         is_generic: bool,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<()> {
-        let res = Self::load_resource(execution_context, data_store, gas_meter, addr, ty)?
+        let runtime_environment = loader.runtime_environment();
+        let res = Self::load_resource(loader, module_store, data_store, gas_meter, addr, ty)?
             .borrow_global();
         gas_meter.charge_borrow_global(
             is_mut,
             is_generic,
-            TypeWithExecutionContext {
+            TypeWithRuntimeEnvironment {
                 ty,
-                execution_context,
+                runtime_environment: &runtime_environment,
             },
             res.is_ok(),
         )?;
         self.check_access(
-            execution_context,
+            loader,
             if is_mut {
                 AccessKind::Writes
             } else {
@@ -847,7 +850,7 @@ impl Interpreter {
 
     fn check_access(
         &self,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
         kind: AccessKind,
         ty: &Type,
         addr: AccountAddress,
@@ -862,8 +865,7 @@ impl Interpreter {
                 )
             }
         };
-        let struct_name = execution_context
-            .loader()
+        let struct_name = loader
             .name_cache
             .idx_to_struct_name_ref(struct_idx)
             .map_err(|err| {
@@ -879,23 +881,25 @@ impl Interpreter {
     fn exists(
         &mut self,
         is_generic: bool,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<()> {
-        let gv = Self::load_resource(execution_context, data_store, gas_meter, addr, ty)?;
+        let runtime_environment = loader.runtime_environment();
+        let gv = Self::load_resource(loader, module_store, data_store, gas_meter, addr, ty)?;
         let exists = gv.exists()?;
         gas_meter.charge_exists(
             is_generic,
-            TypeWithExecutionContext {
+            TypeWithRuntimeEnvironment {
                 ty,
-                execution_context,
+                runtime_environment: &runtime_environment,
             },
             exists,
         )?;
-        self.check_access(execution_context, AccessKind::Reads, ty, addr)?;
+        self.check_access(loader, AccessKind::Reads, ty, addr)?;
         self.operand_stack.push(Value::bool(exists))?;
         Ok(())
     }
@@ -904,35 +908,37 @@ impl Interpreter {
     fn move_from(
         &mut self,
         is_generic: bool,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<()> {
+        let runtime_environment = loader.runtime_environment();
         let resource =
-            match Self::load_resource(execution_context, data_store, gas_meter, addr, ty)?
+            match Self::load_resource(loader, module_store, data_store, gas_meter, addr, ty)?
                 .move_from()
             {
                 Ok(resource) => {
                     gas_meter.charge_move_from(
                         is_generic,
-                        TypeWithExecutionContext {
+                        TypeWithRuntimeEnvironment {
                             ty,
-                            execution_context,
+                            runtime_environment: &runtime_environment,
                         },
                         Some(&resource),
                     )?;
-                    self.check_access(execution_context, AccessKind::Writes, ty, addr)?;
+                    self.check_access(loader, AccessKind::Writes, ty, addr)?;
                     resource
                 }
                 Err(err) => {
                     let val: Option<&Value> = None;
                     gas_meter.charge_move_from(
                         is_generic,
-                        TypeWithExecutionContext {
+                        TypeWithRuntimeEnvironment {
                             ty,
-                            execution_context,
+                            runtime_environment: &runtime_environment,
                         },
                         val,
                     )?;
@@ -949,36 +955,38 @@ impl Interpreter {
     fn move_to(
         &mut self,
         is_generic: bool,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
         addr: AccountAddress,
         ty: &Type,
         resource: Value,
     ) -> PartialVMResult<()> {
-        let gv = Self::load_resource(execution_context, data_store, gas_meter, addr, ty)?;
+        let runtime_environment = loader.runtime_environment();
+        let gv = Self::load_resource(loader, module_store, data_store, gas_meter, addr, ty)?;
         // NOTE(Gas): To maintain backward compatibility, we need to charge gas after attempting
         //            the move_to operation.
         match gv.move_to(resource) {
             Ok(()) => {
                 gas_meter.charge_move_to(
                     is_generic,
-                    TypeWithExecutionContext {
+                    TypeWithRuntimeEnvironment {
                         ty,
-                        execution_context,
+                        runtime_environment: &runtime_environment,
                     },
                     gv.view().unwrap(),
                     true,
                 )?;
-                self.check_access(execution_context, AccessKind::Writes, ty, addr)?;
+                self.check_access(loader, AccessKind::Writes, ty, addr)?;
                 Ok(())
             }
             Err((err, resource)) => {
                 gas_meter.charge_move_to(
                     is_generic,
-                    TypeWithExecutionContext {
+                    TypeWithRuntimeEnvironment {
                         ty,
-                        execution_context,
+                        runtime_environment: &runtime_environment,
                     },
                     &resource,
                     false,
@@ -1029,7 +1037,7 @@ impl Interpreter {
     fn debug_print_frame<B: Write>(
         &self,
         buf: &mut B,
-        execution_context: &ExecutionContext,
+        runtime_environment: &crate::RuntimeEnvironment,
         idx: usize,
         frame: &Frame,
     ) -> PartialVMResult<()> {
@@ -1043,8 +1051,7 @@ impl Interpreter {
         debug_write!(buf, "{}", func.name())?;
         let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
-        let runtime_environment = execution_context.runtime_environment();
-        let type_tag_converter = TypeTagConverter::new(&runtime_environment);
+        let type_tag_converter = TypeTagConverter::new(runtime_environment);
         for ty in ty_args {
             ty_tags.push(type_tag_converter.ty_to_ty_tag(ty)?);
         }
@@ -1095,11 +1102,11 @@ impl Interpreter {
     pub(crate) fn debug_print_stack_trace<B: Write>(
         &self,
         buf: &mut B,
-        execution_context: &ExecutionContext,
+        runtime_environment: &crate::RuntimeEnvironment,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:")?;
         for (i, frame) in self.call_stack.0.iter().enumerate() {
-            self.debug_print_frame(buf, execution_context, i, frame)?;
+            self.debug_print_frame(buf, runtime_environment, i, frame)?;
         }
         debug_writeln!(buf, "Operand Stack:")?;
         for (idx, val) in self.operand_stack.value.iter().enumerate() {
@@ -1335,13 +1342,12 @@ impl CallStack {
 }
 
 fn check_depth_of_type(
-    execution_context: &ExecutionContext,
+    runtime_environment: &crate::RuntimeEnvironment,
     data_store: &TransactionDataCache,
     traversal_context: &mut TraversalContext,
     ty: &Type,
 ) -> PartialVMResult<()> {
-    let runtime_environment = execution_context.runtime_environment();
-    let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, data_store);
+    let base_storage = RuntimeEnvironmentRef::new(runtime_environment, data_store);
     let module_storage = base_storage.as_unsync_module_storage();
     let mut gas_meter = UnmeteredGasMeter;
     dispatch_loader!(&module_storage, loader, {
@@ -1487,7 +1493,8 @@ impl Frame {
     fn execute_code(
         &mut self,
         resolver: &Resolver,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         interpreter: &mut Interpreter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
@@ -1495,7 +1502,8 @@ impl Frame {
     ) -> VMResult<ExitCode> {
         self.execute_code_impl(
             resolver,
-            execution_context,
+            loader,
+            module_store,
             interpreter,
             data_store,
             gas_meter,
@@ -1630,13 +1638,13 @@ impl Frame {
     fn post_execution_type_stack_transition(
         local_tys: &[Type],
         ty_args: &[Type],
-        execution_context: &ExecutionContext,
+        loader: &Loader,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         ty_cache: &mut FrameTypeCache,
         instruction: &Bytecode,
     ) -> PartialVMResult<()> {
-        let ty_builder = execution_context.ty_builder();
+        let ty_builder = loader.ty_builder();
 
         match instruction {
             Bytecode::BrTrue(_) | Bytecode::BrFalse(_) => (),
@@ -2107,7 +2115,8 @@ impl Frame {
     fn execute_code_impl(
         &mut self,
         resolver: &Resolver,
-        execution_context: &ExecutionContext,
+        loader: &Loader,
+        module_store: &ModuleStorageAdapter,
         interpreter: &mut Interpreter,
         data_store: &mut TransactionDataCache,
         gas_meter: &mut impl GasMeter,
@@ -2117,9 +2126,9 @@ impl Frame {
 
         macro_rules! make_ty {
             ($ty:expr) => {
-                TypeWithExecutionContext {
+                TypeWithRuntimeEnvironment {
                     ty: $ty,
-                    execution_context,
+                    runtime_environment: &loader.runtime_environment(),
                 }
             };
         }
@@ -2258,7 +2267,7 @@ impl Frame {
                     Bytecode::MoveLoc(idx) => {
                         let local = self.locals.move_loc(
                             *idx as usize,
-                            execution_context.vm_config().check_invariant_in_swap_loc,
+                            loader.vm_config().check_invariant_in_swap_loc,
                         )?;
                         gas_meter.charge_move_loc(&local)?;
 
@@ -2270,7 +2279,7 @@ impl Frame {
                         self.locals.store_loc(
                             *idx as usize,
                             value_to_store,
-                            execution_context.vm_config().check_invariant_in_swap_loc,
+                            loader.vm_config().check_invariant_in_swap_loc,
                         )?;
                     }
                     Bytecode::Call(idx) => {
@@ -2331,7 +2340,7 @@ impl Frame {
                         let field_count = resolver.field_count(*sd_idx);
                         let struct_type = resolver.get_struct_ty(*sd_idx);
                         check_depth_of_type(
-                            execution_context,
+                            &loader.runtime_environment(),
                             data_store,
                             traversal_context,
                             &struct_type,
@@ -2365,7 +2374,12 @@ impl Frame {
                             self.ty_cache
                                 .get_struct_type(*si_idx, resolver, &self.ty_args)?;
                         gas_meter.charge_create_ty(ty_count)?;
-                        check_depth_of_type(execution_context, data_store, traversal_context, ty)?;
+                        check_depth_of_type(
+                            &loader.runtime_environment(),
+                            data_store,
+                            traversal_context,
+                            ty,
+                        )?;
 
                         let field_count = resolver.field_instantiation_count(*si_idx);
                         gas_meter.charge_pack(
@@ -2406,7 +2420,12 @@ impl Frame {
                                 .get_struct_type(*si_idx, resolver, &self.ty_args)?;
                         gas_meter.charge_create_ty(ty_count)?;
 
-                        check_depth_of_type(execution_context, data_store, traversal_context, ty)?;
+                        check_depth_of_type(
+                            &loader.runtime_environment(),
+                            data_store,
+                            traversal_context,
+                            ty,
+                        )?;
 
                         let struct_ = interpreter.operand_stack.pop_as::<Struct>()?;
 
@@ -2581,7 +2600,8 @@ impl Frame {
                         interpreter.borrow_global(
                             is_mut,
                             false,
-                            execution_context,
+                            loader,
+                            module_store,
                             data_store,
                             gas_meter,
                             addr,
@@ -2599,7 +2619,8 @@ impl Frame {
                         interpreter.borrow_global(
                             is_mut,
                             true,
-                            execution_context,
+                            loader,
+                            module_store,
                             data_store,
                             gas_meter,
                             addr,
@@ -2611,7 +2632,8 @@ impl Frame {
                         let ty = resolver.get_struct_ty(*sd_idx);
                         interpreter.exists(
                             false,
-                            execution_context,
+                            loader,
+                            module_store,
                             data_store,
                             gas_meter,
                             addr,
@@ -2626,7 +2648,8 @@ impl Frame {
                         gas_meter.charge_create_ty(ty_count)?;
                         interpreter.exists(
                             true,
-                            execution_context,
+                            loader,
+                            module_store,
                             data_store,
                             gas_meter,
                             addr,
@@ -2638,7 +2661,8 @@ impl Frame {
                         let ty = resolver.get_struct_ty(*sd_idx);
                         interpreter.move_from(
                             false,
-                            execution_context,
+                            loader,
+                            module_store,
                             data_store,
                             gas_meter,
                             addr,
@@ -2653,7 +2677,8 @@ impl Frame {
                         gas_meter.charge_create_ty(ty_count)?;
                         interpreter.move_from(
                             true,
-                            execution_context,
+                            loader,
+                            module_store,
                             data_store,
                             gas_meter,
                             addr,
@@ -2671,7 +2696,8 @@ impl Frame {
                         let ty = resolver.get_struct_ty(*sd_idx);
                         interpreter.move_to(
                             false,
-                            execution_context,
+                            loader,
+                            module_store,
                             data_store,
                             gas_meter,
                             addr,
@@ -2693,7 +2719,8 @@ impl Frame {
                         gas_meter.charge_create_ty(ty_count)?;
                         interpreter.move_to(
                             true,
-                            execution_context,
+                            loader,
+                            module_store,
                             data_store,
                             gas_meter,
                             addr,
@@ -2719,7 +2746,12 @@ impl Frame {
                             self.ty_cache
                                 .get_signature_index_type(*si, resolver, &self.ty_args)?;
                         gas_meter.charge_create_ty(ty_count)?;
-                        check_depth_of_type(execution_context, data_store, traversal_context, ty)?;
+                        check_depth_of_type(
+                            &loader.runtime_environment(),
+                            data_store,
+                            traversal_context,
+                            ty,
+                        )?;
                         gas_meter.charge_vec_pack(
                             make_ty!(ty),
                             interpreter.operand_stack.last_n(*num as usize)?,
@@ -2734,9 +2766,9 @@ impl Frame {
                             self.ty_cache
                                 .get_signature_index_type(*si, resolver, &self.ty_args)?;
                         gas_meter.charge_create_ty(ty_count)?;
-                        gas_meter.charge_vec_len(TypeWithExecutionContext {
+                        gas_meter.charge_vec_len(TypeWithRuntimeEnvironment {
                             ty,
-                            execution_context,
+                            runtime_environment: &loader.runtime_environment(),
                         })?;
                         let value = vec_ref.len(ty)?;
                         interpreter.operand_stack.push(value)?;
@@ -2815,7 +2847,7 @@ impl Frame {
                     Self::post_execution_type_stack_transition(
                         &self.local_tys,
                         &self.ty_args,
-                        execution_context,
+                        loader,
                         resolver,
                         interpreter,
                         &mut self.ty_cache,
@@ -2848,8 +2880,12 @@ impl Frame {
         &self.ty_args
     }
 
-    fn resolver<'a>(&self, execution_context: &'a ExecutionContext<'a>) -> Resolver<'a> {
-        self.function.get_resolver(execution_context)
+    fn resolver<'a>(
+        &self,
+        loader: &'a Loader,
+        module_store: &'a ModuleStorageAdapter,
+    ) -> Resolver<'a> {
+        self.function.get_resolver(loader, module_store)
     }
 
     fn location(&self) -> Location {

@@ -6,7 +6,6 @@ use crate::{
     config::VMConfig,
     data_cache::TransactionDataCache,
     dispatch_loader,
-    execution_context::ExecutionContext,
     interpreter::Interpreter,
     loader::{LoadedFunction, Loader, ModuleCache, ModuleStorage, ModuleStorageAdapter},
     module_traversal::TraversalContext,
@@ -40,18 +39,18 @@ use move_vm_types::{
 use sha3::{Digest, Sha3_256};
 use std::{borrow::Borrow, collections::BTreeMap, sync::Arc};
 
+use crate::ModuleStorage as LoaderV2ModuleStorage;
 use crate::{
     loader::Module,
     storage::{
         dependencies_gas_charging,
         loader::traits::{
-            FunctionDefinitionLoader, InstantiatedFunctionLoader,
-            InstantiatedFunctionLoaderHelper, NativeModuleLoader, ScriptLoader,
+            FunctionDefinitionLoader, InstantiatedFunctionLoader, InstantiatedFunctionLoaderHelper,
+            NativeModuleLoader, ScriptLoader,
         },
         ty_layout_converter::LayoutConverter,
     },
 };
-use crate::ModuleStorage as LoaderV2ModuleStorage;
 
 /// An instantiation of the MoveVM.
 pub(crate) struct VMRuntime {
@@ -303,8 +302,8 @@ impl VMRuntime {
             )
         });
         let (_ctx, verified_modules_iter) = module_storage.unpack_into_verified_modules_iter();
-        let (module, function) =
-            result.map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
+        let (module, function) = result
+            .map_err(|err| self.normalize_module_loading_error(module_id, data_store, err))?;
         self.sync_verified_modules(module_store, verified_modules_iter);
 
         if function.return_tys().len() != 1 {
@@ -531,7 +530,9 @@ impl VMRuntime {
                     name,
                     move_core_types::gas_algebra::NumBytes::new(size as u64),
                 )
-                .map_err(|err| err.finish(Location::Module(ModuleId::new(*addr, name.to_owned()))))?;
+                .map_err(|err| {
+                    err.finish(Location::Module(ModuleId::new(*addr, name.to_owned())))
+                })?;
         }
         Ok(())
     }
@@ -830,13 +831,13 @@ impl VMRuntime {
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
-        let execution_context = ExecutionContext::new(&self.loader, module_store);
         let return_values = Interpreter::entrypoint(
             function,
             ty_args,
             deserialized_args,
             data_store,
-            &execution_context,
+            &self.loader,
+            module_store,
             gas_meter,
             traversal_context,
             extensions,

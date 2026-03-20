@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution_context::ExecutionContext,
-    loader::{access_specifier_loader::load_access_specifier, Resolver, ScriptHash},
+    loader::{
+        access_specifier_loader::load_access_specifier, Loader, ModuleStorageAdapter, Resolver,
+        ScriptHash,
+    },
     native_functions::{NativeFunction, NativeFunctions, UnboxedNativeFunction},
 };
 use move_binary_format::{
@@ -181,19 +183,19 @@ impl Function {
 
     pub(crate) fn get_resolver<'a>(
         &self,
-        execution_context: &'a ExecutionContext<'a>,
+        loader: &'a Loader,
+        module_store: &'a ModuleStorageAdapter,
     ) -> Resolver<'a> {
         match &self.scope {
             Scope::Module(module_id) => {
-                let module = execution_context
-                    .module_store()
+                let module = module_store
                     .module_at(module_id)
                     .expect("ModuleId on Function must exist");
-                Resolver::for_module(execution_context, module)
+                Resolver::for_module(loader, module_store, module)
             }
             Scope::Script(script_hash) => {
-                let script = execution_context.loader().get_script(script_hash);
-                Resolver::for_script(execution_context, script)
+                let script = loader.get_script(script_hash);
+                Resolver::for_script(loader, module_store, script)
             }
         }
     }

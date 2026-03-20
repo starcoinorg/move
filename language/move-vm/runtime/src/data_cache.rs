@@ -9,9 +9,7 @@ use crate::{
 };
 use bytes::Bytes;
 use move_binary_format::{
-    deserializer::DeserializerConfig,
-    errors::*,
-    file_format::CompiledScript,
+    deserializer::DeserializerConfig, errors::*, file_format::CompiledScript,
 };
 use move_core_types::{
     account_address::AccountAddress,

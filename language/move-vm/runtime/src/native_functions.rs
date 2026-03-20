@@ -5,9 +5,8 @@
 use crate::{
     data_cache::TransactionDataCache,
     dispatch_loader,
-    execution_context::ExecutionContext,
     interpreter::Interpreter,
-    loader::{Function, Resolver},
+    loader::{Function, ModuleStorageAdapter, Resolver},
     module_traversal::{TraversalContext, TraversalStorage},
     native_extensions::NativeContextExtensions,
     AsUnsyncModuleStorage, RuntimeEnvironmentRef,
@@ -107,7 +106,7 @@ pub struct NativeContext<'a, 'b, 'c> {
     interpreter: &'a mut Interpreter,
     data_store: &'a mut TransactionDataCache<'c>,
     resolver: &'a Resolver<'a>,
-    execution_context: &'a ExecutionContext<'a>,
+    module_store: &'a ModuleStorageAdapter,
     extensions: &'a mut NativeContextExtensions<'b>,
     gas_balance: InternalGas,
     traversal_context: &'a TraversalContext<'a>,
@@ -118,7 +117,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
         interpreter: &'a mut Interpreter,
         data_store: &'a mut TransactionDataCache<'c>,
         resolver: &'a Resolver<'a>,
-        execution_context: &'a ExecutionContext<'a>,
+        module_store: &'a ModuleStorageAdapter,
         extensions: &'a mut NativeContextExtensions<'b>,
         gas_balance: InternalGas,
         traversal_context: &'a TraversalContext<'a>,
@@ -127,7 +126,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
             interpreter,
             data_store,
             resolver,
-            execution_context,
+            module_store,
             extensions,
             gas_balance,
             traversal_context,
@@ -138,7 +137,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
 impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
         self.interpreter
-            .debug_print_stack_trace(buf, self.execution_context)
+            .debug_print_stack_trace(buf, &self.resolver.loader().runtime_environment())
     }
 
     pub fn exists_at(
@@ -148,12 +147,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     ) -> VMResult<(bool, Option<NumBytes>)> {
         let (value, num_bytes) = self
             .data_store
-            .load_resource(
-                self.execution_context.loader(),
-                address,
-                type_,
-                self.execution_context.module_store(),
-            )
+            .load_resource(self.resolver.loader(), address, type_, self.module_store)
             .map_err(|err| err.finish(Location::Undefined))?;
         let exists = value
             .exists()
@@ -162,12 +156,12 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     }
 
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        let runtime_environment = self.execution_context.runtime_environment();
+        let runtime_environment = self.resolver.loader().runtime_environment();
         TypeTagConverter::new(&runtime_environment).ty_to_ty_tag(ty)
     }
 
     pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
-        let runtime_environment = self.execution_context.runtime_environment();
+        let runtime_environment = self.resolver.loader().runtime_environment();
         let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, &*self.data_store);
         let module_storage = base_storage.as_unsync_module_storage();
         let mut gas_meter = UnmeteredGasMeter;
@@ -186,7 +180,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
         &self,
         ty: &Type,
     ) -> PartialVMResult<(MoveTypeLayout, bool)> {
-        let runtime_environment = self.execution_context.runtime_environment();
+        let runtime_environment = self.resolver.loader().runtime_environment();
         let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, &*self.data_store);
         let module_storage = base_storage.as_unsync_module_storage();
         let mut gas_meter = UnmeteredGasMeter;
@@ -202,7 +196,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     }
 
     pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
-        let runtime_environment = self.execution_context.runtime_environment();
+        let runtime_environment = self.resolver.loader().runtime_environment();
         let base_storage = RuntimeEnvironmentRef::new(&runtime_environment, &*self.data_store);
         let module_storage = base_storage.as_unsync_module_storage();
         let mut gas_meter = UnmeteredGasMeter;
@@ -257,7 +251,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
             .ensure_module_loaded_v2(
                 module,
                 self.data_store,
-                self.execution_context.module_store(),
+                self.module_store,
                 &mut gas_meter,
                 &mut traversal_context,
             )

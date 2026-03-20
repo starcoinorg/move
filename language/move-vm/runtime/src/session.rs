@@ -416,15 +416,13 @@ impl<'r, 'l> Session<'r, 'l> {
         function_name: &IdentStr,
         expected_return_type: &Type,
     ) -> VMResult<LoadedFunction> {
-        self.move_vm
-            .runtime
-            .load_function_with_type_arg_inference(
-                module_id,
-                function_name,
-                expected_return_type,
-                &mut self.data_cache,
-                &self.module_store,
-            )
+        self.move_vm.runtime.load_function_with_type_arg_inference(
+            module_id,
+            function_name,
+            expected_return_type,
+            &mut self.data_cache,
+            &self.module_store,
+        )
     }
 
     /// Load a module, a function, and all of its types into cache
@@ -444,7 +442,9 @@ impl<'r, 'l> Session<'r, 'l> {
     }
 
     pub fn load_type(&mut self, type_tag: &TypeTag) -> VMResult<Type> {
-        self.move_vm.runtime.load_type(type_tag, &mut self.data_cache)
+        self.move_vm
+            .runtime
+            .load_type(type_tag, &mut self.data_cache)
     }
 
     pub fn get_type_layout(&mut self, type_tag: &TypeTag) -> VMResult<MoveTypeLayout> {
@@ -513,14 +513,12 @@ impl<'r, 'l> Session<'r, 'l> {
         I: IntoIterator<Item = (&'a AccountAddress, &'a IdentStr)>,
         I::IntoIter: DoubleEndedIterator,
     {
-        self.move_vm
-            .runtime
-            .check_dependencies_and_charge_gas(
-                &self.data_cache,
-                gas_meter,
-                traversal_context,
-                ids,
-            )
+        self.move_vm.runtime.check_dependencies_and_charge_gas(
+            &self.data_cache,
+            gas_meter,
+            traversal_context,
+            ids,
+        )
     }
 
     pub fn check_dependencies_and_charge_gas_non_recursive_optional<'a, I>(
