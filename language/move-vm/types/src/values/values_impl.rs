@@ -3318,7 +3318,7 @@ impl serde::Serialize for SerializationReadyValue<'_, '_, '_, MoveTypeLayout, Va
 impl serde::Serialize for SerializationReadyValue<'_, '_, '_, MoveStructLayout, Vec<ValueImpl>> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let values = &self.value;
-        let field_layouts = struct_field_layout_refs(self.layout);
+        let field_layouts = StructFieldLayouts::from_struct_layout(self.layout);
         if field_layouts.len() != values.len() {
             return Err(invariant_violation::<S>(format!(
                 "cannot serialize struct value {:?} as {:?} -- number of fields mismatch",
@@ -3326,10 +3326,16 @@ impl serde::Serialize for SerializationReadyValue<'_, '_, '_, MoveStructLayout, 
             )));
         }
         let mut t = serializer.serialize_tuple(values.len())?;
-        for (field_layout, value) in field_layouts.iter().zip(values.iter()) {
+        for (idx, value) in values.iter().enumerate() {
+            let field_layout = field_layouts.get(idx).ok_or_else(|| {
+                invariant_violation::<S>(format!(
+                    "cannot serialize struct value {:?} as {:?} -- missing layout for field {}",
+                    self.value, self.layout, idx
+                ))
+            })?;
             t.serialize_element(&SerializationReadyValue {
                 ctx: self.ctx,
-                layout: *field_layout,
+                layout: field_layout,
                 value,
                 depth: self.depth + 1,
             })?;
@@ -3453,7 +3459,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for DeserializationSeed<'_, &MoveStructL
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        let field_layouts = struct_field_layout_refs(self.layout);
+        let field_layouts = StructFieldLayouts::from_struct_layout(self.layout);
         let fields = deserializer.deserialize_tuple(
             field_layouts.len(),
             StructFieldVisitor(self.ctx, field_layouts),
@@ -3486,7 +3492,40 @@ impl<'d, 'c, 'l> serde::de::Visitor<'d> for VectorElementVisitor<'c, 'l> {
     }
 }
 
-struct StructFieldVisitor<'c, 'l>(&'c ValueSerDeContext<'c>, Vec<&'l MoveTypeLayout>);
+enum StructFieldLayouts<'a> {
+    Runtime(&'a [MoveTypeLayout]),
+    Decorated(Vec<&'a MoveTypeLayout>),
+}
+
+impl<'a> StructFieldLayouts<'a> {
+    fn from_struct_layout(layout: &'a MoveStructLayout) -> Self {
+        match layout {
+            MoveStructLayout::Runtime(fields) => Self::Runtime(fields.as_slice()),
+            MoveStructLayout::WithFields(fields) => {
+                Self::Decorated(fields.iter().map(|field| &field.layout).collect())
+            }
+            MoveStructLayout::WithTypes { fields, .. } => {
+                Self::Decorated(fields.iter().map(|field| &field.layout).collect())
+            }
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Self::Runtime(fields) => fields.len(),
+            Self::Decorated(fields) => fields.len(),
+        }
+    }
+
+    fn get(&self, index: usize) -> Option<&'a MoveTypeLayout> {
+        match self {
+            Self::Runtime(fields) => fields.get(index),
+            Self::Decorated(fields) => fields.get(index).copied(),
+        }
+    }
+}
+
+struct StructFieldVisitor<'c, 'l>(&'c ValueSerDeContext<'c>, StructFieldLayouts<'l>);
 
 impl<'d, 'c, 'l> serde::de::Visitor<'d> for StructFieldVisitor<'c, 'l> {
     type Value = Vec<Value>;
@@ -3500,10 +3539,13 @@ impl<'d, 'c, 'l> serde::de::Visitor<'d> for StructFieldVisitor<'c, 'l> {
         A: serde::de::SeqAccess<'d>,
     {
         let mut val = Vec::new();
-        for (i, field_layout) in self.1.iter().enumerate() {
+        for i in 0..self.1.len() {
+            let field_layout = self.1.get(i).ok_or_else(|| {
+                A::Error::custom("field layout should exist when visiting struct fields")
+            })?;
             if let Some(elem) = seq.next_element_seed(DeserializationSeed {
                 ctx: self.0,
-                layout: *field_layout,
+                layout: field_layout,
             })? {
                 val.push(elem)
             } else {
@@ -3511,14 +3553,6 @@ impl<'d, 'c, 'l> serde::de::Visitor<'d> for StructFieldVisitor<'c, 'l> {
             }
         }
         Ok(val)
-    }
-}
-
-fn struct_field_layout_refs(layout: &MoveStructLayout) -> Vec<&MoveTypeLayout> {
-    match layout {
-        MoveStructLayout::Runtime(fields) => fields.iter().collect(),
-        MoveStructLayout::WithFields(fields) => fields.iter().map(|f| &f.layout).collect(),
-        MoveStructLayout::WithTypes { fields, .. } => fields.iter().map(|f| &f.layout).collect(),
     }
 }
 
