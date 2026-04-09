@@ -1,15 +1,21 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use dashmap::DashMap;
 use move_core_types::value::{MoveStructLayout, MoveTypeLayout};
+use once_cell::sync::Lazy;
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::hash_map::DefaultHasher,
     collections::HashMap,
     hash::{Hash, Hasher},
 };
 
 type LayoutBucket = Vec<(MoveTypeLayout, bool)>;
+const GLOBAL_CACHE_SOFT_LIMIT: usize = 100_000;
+
+static GLOBAL_LAYOUT_IDENTIFIER_MAPPING_CACHE: Lazy<DashMap<u64, LayoutBucket>> =
+    Lazy::new(DashMap::new);
 
 #[inline]
 fn hash_layout(layout: &MoveTypeLayout) -> u64 {
@@ -30,6 +36,13 @@ fn lookup_bucket(bucket: &LayoutBucket, layout: &MoveTypeLayout) -> Option<bool>
 fn insert_bucket(bucket: &mut LayoutBucket, layout: &MoveTypeLayout, value: bool) {
     if lookup_bucket(bucket, layout).is_none() {
         bucket.push((layout.clone(), value));
+    }
+}
+
+#[inline]
+fn maybe_trim_global_cache() {
+    if GLOBAL_LAYOUT_IDENTIFIER_MAPPING_CACHE.len() > GLOBAL_CACHE_SOFT_LIMIT {
+        GLOBAL_LAYOUT_IDENTIFIER_MAPPING_CACHE.clear();
     }
 }
 
@@ -54,9 +67,16 @@ pub fn compute_layout_has_identifier_mappings(layout: &MoveTypeLayout) -> bool {
 
 /// Per-view cache for checking whether a type layout contains delayed-field identifier mappings.
 ///
-/// This uses stable hash + equality matching to avoid pointer-reuse hazards.
+/// Caching strategy:
+/// 1. Local cache keyed by stable hash + equality bucket.
+/// 2. Process-wide global cache keyed by stable hash + equality bucket.
+/// 3. Optional stable-reference fast path (`has_identifier_mappings_stable_ref`) for callers that
+///    can guarantee layout reference stability.
 #[derive(Default)]
 pub struct LayoutIdentifierMappingCache {
+    last_layout_ptr: Cell<usize>,
+    last_value: Cell<bool>,
+    has_last: Cell<bool>,
     entries: RefCell<HashMap<u64, LayoutBucket>>,
 }
 
@@ -72,13 +92,44 @@ impl LayoutIdentifierMappingCache {
             return cached;
         }
 
+        if let Some(cached) = GLOBAL_LAYOUT_IDENTIFIER_MAPPING_CACHE
+            .get(&key)
+            .and_then(|bucket| lookup_bucket(bucket.value(), layout))
+        {
+            self.entries
+                .borrow_mut()
+                .entry(key)
+                .and_modify(|bucket| insert_bucket(bucket, layout, cached))
+                .or_insert_with(|| vec![(layout.clone(), cached)]);
+            return cached;
+        }
+
         let computed = compute_layout_has_identifier_mappings(layout);
         self.entries
             .borrow_mut()
             .entry(key)
             .and_modify(|bucket| insert_bucket(bucket, layout, computed))
             .or_insert_with(|| vec![(layout.clone(), computed)]);
+        GLOBAL_LAYOUT_IDENTIFIER_MAPPING_CACHE
+            .entry(key)
+            .and_modify(|bucket| insert_bucket(bucket, layout, computed))
+            .or_insert_with(|| vec![(layout.clone(), computed)]);
+        maybe_trim_global_cache();
         computed
+    }
+
+    /// Fast path for callers that can guarantee the layout reference is stable across checks.
+    /// For general callers, use `has_identifier_mappings`.
+    pub fn has_identifier_mappings_stable_ref(&self, layout: &MoveTypeLayout) -> bool {
+        let ptr = layout as *const MoveTypeLayout as usize;
+        if self.has_last.get() && self.last_layout_ptr.get() == ptr {
+            return self.last_value.get();
+        }
+        let result = self.has_identifier_mappings(layout);
+        self.last_layout_ptr.set(ptr);
+        self.last_value.set(result);
+        self.has_last.set(true);
+        result
     }
 }
 
@@ -173,5 +224,16 @@ mod tests {
             assert_eq!(expected, cached_first);
             assert_eq!(cached_first, cached_second);
         }
+    }
+
+    #[test]
+    fn test_layout_identifier_mapping_cache_cross_instance_consistency() {
+        let layout = with_types_native_layout();
+        let cache_a = LayoutIdentifierMappingCache::default();
+        let cache_b = LayoutIdentifierMappingCache::default();
+
+        let expected = compute_layout_has_identifier_mappings(&layout);
+        assert_eq!(expected, cache_a.has_identifier_mappings(&layout));
+        assert_eq!(expected, cache_b.has_identifier_mappings(&layout));
     }
 }

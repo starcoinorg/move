@@ -19,6 +19,8 @@ smallvec = { workspace = true }
 triomphe = { workspace = true }
 
 bcs = { workspace = true }
+dashmap = { workspace = true }
+once_cell = { workspace = true }
 
 move-binary-format = { path = "../../move-binary-format" }
 move-core-types = { path = "../../move-core/types" }
