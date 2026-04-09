@@ -75,6 +75,7 @@ pub fn compute_layout_has_identifier_mappings(layout: &MoveTypeLayout) -> bool {
 #[derive(Default)]
 pub struct LayoutIdentifierMappingCache {
     last_layout_ptr: Cell<usize>,
+    last_layout_hash: Cell<u64>,
     last_value: Cell<bool>,
     has_last: Cell<bool>,
     entries: RefCell<HashMap<u64, LayoutBucket>>,
@@ -122,11 +123,16 @@ impl LayoutIdentifierMappingCache {
     /// For general callers, use `has_identifier_mappings`.
     pub fn has_identifier_mappings_stable_ref(&self, layout: &MoveTypeLayout) -> bool {
         let ptr = layout as *const MoveTypeLayout as usize;
-        if self.has_last.get() && self.last_layout_ptr.get() == ptr {
+        let key = hash_layout(layout);
+        if self.has_last.get()
+            && self.last_layout_ptr.get() == ptr
+            && self.last_layout_hash.get() == key
+        {
             return self.last_value.get();
         }
         let result = self.has_identifier_mappings(layout);
         self.last_layout_ptr.set(ptr);
+        self.last_layout_hash.set(key);
         self.last_value.set(result);
         self.has_last.set(true);
         result
@@ -190,6 +196,16 @@ mod tests {
         })
     }
 
+    fn all_test_layouts() -> Vec<MoveTypeLayout> {
+        vec![
+            MoveTypeLayout::U64,
+            runtime_native_layout(),
+            with_fields_native_layout(),
+            with_types_native_layout(),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Bool)),
+        ]
+    }
+
     #[test]
     fn test_compute_layout_has_identifier_mappings() {
         assert!(!compute_layout_has_identifier_mappings(
@@ -209,13 +225,7 @@ mod tests {
     #[test]
     fn test_layout_identifier_mapping_cache_matches_compute() {
         let cache = LayoutIdentifierMappingCache::default();
-        let layouts = vec![
-            MoveTypeLayout::U64,
-            runtime_native_layout(),
-            with_fields_native_layout(),
-            with_types_native_layout(),
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Bool)),
-        ];
+        let layouts = all_test_layouts();
 
         for layout in layouts {
             let expected = compute_layout_has_identifier_mappings(&layout);
@@ -223,6 +233,40 @@ mod tests {
             let cached_second = cache.has_identifier_mappings(&layout);
             assert_eq!(expected, cached_first);
             assert_eq!(cached_first, cached_second);
+        }
+    }
+
+    #[test]
+    fn test_layout_identifier_mapping_cache_stable_ref_matches_legacy_path() {
+        let cache = LayoutIdentifierMappingCache::default();
+
+        for layout in all_test_layouts() {
+            let expected = compute_layout_has_identifier_mappings(&layout);
+            for _ in 0..16 {
+                assert_eq!(expected, cache.has_identifier_mappings_stable_ref(&layout));
+            }
+            assert_eq!(expected, cache.has_identifier_mappings(&layout));
+        }
+    }
+
+    #[test]
+    fn test_layout_identifier_mapping_cache_stable_ref_mixed_with_fresh_layouts() {
+        let cache = LayoutIdentifierMappingCache::default();
+        let baseline_sequence = vec![
+            MoveTypeLayout::U64,
+            runtime_native_layout(),
+            MoveTypeLayout::U64,
+            with_fields_native_layout(),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Bool)),
+            with_types_native_layout(),
+            runtime_native_layout(),
+            MoveTypeLayout::U64,
+        ];
+
+        for layout in baseline_sequence {
+            let expected = compute_layout_has_identifier_mappings(&layout);
+            assert_eq!(expected, cache.has_identifier_mappings_stable_ref(&layout));
+            assert_eq!(expected, cache.has_identifier_mappings(&layout));
         }
     }
 
