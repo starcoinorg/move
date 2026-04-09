@@ -336,6 +336,15 @@ mod native_values {
         )]))
     }
 
+    fn nested_runtime_layout(kind: IdentifierMappingKind) -> MoveTypeLayout {
+        MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Struct(
+            MoveStructLayout::Runtime(vec![
+                MoveTypeLayout::Native(kind, Box::new(MoveTypeLayout::U64)),
+                MoveTypeLayout::U64,
+            ]),
+        )]))
+    }
+
     fn nested_with_types_layout(kind: IdentifierMappingKind) -> MoveTypeLayout {
         let outer_tag = StructTag {
             address: AccountAddress::ONE,
@@ -443,5 +452,65 @@ mod native_values {
         assert_eq!(&output[0..8], &delayed_id.as_u64().to_le_bytes());
         assert_eq!(&output[8..16], &22u64.to_le_bytes());
         assert_eq!(*mapping.seen.borrow(), Some(11));
+    }
+
+    #[test]
+    fn test_exchange_nested_native_u64_with_runtime_layout() {
+        let layout = nested_runtime_layout(IdentifierMappingKind::Aggregator);
+        let delayed_id = DelayedFieldID::new_with_width(9, 8);
+        let mapping = Mapping {
+            id: delayed_id,
+            seen: RefCell::new(None),
+        };
+
+        let mut input = Vec::new();
+        input.extend_from_slice(&33u64.to_le_bytes());
+        input.extend_from_slice(&44u64.to_le_bytes());
+
+        let exchanged = deserialize_and_replace_values_with_ids(&input, &layout, &mapping)
+            .expect("exchange should succeed for Runtime nested native layout");
+        let output = serialize_and_allow_delayed_values(&exchanged, &layout)
+            .expect("serialization should succeed")
+            .expect("serialized bytes should exist");
+
+        assert_eq!(&output[0..8], &delayed_id.as_u64().to_le_bytes());
+        assert_eq!(&output[8..16], &44u64.to_le_bytes());
+        assert_eq!(*mapping.seen.borrow(), Some(33));
+    }
+
+    #[test]
+    fn test_exchange_nested_native_u64_runtime_matches_decorated_layouts() {
+        let kind = IdentifierMappingKind::Aggregator;
+        let delayed_id = DelayedFieldID::new_with_width(99, 8);
+        let mut input = Vec::new();
+        input.extend_from_slice(&123u64.to_le_bytes());
+        input.extend_from_slice(&456u64.to_le_bytes());
+
+        let layouts = vec![
+            nested_runtime_layout(kind.clone()),
+            nested_with_fields_layout(kind.clone()),
+            nested_with_types_layout(kind),
+        ];
+
+        let mut outputs = Vec::new();
+        for layout in layouts {
+            let mapping = Mapping {
+                id: delayed_id,
+                seen: RefCell::new(None),
+            };
+            let exchanged = deserialize_and_replace_values_with_ids(&input, &layout, &mapping)
+                .expect("exchange should succeed across nested native layouts");
+            let output = serialize_and_allow_delayed_values(&exchanged, &layout)
+                .expect("serialization should succeed")
+                .expect("serialized bytes should exist");
+            assert_eq!(*mapping.seen.borrow(), Some(123));
+            outputs.push(output);
+        }
+
+        assert_eq!(outputs.len(), 3);
+        assert_eq!(outputs[0], outputs[1]);
+        assert_eq!(outputs[1], outputs[2]);
+        assert_eq!(&outputs[0][0..8], &delayed_id.as_u64().to_le_bytes());
+        assert_eq!(&outputs[0][8..16], &456u64.to_le_bytes());
     }
 }
