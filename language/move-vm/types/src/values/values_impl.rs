@@ -17,7 +17,7 @@ use move_core_types::{
     effects::Op,
     gas_algebra::AbstractMemorySize,
     u256,
-    value::{MoveStructLayout, MoveTypeLayout},
+    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     vm_status::{sub_status::NFE_VECTOR_ERROR_BASE, StatusCode},
 };
 use std::{
@@ -3494,33 +3494,32 @@ impl<'d, 'c, 'l> serde::de::Visitor<'d> for VectorElementVisitor<'c, 'l> {
 
 enum StructFieldLayouts<'a> {
     Runtime(&'a [MoveTypeLayout]),
-    Decorated(Vec<&'a MoveTypeLayout>),
+    WithFields(&'a [MoveFieldLayout]),
+    WithTypes(&'a [MoveFieldLayout]),
 }
 
 impl<'a> StructFieldLayouts<'a> {
     fn from_struct_layout(layout: &'a MoveStructLayout) -> Self {
         match layout {
             MoveStructLayout::Runtime(fields) => Self::Runtime(fields.as_slice()),
-            MoveStructLayout::WithFields(fields) => {
-                Self::Decorated(fields.iter().map(|field| &field.layout).collect())
-            }
-            MoveStructLayout::WithTypes { fields, .. } => {
-                Self::Decorated(fields.iter().map(|field| &field.layout).collect())
-            }
+            MoveStructLayout::WithFields(fields) => Self::WithFields(fields.as_slice()),
+            MoveStructLayout::WithTypes { fields, .. } => Self::WithTypes(fields.as_slice()),
         }
     }
 
     fn len(&self) -> usize {
         match self {
             Self::Runtime(fields) => fields.len(),
-            Self::Decorated(fields) => fields.len(),
+            Self::WithFields(fields) => fields.len(),
+            Self::WithTypes(fields) => fields.len(),
         }
     }
 
     fn get(&self, index: usize) -> Option<&'a MoveTypeLayout> {
         match self {
             Self::Runtime(fields) => fields.get(index),
-            Self::Decorated(fields) => fields.get(index).copied(),
+            Self::WithFields(fields) => fields.get(index).map(|field| &field.layout),
+            Self::WithTypes(fields) => fields.get(index).map(|field| &field.layout),
         }
     }
 }
