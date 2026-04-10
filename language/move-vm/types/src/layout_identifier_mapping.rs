@@ -4,9 +4,9 @@
 use dashmap::DashMap;
 use move_core_types::value::{MoveStructLayout, MoveTypeLayout};
 use once_cell::sync::Lazy;
+use rustc_hash::FxHasher;
 use std::{
     cell::{Cell, RefCell},
-    collections::hash_map::DefaultHasher,
     collections::HashMap,
     hash::{Hash, Hasher},
 };
@@ -19,7 +19,7 @@ static GLOBAL_LAYOUT_IDENTIFIER_MAPPING_CACHE: Lazy<DashMap<u64, LayoutBucket>> 
 
 #[inline]
 fn hash_layout(layout: &MoveTypeLayout) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = FxHasher::default();
     layout.hash(&mut hasher);
     hasher.finish()
 }
@@ -75,7 +75,6 @@ pub fn compute_layout_has_identifier_mappings(layout: &MoveTypeLayout) -> bool {
 #[derive(Default)]
 pub struct LayoutIdentifierMappingCache {
     last_layout_ptr: Cell<usize>,
-    last_layout_hash: Cell<u64>,
     last_value: Cell<bool>,
     has_last: Cell<bool>,
     entries: RefCell<HashMap<u64, LayoutBucket>>,
@@ -123,16 +122,11 @@ impl LayoutIdentifierMappingCache {
     /// For general callers, use `has_identifier_mappings`.
     pub fn has_identifier_mappings_stable_ref(&self, layout: &MoveTypeLayout) -> bool {
         let ptr = layout as *const MoveTypeLayout as usize;
-        let key = hash_layout(layout);
-        if self.has_last.get()
-            && self.last_layout_ptr.get() == ptr
-            && self.last_layout_hash.get() == key
-        {
+        if self.has_last.get() && self.last_layout_ptr.get() == ptr {
             return self.last_value.get();
         }
         let result = self.has_identifier_mappings(layout);
         self.last_layout_ptr.set(ptr);
-        self.last_layout_hash.set(key);
         self.last_value.set(result);
         self.has_last.set(true);
         result
@@ -239,13 +233,14 @@ mod tests {
     #[test]
     fn test_layout_identifier_mapping_cache_stable_ref_matches_legacy_path() {
         let cache = LayoutIdentifierMappingCache::default();
+        let layouts = all_test_layouts();
 
-        for layout in all_test_layouts() {
-            let expected = compute_layout_has_identifier_mappings(&layout);
+        for layout in &layouts {
+            let expected = compute_layout_has_identifier_mappings(layout);
             for _ in 0..16 {
-                assert_eq!(expected, cache.has_identifier_mappings_stable_ref(&layout));
+                assert_eq!(expected, cache.has_identifier_mappings_stable_ref(layout));
             }
-            assert_eq!(expected, cache.has_identifier_mappings(&layout));
+            assert_eq!(expected, cache.has_identifier_mappings(layout));
         }
     }
 
@@ -263,10 +258,10 @@ mod tests {
             MoveTypeLayout::U64,
         ];
 
-        for layout in baseline_sequence {
-            let expected = compute_layout_has_identifier_mappings(&layout);
-            assert_eq!(expected, cache.has_identifier_mappings_stable_ref(&layout));
-            assert_eq!(expected, cache.has_identifier_mappings(&layout));
+        for layout in &baseline_sequence {
+            let expected = compute_layout_has_identifier_mappings(layout);
+            assert_eq!(expected, cache.has_identifier_mappings_stable_ref(layout));
+            assert_eq!(expected, cache.has_identifier_mappings(layout));
         }
     }
 
